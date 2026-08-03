@@ -23,7 +23,7 @@ The source and tests define current behavior.
 
 ## Development
 
-Contributor documentation and implementation are still being established.
+- [Set up the local game-data tools](/docs/exporter-development-setup.md)
 
 ## Data boundary
 
