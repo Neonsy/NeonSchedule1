@@ -35,4 +35,4 @@ The offline stage is complete when every requested mesh reference has a terminal
 
 ## Continue the workflow
 
-The exporter workspace will add its component manual with the tool source.
+Use the [complete exporter manual](/projects/game-data-exporter/README.md) for commands, output formats, recovery, and cleanup.

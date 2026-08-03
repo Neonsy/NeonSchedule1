@@ -1,0 +1,18 @@
+{
+  "name": "@neonschedule1/typescript",
+  "private": true,
+  "license": "Apache-2.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.x",
+      "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "24.19.0",
+      "onFail": "download"
+    }
+  },
+  "devDependencies": {}
+}
