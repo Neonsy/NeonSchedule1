@@ -209,6 +209,102 @@ describe('mixing engine', () => {
             },
         ]);
     });
+
+    it('applies effect constraints only to final results without corrupting the value cutoff', () => {
+        const effects = [
+            effect('base', 0, 0),
+            effect('temporary', 1, 1),
+            effect('required', 1, 1, 1),
+            effect('high', 10, 1, 10),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 10,
+                    effects: [
+                        mapEffect('base', 0),
+                        mapEffect('temporary', 1),
+                        mapEffect('required', 2),
+                        mapEffect('high', 10),
+                    ],
+                },
+            ],
+        };
+        const items = [
+            product('product', ['base'], 10),
+            ingredient('step', 'temporary', 1),
+            ingredient('high', 'high', 1),
+        ];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])));
+
+        expect(
+            search.search({
+                productId: 'product',
+                availableIngredientIds: ['step', 'high'],
+                maxIngredients: 2,
+                limit: 1,
+                requiredEffectIds: ['required'],
+                forbiddenEffectIds: ['temporary'],
+            })
+        ).toEqual([
+            {
+                productId: 'product',
+                ingredientIds: ['step', 'step'],
+                effectIds: ['required'],
+                productValue: 20,
+                ingredientCost: 2,
+                ingredientCount: 2,
+            },
+        ]);
+    });
+
+    it('rejects invalid effect constraints', () => {
+        const effects = [effect('base', 0, 0)];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 8,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 1,
+                    effects: [mapEffect('base', 0)],
+                },
+            ],
+        };
+        const items = [product('product', ['base'], 10)];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])));
+
+        expect(() =>
+            search.search({
+                productId: 'product',
+                availableIngredientIds: [],
+                maxIngredients: 0,
+                limit: 1,
+                requiredEffectIds: ['missing'],
+            })
+        ).toThrow('Unknown required mixing effect "missing"');
+        expect(() =>
+            search.search({
+                productId: 'product',
+                availableIngredientIds: [],
+                maxIngredients: 0,
+                limit: 1,
+                requiredEffectIds: ['base'],
+                forbiddenEffectIds: ['base'],
+            })
+        ).toThrow('Mixing effect "base" cannot be both required and forbidden');
+    });
 });
 
 function effect(id: string, directionX: number, magnitude: number, addBaseValueMultiple = 0): Effect {

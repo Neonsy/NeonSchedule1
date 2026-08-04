@@ -10,6 +10,8 @@ export interface RecipeSearchInput {
     readonly availableIngredientIds: readonly string[];
     readonly maxIngredients: number;
     readonly limit: number;
+    readonly requiredEffectIds?: readonly string[];
+    readonly forbiddenEffectIds?: readonly string[];
 }
 
 export interface RecipeSearchOptions {
@@ -62,6 +64,11 @@ export class RecipeSearch {
 
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
+        const constraints = new FinalEffectConstraints(
+            this.#engine,
+            input.requiredEffectIds ?? [],
+            input.forbiddenEffectIds ?? []
+        );
         const base: SearchState = {
             effectIds: [...product.effectIds],
             ingredientIds: [],
@@ -74,7 +81,7 @@ export class RecipeSearch {
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
-            const cutoff = new ProductValueCutoff(outcomes, input.limit);
+            const cutoff = new ProductValueCutoff(outcomes, input.limit, constraints);
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
@@ -91,7 +98,12 @@ export class RecipeSearch {
                 let { upperValue } = ranked;
                 if (cutoff.value !== null && upperValue < cutoff.value) continue;
                 if (remainingIngredients <= 2) {
-                    const exact = valueBound.exactShortHorizon(state.effectIds, remainingIngredients);
+                    const exact = valueBound.exactShortHorizon(
+                        state.effectIds,
+                        remainingIngredients,
+                        constraints
+                    );
+                    if (exact === null) continue;
                     cutoff.add(exact.key, exact.value);
                     upperValue = exact.value;
                     if (cutoff.value !== null && upperValue < cutoff.value) continue;
@@ -111,8 +123,15 @@ export class RecipeSearch {
                         throw new RecipeSearchLimitError(depth, this.#maxStates);
                     }
                     next.set(key, candidate);
-                    if (current === undefined && !outcomes.has(key)) {
-                        cutoff.add(key, this.#engine.calculateProductValue(product.basePrice, candidate.effectIds));
+                    if (
+                        current === undefined &&
+                        !outcomes.has(key) &&
+                        constraints.matches(candidate.effectIds)
+                    ) {
+                        cutoff.add(
+                            key,
+                            this.#engine.calculateProductValue(product.basePrice, candidate.effectIds)
+                        );
                     }
                 }
             }
@@ -126,7 +145,10 @@ export class RecipeSearch {
             layer = next;
         }
 
-        return [...outcomes.values()].sort(compareRecipes).slice(0, input.limit);
+        return [...outcomes.values()]
+            .filter((recipe) => constraints.matches(recipe.effectIds))
+            .sort(compareRecipes)
+            .slice(0, input.limit);
     }
 
     #product(id: string): Product {
@@ -158,9 +180,15 @@ class ProductValueCutoff {
     readonly #keys = new Set<string>();
     readonly #values: number[] = [];
 
-    constructor(recipes: Iterable<readonly [string, RecipeEvaluation]>, limit: number) {
+    constructor(
+        recipes: Iterable<readonly [string, RecipeEvaluation]>,
+        limit: number,
+        constraints: FinalEffectConstraints
+    ) {
         this.#limit = limit;
-        for (const [key, recipe] of recipes) this.add(key, recipe.productValue);
+        for (const [key, recipe] of recipes) {
+            if (constraints.matches(recipe.effectIds)) this.add(key, recipe.productValue);
+        }
     }
 
     get value(): number | null {
@@ -209,10 +237,16 @@ class RecipeValueBound {
 
     exactShortHorizon(
         effectIds: readonly string[],
-        remainingIngredients: number
-    ): { readonly key: string; readonly value: number } {
-        let bestKey = stateKey(effectIds);
-        let bestValue = this.#engine.calculateProductValue(this.#product.basePrice, effectIds);
+        remainingIngredients: number,
+        constraints: FinalEffectConstraints
+    ): { readonly key: string; readonly value: number } | null {
+        let best: { readonly key: string; readonly value: number } | null = null;
+        if (constraints.matches(effectIds)) {
+            best = {
+                key: stateKey(effectIds),
+                value: this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
+            };
+        }
         let layer = new Map([[stateKey(effectIds), effectIds]]);
         for (let depth = 0; depth < remainingIngredients; depth++) {
             const next = new Map<string, readonly string[]>();
@@ -223,16 +257,16 @@ class RecipeValueBound {
                 }
             }
             for (const result of next.values()) {
+                if (!constraints.matches(result)) continue;
                 const key = stateKey(result);
                 const value = this.#engine.calculateProductValue(this.#product.basePrice, result);
-                if (value > bestValue || (value === bestValue && key < bestKey)) {
-                    bestKey = key;
-                    bestValue = value;
+                if (best === null || value > best.value || (value === best.value && key < best.key)) {
+                    best = { key, value };
                 }
             }
             layer = next;
         }
-        return { key: bestKey, value: bestValue };
+        return best;
     }
 
     #bestEffect(effectId: string, remainingIngredients: number): string {
@@ -276,6 +310,53 @@ class RecipeValueBound {
         if (effect === undefined) throw new Error(`Unknown mixing effect ${JSON.stringify(effectId)}`);
         return effect.value.addBaseValueMultiple;
     }
+}
+
+class FinalEffectConstraints {
+    readonly #required: ReadonlySet<string>;
+    readonly #forbidden: ReadonlySet<string>;
+
+    constructor(
+        engine: MixingEngine,
+        requiredEffectIds: readonly string[],
+        forbiddenEffectIds: readonly string[]
+    ) {
+        this.#required = effectIdSet(engine, requiredEffectIds, 'required');
+        this.#forbidden = effectIdSet(engine, forbiddenEffectIds, 'forbidden');
+        for (const effectId of this.#required) {
+            if (this.#forbidden.has(effectId)) {
+                throw new Error(`Mixing effect ${JSON.stringify(effectId)} cannot be both required and forbidden`);
+            }
+        }
+    }
+
+    matches(effectIds: readonly string[]): boolean {
+        for (const effectId of this.#required) {
+            if (!effectIds.includes(effectId)) return false;
+        }
+        for (const effectId of this.#forbidden) {
+            if (effectIds.includes(effectId)) return false;
+        }
+        return true;
+    }
+}
+
+function effectIdSet(
+    engine: MixingEngine,
+    effectIds: readonly string[],
+    kind: 'required' | 'forbidden'
+): ReadonlySet<string> {
+    const result = new Set<string>();
+    for (const effectId of effectIds) {
+        if (result.has(effectId)) {
+            throw new Error(`Duplicate ${kind} mixing effect ${JSON.stringify(effectId)}`);
+        }
+        if (!engine.effectsById.has(effectId)) {
+            throw new Error(`Unknown ${kind} mixing effect ${JSON.stringify(effectId)}`);
+        }
+        result.add(effectId);
+    }
+    return result;
 }
 
 function evaluateState(
