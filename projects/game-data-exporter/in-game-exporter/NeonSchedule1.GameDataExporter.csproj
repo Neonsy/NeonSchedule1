@@ -1,0 +1,82 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>NeonSchedule1.GameDataExporter</AssemblyName>
+    <RootNamespace>NeonSchedule1.GameDataExporter</RootNamespace>
+    <Version>0.0.1</Version>
+    <AssemblyVersion>0.0.1.0</AssemblyVersion>
+    <FileVersion>0.0.1.0</FileVersion>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
+    <DebugSymbols Condition="'$(Configuration)' == 'Release'">false</DebugSymbols>
+    <GameDirectory Condition="'$(GameDirectory)' == ''">$(NEONSCHEDULE1_GAME_DIR)</GameDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(GameDirectory)\MelonLoader\net6\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(GameDirectory)\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppScheduleOne.Core">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\Il2CppScheduleOne.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppFishNet.Runtime">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\Il2CppFishNet.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.AIModule">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.AIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.AI.Navigation">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\Unity.AI.Navigation.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameDirectory)\MelonLoader\Il2CppAssemblies\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="S1API.Il2Cpp.MelonLoader">
+      <HintPath>$(GameDirectory)\Mods\S1API.Il2Cpp.MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateGameDirectory" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameDirectory)' == ''" Text="Set NEONSCHEDULE1_GAME_DIR or pass /p:GameDirectory=&quot;path to Schedule I&quot;." />
+    <Error Condition="'$(GameDirectory)' != '' and !Exists('$(GameDirectory)\MelonLoader\net6\MelonLoader.dll')" Text="MelonLoader was not found under GameDirectory: $(GameDirectory)" />
+    <Error Condition="'$(GameDirectory)' != '' and !Exists('$(GameDirectory)\Mods\S1API.Il2Cpp.MelonLoader.dll')" Text="S1API.Il2Cpp.MelonLoader.dll was not found in the game's Mods directory." />
+  </Target>
+</Project>
