@@ -61,7 +61,7 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
 
     constructor(itemsById: ReadonlyMap<string, Item>, catalog: ProductionCatalog) {
         this.#itemsById = itemsById;
-        this.#routesByOutput = indexRoutes(productionRoutes(catalog));
+        this.#routesByOutput = indexRoutes(productionRoutes(itemsById, catalog));
     }
 
     unitCost(itemId: string): number {
@@ -141,27 +141,52 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
     }
 }
 
-function productionRoutes(catalog: ProductionCatalog): ProductionRoute[] {
+function productionRoutes(
+    itemsById: ReadonlyMap<string, Item>,
+    catalog: ProductionCatalog
+): ProductionRoute[] {
     const routes: ProductionRoute[] = [];
     for (const seed of catalog.seeds) {
+        if (seed.soilItemIds.length === 0) {
+            throw new Error(`Seed production ${JSON.stringify(seed.seedItemId)} has no soil`);
+        }
         for (const product of seed.harvestProducts) {
-            routes.push({
-                id: `seed:${seed.seedItemId}:${product.itemId}`,
-                method: 'seed-harvest',
-                outputItemId: product.itemId,
-                outputQuantity: seed.baseYieldQuantity * product.quantity,
-                inputs: [{ acceptedItemIds: [seed.seedItemId], quantity: 1 }],
-            });
+            for (const soilItemId of seed.soilItemIds) {
+                routes.push({
+                    id: `seed:${seed.seedItemId}:${product.itemId}:${soilItemId}`,
+                    method: 'seed-harvest',
+                    outputItemId: product.itemId,
+                    outputQuantity: seed.baseYieldQuantity * product.quantity,
+                    inputs: [
+                        { acceptedItemIds: [seed.seedItemId], quantity: 1 },
+                        {
+                            acceptedItemIds: [soilItemId],
+                            quantity: soilUseQuantity(itemsById, soilItemId),
+                        },
+                    ],
+                });
+            }
         }
     }
     for (const shroom of catalog.shrooms) {
-        routes.push({
-            id: `shroom:${shroom.spawnItemId}:${shroom.productItemId}`,
-            method: 'shroom-harvest',
-            outputItemId: shroom.productItemId,
-            outputQuantity: shroom.baseYieldQuantity,
-            inputs: [{ acceptedItemIds: [shroom.spawnItemId], quantity: 1 }],
-        });
+        if (shroom.soilItemIds.length === 0) {
+            throw new Error(`Shroom production ${JSON.stringify(shroom.spawnItemId)} has no soil`);
+        }
+        for (const soilItemId of shroom.soilItemIds) {
+            routes.push({
+                id: `shroom:${shroom.spawnItemId}:${shroom.productItemId}:${soilItemId}`,
+                method: 'shroom-harvest',
+                outputItemId: shroom.productItemId,
+                outputQuantity: shroom.baseYieldQuantity,
+                inputs: [
+                    { acceptedItemIds: [shroom.spawnItemId], quantity: 1 },
+                    {
+                        acceptedItemIds: [soilItemId],
+                        quantity: soilUseQuantity(itemsById, soilItemId),
+                    },
+                ],
+            });
+        }
     }
     for (const recipe of catalog.stationRecipes) {
         routes.push({
@@ -222,6 +247,14 @@ function productionRoutes(catalog: ProductionCatalog): ProductionRoute[] {
         }
     }
     return routes;
+}
+
+function soilUseQuantity(itemsById: ReadonlyMap<string, Item>, itemId: string): number {
+    const soil = itemsById.get(itemId)?.soil;
+    if (soil === null || soil === undefined || soil.uses <= 0) {
+        throw new Error(`Production soil ${JSON.stringify(itemId)} has no positive use count`);
+    }
+    return 1 / soil.uses;
 }
 
 function indexRoutes(routes: readonly ProductionRoute[]): ReadonlyMap<string, readonly ProductionRoute[]> {

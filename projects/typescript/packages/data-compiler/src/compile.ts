@@ -15,7 +15,7 @@ import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.8';
+export const NORMALIZER_VERSION = '0.0.9';
 
 const deferredDomains = [
     'buildable-geometry',

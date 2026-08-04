@@ -42,23 +42,25 @@ export function normalizeProduction(
         'report.productionStations',
         integrity
     );
+    const normalizedStations = [...stations.entries()]
+        .map(([itemId, raw]) => normalizeStation(itemId, raw, itemIds, integrity))
+        .filter((station): station is ProductionStation => station !== null)
+        .sort((left, right) => left.itemId.localeCompare(right.itemId));
+    const soils = productionSoils(report, normalizedStations, itemIds, integrity);
 
     const catalog: ProductionCatalog = {
         schema: 'neonschedule1-production-catalog-1',
         seeds: [...seeds.entries()]
-            .map(([itemId, raw]) => normalizeSeed(itemId, raw, itemIds, integrity))
+            .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),
         shrooms: [...shroomSpawns.entries()]
-            .map(([itemId, raw]) => normalizeShroom(itemId, raw, itemIds, integrity))
+            .map(([itemId, raw]) => normalizeShroom(itemId, raw, soils.shroom, itemIds, integrity))
             .sort((left, right) => left.spawnItemId.localeCompare(right.spawnItemId)),
         stationRecipes: [...recipes.entries()]
             .map(([id, raw]) => normalizeRecipe(id, raw, itemIds, integrity))
             .sort((left, right) => left.id.localeCompare(right.id)),
         ovenTransforms: normalizeOvenTransforms(report.ovenTransforms, itemIds, integrity),
-        stations: [...stations.entries()]
-            .map(([itemId, raw]) => normalizeStation(itemId, raw, itemIds, integrity))
-            .filter((station): station is ProductionStation => station !== null)
-            .sort((left, right) => left.itemId.localeCompare(right.itemId)),
+        stations: normalizedStations,
     };
 
     integrity.check(
@@ -69,9 +71,50 @@ export function normalizeProduction(
     return ProductionCatalogSchema.assert(catalog);
 }
 
+function productionSoils(
+    report: RawReport,
+    stations: readonly ProductionStation[],
+    itemIds: ReadonlySet<string>,
+    integrity: Integrity
+): { readonly plant: readonly string[]; readonly shroom: readonly string[] } {
+    const all = uniqueIds(
+        report.soils.map((soil, index) => stringField(soil, 'itemId', `report.soils[${index}]`)),
+        'report.soils',
+        integrity
+    );
+    requireReferences(all, itemIds, 'soil', integrity);
+
+    const plant = [
+        ...new Set(
+            stations
+                .filter((station) => station.kind === 'grow-container')
+                .flatMap((station) => station.allowedSoilIds)
+        ),
+    ].sort();
+    requireReferences(plant, new Set(all), 'grow-container soil', integrity);
+
+    // The current game has one dedicated soil definition that regular plant containers reject.
+    // Treating that set difference as shroom soil keeps the normalized relationship explicit and
+    // makes a future ambiguous export fail integrity validation instead of changing costs silently.
+    const plantSet = new Set(plant);
+    const shroom = all.filter((itemId) => !plantSet.has(itemId));
+    integrity.check(
+        'seed production has an accepted soil',
+        report.seeds.length === 0 || plant.length > 0,
+        'Seed production requires at least one soil accepted by a grow container'
+    );
+    integrity.check(
+        'shroom production has one dedicated soil',
+        report.shroomSpawns.length === 0 || shroom.length === 1,
+        `Expected one shroom-only soil definition, found ${shroom.length}`
+    );
+    return { plant, shroom };
+}
+
 function normalizeSeed(
     seedItemId: string,
     raw: JsonObject,
+    soilItemIds: readonly string[],
     itemIds: ReadonlySet<string>,
     integrity: Integrity
 ): SeedProduction {
@@ -96,6 +139,7 @@ function normalizeSeed(
     return {
         schema: 'neonschedule1-seed-production-1',
         seedItemId,
+        soilItemIds: [...soilItemIds],
         plantRuntimeType: stringField(raw, 'plantRuntimeType', path),
         growthTime: positiveNumber(raw, 'growthTime', path, integrity),
         baseYieldQuantity: positiveNumber(raw, 'baseYieldQuantity', path, integrity),
@@ -107,6 +151,7 @@ function normalizeSeed(
 function normalizeShroom(
     spawnItemId: string,
     raw: JsonObject,
+    soilItemIds: readonly string[],
     itemIds: ReadonlySet<string>,
     integrity: Integrity
 ): ShroomProduction {
@@ -117,6 +162,7 @@ function normalizeShroom(
     return {
         schema: 'neonschedule1-shroom-production-1',
         spawnItemId,
+        soilItemIds: [...soilItemIds],
         productItemId,
         growTime: positiveNumber(raw, 'growTime', path, integrity),
         baseYieldQuantity: positiveNumber(raw, 'baseYieldQuantity', path, integrity),

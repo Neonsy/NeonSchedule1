@@ -203,6 +203,18 @@ describe('domain normalization', () => {
             harvestTarget: 'buds',
             harvestables: [{ productId: 'product', quantity: 1 }],
         });
+        report.shroomSpawns.push({
+            itemId: 'spawn',
+            productId: 'shroom',
+            growTime: 18,
+            baseYieldQuantity: 16,
+            maximumTemperatureForGrowth: 15,
+            minimumSoilMoistureForGrowth: 0.1,
+        });
+        report.soils.push(
+            { itemId: 'soil', quality: 'Basic', uses: 1 },
+            { itemId: 'substrate', quality: 'Basic', uses: 1 }
+        );
         report.recipes.push({
             id: 'liquid',
             title: 'Liquid',
@@ -230,6 +242,17 @@ describe('domain normalization', () => {
         });
         report.productionStations.push(
             {
+                itemId: 'pot',
+                kind: 'grow-container',
+                yieldMultiplier: 1,
+                growSpeedMultiplier: 1,
+                maxTemperatureGrowthMultiplier: 1.5,
+                minimumTemperatureThreshold: 20,
+                maximumTemperatureThreshold: 40,
+                allowedSoilIds: ['soil'],
+                allowedAdditiveIds: [],
+            },
+            {
                 itemId: 'cauldron',
                 kind: 'cauldron',
                 cookTime: 6,
@@ -252,9 +275,13 @@ describe('domain normalization', () => {
             new Set([
                 'seed',
                 'product',
+                'soil',
+                'substrate',
+                'shroom',
                 'input',
                 'liquid',
                 'mixer',
+                'pot',
                 'cauldron',
                 'leaf',
                 'fuel',
@@ -270,8 +297,14 @@ describe('domain normalization', () => {
         expect(integrity.errors).toEqual([]);
         expect(production.seeds[0]).toMatchObject({
             seedItemId: 'seed',
+            soilItemIds: ['soil'],
             baseYieldQuantity: 12,
             harvestProducts: [{ itemId: 'product', quantity: 1 }],
+        });
+        expect(production.shrooms[0]).toMatchObject({
+            spawnItemId: 'spawn',
+            soilItemIds: ['substrate'],
+            productItemId: 'shroom',
         });
         expect(production.stationRecipes[0]).toMatchObject({
             id: 'liquid',
@@ -293,7 +326,7 @@ describe('domain normalization', () => {
             kind: 'mixing',
             capacity: 10,
         });
-        expect(production.stations[2]).toMatchObject({
+        expect(production.stations[3]).toMatchObject({
             itemId: 'spawn-station',
             kind: 'mushroom-spawn',
             grainBagQuantity: 1,

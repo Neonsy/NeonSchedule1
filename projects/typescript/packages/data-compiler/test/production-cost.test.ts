@@ -24,6 +24,9 @@ describe('production material costs', () => {
             item('syringe', 120),
             item('spawn', 100),
             item('shroom', 65),
+            item('soil', 10, 1),
+            item('reusable-soil', 15, 2),
+            item('substrate', 60, 1),
             item('cauldron'),
             item('spawn-station'),
         ];
@@ -32,18 +35,27 @@ describe('production material costs', () => {
             catalog()
         );
 
+        expect(evaluator.evaluate('leaf')).toMatchObject({
+            kind: 'production',
+            method: 'seed-harvest',
+            unitCost: 10.75,
+            inputs: [
+                { itemId: 'seed', quantity: 1, totalCost: 100 },
+                { itemId: 'reusable-soil', quantity: 0.5, totalCost: 7.5 },
+            ],
+        });
         expect(evaluator.evaluate('cocaine')).toMatchObject({
             kind: 'production',
             method: 'oven',
-            unitCost: 20.5,
+            unitCost: 22,
             inputs: [
                 {
                     itemId: 'base',
-                    unitCost: 20.5,
+                    unitCost: 22,
                     cost: {
                         method: 'cauldron',
                         outputQuantity: 10,
-                        batchCost: 205,
+                        batchCost: 220,
                     },
                 },
             ],
@@ -65,13 +77,14 @@ describe('production material costs', () => {
         expect(evaluator.evaluate('shroom')).toMatchObject({
             kind: 'production',
             method: 'shroom-harvest',
-            unitCost: 8.75,
+            unitCost: 12.5,
             inputs: [
                 {
                     itemId: 'spawn',
                     unitCost: 140,
                     cost: { method: 'mushroom-spawn', batchCost: 140 },
                 },
+                { itemId: 'substrate', quantity: 1, totalCost: 60 },
             ],
         });
     });
@@ -114,6 +127,7 @@ function catalog(): ProductionCatalog {
             {
                 schema: 'neonschedule1-seed-production-1',
                 seedItemId: 'seed',
+                soilItemIds: ['soil', 'reusable-soil'],
                 plantRuntimeType: 'Plant',
                 growthTime: 1,
                 baseYieldQuantity: 10,
@@ -125,6 +139,7 @@ function catalog(): ProductionCatalog {
             {
                 schema: 'neonschedule1-shroom-production-1',
                 spawnItemId: 'spawn',
+                soilItemIds: ['substrate'],
                 productItemId: 'shroom',
                 growTime: 1,
                 baseYieldQuantity: 16,
@@ -211,7 +226,7 @@ function emptyCatalog(): ProductionCatalog {
     };
 }
 
-function item(id: string, basePurchasePrice: number | null = null): Item {
+function item(id: string, basePurchasePrice: number | null = null, soilUses: number | null = null): Item {
     return {
         schema: 'neonschedule1-item-3',
         id,
@@ -227,7 +242,7 @@ function item(id: string, basePurchasePrice: number | null = null): Item {
         product: null,
         packaging: null,
         additive: null,
-        soil: null,
+        soil: soilUses === null ? null : { quality: 'Test', uses: soilUses },
         mixingIngredient: null,
         presentation: {
             description: '',

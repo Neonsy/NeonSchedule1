@@ -6,6 +6,7 @@ export type HarvestProduct = typeof HarvestProductSchema.infer;
 export const SeedProductionSchema = type({
     schema: "'neonschedule1-seed-production-1'",
     seedItemId: 'string',
+    soilItemIds: 'string[]',
     plantRuntimeType: 'string',
     growthTime: 'number',
     baseYieldQuantity: 'number',
@@ -17,6 +18,7 @@ export type SeedProduction = typeof SeedProductionSchema.infer;
 export const ShroomProductionSchema = type({
     schema: "'neonschedule1-shroom-production-1'",
     spawnItemId: 'string',
+    soilItemIds: 'string[]',
     productItemId: 'string',
     growTime: 'number',
     baseYieldQuantity: 'number',
