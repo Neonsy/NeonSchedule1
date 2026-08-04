@@ -290,6 +290,8 @@ describe('domain normalization', () => {
                 'grain-bag',
                 'syringe',
                 'spawn',
+                'chemistrystation',
+                'mushroombed',
             ]),
             integrity
         );
@@ -306,10 +308,12 @@ describe('domain normalization', () => {
             spawnItemId: 'spawn',
             soilItemIds: ['substrate'],
             productItemId: 'shroom',
+            acceptedEquipmentItemIds: ['mushroombed'],
             growTimeMinutes: 1_080,
         });
         expect(production.stationRecipes[0]).toMatchObject({
             id: 'liquid',
+            acceptedEquipmentItemIds: ['chemistrystation'],
             ingredients: [{ quantity: 1, acceptedItemIds: ['input'] }],
         });
         expect(production.ovenTransforms[0]).toMatchObject({

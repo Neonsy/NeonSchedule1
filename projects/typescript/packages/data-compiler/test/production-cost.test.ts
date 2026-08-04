@@ -30,6 +30,10 @@ describe('production material costs', () => {
             item('substrate', 60, 1),
             item('cauldron'),
             item('spawn-station'),
+            item('pot'),
+            item('oven'),
+            item('chemistry-station'),
+            item('mushroom-bed'),
         ];
         const evaluator = new ProductionMaterialCostEvaluator(
             new Map(items.map((entry) => [entry.id, entry])),
@@ -40,6 +44,8 @@ describe('production material costs', () => {
             kind: 'production',
             method: 'seed-harvest',
             durationMinutesPerBatch: 60,
+            acceptedEquipmentItemIds: ['pot'],
+            equipmentItemId: null,
             unitCost: 10.75,
             inputs: [
                 { itemId: 'seed', quantity: 1, totalCost: 100 },
@@ -50,6 +56,8 @@ describe('production material costs', () => {
             kind: 'production',
             method: 'oven',
             durationMinutesPerBatch: 1,
+            acceptedEquipmentItemIds: ['oven'],
+            equipmentItemId: 'oven',
             unitCost: 22,
             inputs: [
                 {
@@ -58,6 +66,8 @@ describe('production material costs', () => {
                     cost: {
                         method: 'cauldron',
                         durationMinutesPerBatch: 1,
+                        acceptedEquipmentItemIds: ['cauldron'],
+                        equipmentItemId: 'cauldron',
                         outputQuantity: 10,
                         batchCost: 220,
                     },
@@ -68,12 +78,16 @@ describe('production material costs', () => {
             kind: 'production',
             method: 'oven',
             durationMinutesPerBatch: 1,
+            acceptedEquipmentItemIds: ['oven'],
+            equipmentItemId: 'oven',
             unitCost: 14,
             inputs: [
                 {
                     cost: {
                         method: 'station-recipe',
                         durationMinutesPerBatch: 1,
+                        acceptedEquipmentItemIds: ['chemistry-station'],
+                        equipmentItemId: 'chemistry-station',
                         batchCost: 140,
                         inputs: [{ itemId: 'acid' }, { itemId: 'low-pseudo' }, { itemId: 'phosphorus' }],
                     },
@@ -84,6 +98,8 @@ describe('production material costs', () => {
             kind: 'production',
             method: 'shroom-harvest',
             durationMinutesPerBatch: 60,
+            acceptedEquipmentItemIds: ['mushroom-bed'],
+            equipmentItemId: 'mushroom-bed',
             unitCost: 12.5,
             inputs: [
                 {
@@ -92,6 +108,8 @@ describe('production material costs', () => {
                     cost: {
                         method: 'mushroom-spawn',
                         durationMinutesPerBatch: 6,
+                        acceptedEquipmentItemIds: ['spawn-station'],
+                        equipmentItemId: 'spawn-station',
                         batchCost: 140,
                     },
                 },
@@ -103,6 +121,7 @@ describe('production material costs', () => {
     it('rejects a production cycle without a priced source input', () => {
         const cycleCatalog: ProductionCatalog = {
             ...emptyCatalog(),
+            stations: [labOvenStation()],
             ovenTransforms: [
                 {
                     schema: 'neonschedule1-oven-transform-2',
@@ -123,7 +142,11 @@ describe('production material costs', () => {
             ],
         };
         const evaluator = new ProductionMaterialCostEvaluator(
-            new Map([['left', item('left')], ['right', item('right')]]),
+            new Map([
+                ['left', item('left')],
+                ['right', item('right')],
+                ['oven', item('oven')],
+            ]),
             cycleCatalog
         );
 
@@ -142,6 +165,8 @@ describe('production batch plans', () => {
             item('soil', 10, 1),
             item('reusable-soil', 15, 2),
             item('cauldron'),
+            item('pot'),
+            item('oven'),
         ];
         const source = catalog();
         const costs = new ProductionMaterialCostEvaluator(
@@ -154,7 +179,9 @@ describe('production batch plans', () => {
                 ovenTransforms: source.ovenTransforms.filter(
                     (transform) => transform.outputItemId === 'cocaine'
                 ),
-                stations: source.stations.filter((station) => station.kind === 'cauldron'),
+                stations: source.stations.filter((station) =>
+                    ['cauldron', 'grow-container', 'lab-oven'].includes(station.kind)
+                ),
             }
         );
 
@@ -170,6 +197,8 @@ describe('production batch plans', () => {
                     batchCount: 17,
                     outputQuantityPerBatch: 12,
                     durationMinutesPerBatch: 60,
+                    acceptedEquipmentItemIds: ['pot'],
+                    equipmentItemId: null,
                     totalProcessMinutes: 1_020,
                     producedQuantity: 204,
                     leftoverQuantity: 4,
@@ -186,6 +215,8 @@ describe('production batch plans', () => {
                     batchCount: 10,
                     outputQuantityPerBatch: 10,
                     durationMinutesPerBatch: 1,
+                    acceptedEquipmentItemIds: ['cauldron'],
+                    equipmentItemId: 'cauldron',
                     totalProcessMinutes: 10,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -202,6 +233,8 @@ describe('production batch plans', () => {
                     batchCount: 100,
                     outputQuantityPerBatch: 1,
                     durationMinutesPerBatch: 1,
+                    acceptedEquipmentItemIds: ['oven'],
+                    equipmentItemId: 'oven',
                     totalProcessMinutes: 100,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -242,6 +275,55 @@ describe('production batch plans', () => {
             purchaseCost: 1885,
         });
     });
+
+    it('applies the selected grow container to yield and duration', () => {
+        const source = catalog();
+        const tent = {
+            schema: 'neonschedule1-production-station-2' as const,
+            itemId: 'tent',
+            kind: 'grow-container' as const,
+            yieldMultiplier: 0.6666667,
+            growSpeedMultiplier: 1.333333,
+            maxTemperatureGrowthMultiplier: 1,
+            minimumTemperatureThreshold: 1,
+            maximumTemperatureThreshold: 1,
+            allowedSoilIds: ['soil'],
+            allowedAdditiveIds: [],
+        };
+        const selectedCatalog: ProductionCatalog = {
+            ...emptyCatalog(),
+            seeds: source.seeds.map((seed) => ({
+                ...seed,
+                soilItemIds: ['soil'],
+                baseYieldQuantity: 12,
+            })),
+            stations: [tent],
+        };
+        const items = [item('seed', 100), item('leaf'), item('soil', 10, 1), item('tent')];
+        const costs = new ProductionMaterialCostEvaluator(
+            new Map(items.map((entry) => [entry.id, entry])),
+            selectedCatalog,
+            { growContainerItemId: 'tent' }
+        );
+
+        expect(new ProductionBatchPlanner(costs).plan('leaf', 100)).toMatchObject({
+            totalProcessMinutes: 585,
+            requiredMaterialCost: 1_430,
+            purchaseCost: 1_430,
+            productionSteps: [
+                {
+                    routeId: 'seed:seed:leaf:soil:tent',
+                    outputQuantityPerBatch: 8,
+                    durationMinutesPerBatch: 45,
+                    batchCount: 13,
+                    producedQuantity: 104,
+                    leftoverQuantity: 4,
+                    acceptedEquipmentItemIds: ['tent'],
+                    equipmentItemId: 'tent',
+                },
+            ],
+        });
+    });
 });
 
 function catalog(): ProductionCatalog {
@@ -261,10 +343,11 @@ function catalog(): ProductionCatalog {
         ],
         shrooms: [
             {
-                schema: 'neonschedule1-shroom-production-2',
+                schema: 'neonschedule1-shroom-production-3',
                 spawnItemId: 'spawn',
                 soilItemIds: ['substrate'],
                 productItemId: 'shroom',
+                acceptedEquipmentItemIds: ['mushroom-bed'],
                 growTimeMinutes: 60,
                 baseYieldQuantity: 16,
                 maximumTemperatureForGrowth: 1,
@@ -273,13 +356,14 @@ function catalog(): ProductionCatalog {
         ],
         stationRecipes: [
             {
-                schema: 'neonschedule1-station-recipe-1',
+                schema: 'neonschedule1-station-recipe-2',
                 id: 'liquid-meth',
                 title: 'Liquid Meth',
                 cookTimeMinutes: 1,
                 cookTemperature: 1,
                 cookTemperatureTolerance: 1,
                 qualityCalculationMethod: 'Additive',
+                acceptedEquipmentItemIds: ['chemistry-station'],
                 ingredients: [
                     { quantity: 1, acceptedItemIds: ['acid'] },
                     { quantity: 1, acceptedItemIds: ['high-pseudo', 'low-pseudo'] },
@@ -308,6 +392,19 @@ function catalog(): ProductionCatalog {
             },
         ],
         stations: [
+            {
+                schema: 'neonschedule1-production-station-2',
+                itemId: 'pot',
+                kind: 'grow-container',
+                yieldMultiplier: 1,
+                growSpeedMultiplier: 1,
+                maxTemperatureGrowthMultiplier: 1,
+                minimumTemperatureThreshold: 1,
+                maximumTemperatureThreshold: 1,
+                allowedSoilIds: ['soil', 'reusable-soil'],
+                allowedAdditiveIds: [],
+            },
+            labOvenStation(),
             {
                 schema: 'neonschedule1-production-station-2',
                 itemId: 'cauldron',
@@ -342,12 +439,20 @@ function catalog(): ProductionCatalog {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-2',
+        schema: 'neonschedule1-production-catalog-3',
         seeds: [],
         shrooms: [],
         stationRecipes: [],
         ovenTransforms: [],
         stations: [],
+    };
+}
+
+function labOvenStation(): ProductionCatalog['stations'][number] {
+    return {
+        schema: 'neonschedule1-production-station-2',
+        itemId: 'oven',
+        kind: 'lab-oven',
     };
 }
 

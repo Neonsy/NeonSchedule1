@@ -21,10 +21,12 @@ import {
     type JsonObject,
 } from '#data-compiler/json';
 
-// These literals come from the current game's production methods because the raw collector
-// identifies the related items but does not expose their quantities or manual work duration.
+// These literals come from the current game's production methods because the raw collector does
+// not expose some quantities, manual work duration, or equipment associations.
 const cauldronSecondaryInputQuantity = 1;
 const cauldronOutputQuantity = 10;
+const chemistryStationItemId = 'chemistrystation';
+const mushroomBedItemId = 'mushroombed';
 const mushroomSpawnInputQuantity = 1;
 const mushroomSpawnOutputQuantity = 1;
 const mushroomSpawnWorkTimeMinutes = 6;
@@ -49,17 +51,40 @@ export function normalizeProduction(
         .filter((station): station is ProductionStation => station !== null)
         .sort((left, right) => left.itemId.localeCompare(right.itemId));
     const soils = productionSoils(report, normalizedStations, itemIds, integrity);
+    const chemistryStationItemIds = requiredEquipment(
+        chemistryStationItemId,
+        report.recipes.length,
+        itemIds,
+        integrity
+    );
+    const mushroomBedItemIds = requiredEquipment(
+        mushroomBedItemId,
+        report.shroomSpawns.length,
+        itemIds,
+        integrity
+    );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-2',
+        schema: 'neonschedule1-production-catalog-3',
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),
         shrooms: [...shroomSpawns.entries()]
-            .map(([itemId, raw]) => normalizeShroom(itemId, raw, soils.shroom, itemIds, integrity))
+            .map(([itemId, raw]) =>
+                normalizeShroom(
+                    itemId,
+                    raw,
+                    soils.shroom,
+                    mushroomBedItemIds,
+                    itemIds,
+                    integrity
+                )
+            )
             .sort((left, right) => left.spawnItemId.localeCompare(right.spawnItemId)),
         stationRecipes: [...recipes.entries()]
-            .map(([id, raw]) => normalizeRecipe(id, raw, itemIds, integrity))
+            .map(([id, raw]) =>
+                normalizeRecipe(id, raw, chemistryStationItemIds, itemIds, integrity)
+            )
             .sort((left, right) => left.id.localeCompare(right.id)),
         ovenTransforms: normalizeOvenTransforms(report.ovenTransforms, itemIds, integrity),
         stations: normalizedStations,
@@ -154,6 +179,7 @@ function normalizeShroom(
     spawnItemId: string,
     raw: JsonObject,
     soilItemIds: readonly string[],
+    acceptedEquipmentItemIds: readonly string[],
     itemIds: ReadonlySet<string>,
     integrity: Integrity
 ): ShroomProduction {
@@ -162,10 +188,11 @@ function normalizeShroom(
     requireItem(spawnItemId, itemIds, `${path}.itemId`, integrity);
     requireItem(productItemId, itemIds, `${path}.productId`, integrity);
     return {
-        schema: 'neonschedule1-shroom-production-2',
+        schema: 'neonschedule1-shroom-production-3',
         spawnItemId,
         soilItemIds: [...soilItemIds],
         productItemId,
+        acceptedEquipmentItemIds: [...acceptedEquipmentItemIds],
         growTimeMinutes: positiveNumber(raw, 'growTime', path, integrity) * minutesPerHour,
         baseYieldQuantity: positiveNumber(raw, 'baseYieldQuantity', path, integrity),
         maximumTemperatureForGrowth: numberField(raw, 'maximumTemperatureForGrowth', path),
@@ -176,6 +203,7 @@ function normalizeShroom(
 function normalizeRecipe(
     id: string,
     raw: JsonObject,
+    acceptedEquipmentItemIds: readonly string[],
     itemIds: ReadonlySet<string>,
     integrity: Integrity
 ): StationRecipe {
@@ -203,13 +231,14 @@ function normalizeRecipe(
     const outputItemId = stringField(raw, 'outputItemId', path);
     requireItem(outputItemId, itemIds, `${path}.outputItemId`, integrity);
     return {
-        schema: 'neonschedule1-station-recipe-1',
+        schema: 'neonschedule1-station-recipe-2',
         id,
         title: stringField(raw, 'title', path),
         cookTimeMinutes: positiveNumber(raw, 'cookTimeMinutes', path, integrity),
         cookTemperature: numberField(raw, 'cookTemperature', path),
         cookTemperatureTolerance: nonNegativeNumber(raw, 'cookTemperatureTolerance', path, integrity),
         qualityCalculationMethod: stringField(raw, 'qualityCalculationMethod', path),
+        acceptedEquipmentItemIds: [...acceptedEquipmentItemIds],
         ingredients,
         outputItemId,
         outputQuantity: positiveNumber(raw, 'outputQuantity', path, integrity),
@@ -421,6 +450,17 @@ function requireItem(
     integrity: Integrity
 ): void {
     requireReferences([itemId], itemIds, label, integrity);
+}
+
+function requiredEquipment(
+    itemId: string,
+    definitionCount: number,
+    itemIds: ReadonlySet<string>,
+    integrity: Integrity
+): string[] {
+    if (definitionCount === 0) return [];
+    requireItem(itemId, itemIds, `production equipment ${JSON.stringify(itemId)}`, integrity);
+    return [itemId];
 }
 
 function uniqueIds(ids: readonly string[], path: string, integrity: Integrity): string[] {

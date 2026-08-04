@@ -16,10 +16,11 @@ export const SeedProductionSchema = type({
 export type SeedProduction = typeof SeedProductionSchema.infer;
 
 export const ShroomProductionSchema = type({
-    schema: "'neonschedule1-shroom-production-2'",
+    schema: "'neonschedule1-shroom-production-3'",
     spawnItemId: 'string',
     soilItemIds: 'string[]',
     productItemId: 'string',
+    acceptedEquipmentItemIds: 'string[]',
     growTimeMinutes: 'number',
     baseYieldQuantity: 'number',
     maximumTemperatureForGrowth: 'number',
@@ -34,13 +35,14 @@ export const StationRecipeIngredientSchema = type({
 export type StationRecipeIngredient = typeof StationRecipeIngredientSchema.infer;
 
 export const StationRecipeSchema = type({
-    schema: "'neonschedule1-station-recipe-1'",
+    schema: "'neonschedule1-station-recipe-2'",
     id: 'string',
     title: 'string',
     cookTimeMinutes: 'number',
     cookTemperature: 'number',
     cookTemperatureTolerance: 'number',
     qualityCalculationMethod: 'string',
+    acceptedEquipmentItemIds: 'string[]',
     ingredients: StationRecipeIngredientSchema.array(),
     outputItemId: 'string',
     outputQuantity: 'number',
@@ -161,7 +163,7 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-2'",
+    schema: "'neonschedule1-production-catalog-3'",
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

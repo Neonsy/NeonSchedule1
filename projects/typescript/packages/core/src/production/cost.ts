@@ -31,6 +31,8 @@ export interface ProducedMaterialCost {
     readonly method: ProductionMethod;
     readonly outputQuantity: number;
     readonly durationMinutesPerBatch: number;
+    readonly acceptedEquipmentItemIds: readonly string[];
+    readonly equipmentItemId: string | null;
     readonly batchCost: number;
     readonly unitCost: number;
     readonly inputs: readonly ProductionMaterialInput[];
@@ -40,6 +42,10 @@ export type ProductionMaterialCost = BasePurchaseMaterialCost | ProducedMaterial
 
 export interface ProductionMaterialCostResolver {
     unitCost(itemId: string): number;
+}
+
+export interface ProductionMaterialCostOptions {
+    readonly growContainerItemId?: string;
 }
 
 interface RouteInput {
@@ -53,6 +59,8 @@ interface ProductionRoute {
     readonly outputItemId: string;
     readonly outputQuantity: number;
     readonly durationMinutesPerBatch: number;
+    readonly acceptedEquipmentItemIds: readonly string[];
+    readonly equipmentItemId: string | null;
     readonly inputs: readonly RouteInput[];
 }
 
@@ -61,9 +69,13 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
     readonly #routesByOutput: ReadonlyMap<string, readonly ProductionRoute[]>;
     readonly #cache = new Map<string, ProductionMaterialCost>();
 
-    constructor(itemsById: ReadonlyMap<string, Item>, catalog: ProductionCatalog) {
+    constructor(
+        itemsById: ReadonlyMap<string, Item>,
+        catalog: ProductionCatalog,
+        options: ProductionMaterialCostOptions = {}
+    ) {
         this.#itemsById = itemsById;
-        this.#routesByOutput = indexRoutes(productionRoutes(itemsById, catalog));
+        this.#routesByOutput = indexRoutes(productionRoutes(itemsById, catalog, options));
     }
 
     unitCost(itemId: string): number {
@@ -137,6 +149,8 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
             method: route.method,
             outputQuantity: route.outputQuantity,
             durationMinutesPerBatch: route.durationMinutesPerBatch,
+            acceptedEquipmentItemIds: route.acceptedEquipmentItemIds,
+            equipmentItemId: route.equipmentItemId,
             batchCost,
             unitCost: batchCost / route.outputQuantity,
             inputs,
@@ -146,21 +160,63 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
 
 function productionRoutes(
     itemsById: ReadonlyMap<string, Item>,
-    catalog: ProductionCatalog
+    catalog: ProductionCatalog,
+    options: ProductionMaterialCostOptions
 ): ProductionRoute[] {
     const routes: ProductionRoute[] = [];
+    const selectedGrowContainer = selectGrowContainer(catalog, options.growContainerItemId);
     for (const seed of catalog.seeds) {
         if (seed.soilItemIds.length === 0) {
             throw new Error(`Seed production ${JSON.stringify(seed.seedItemId)} has no soil`);
         }
         for (const product of seed.harvestProducts) {
-            for (const soilItemId of seed.soilItemIds) {
+            const soilItemIds = selectedGrowContainer
+                ? seed.soilItemIds.filter((itemId) =>
+                      selectedGrowContainer.allowedSoilIds.includes(itemId)
+                  )
+                : seed.soilItemIds;
+            if (soilItemIds.length === 0) {
+                throw new Error(
+                    `Grow container ${JSON.stringify(selectedGrowContainer?.itemId)} accepts no soil for seed ${JSON.stringify(seed.seedItemId)}`
+                );
+            }
+            for (const soilItemId of soilItemIds) {
+                const routeId = [
+                    'seed',
+                    seed.seedItemId,
+                    product.itemId,
+                    soilItemId,
+                    selectedGrowContainer?.itemId,
+                ]
+                    .filter((part) => part !== undefined)
+                    .join(':');
+                const equipment = {
+                    ...requireEquipment(
+                        itemsById,
+                        catalog.stations
+                            .filter(
+                                (station) =>
+                                    station.kind === 'grow-container' &&
+                                    station.allowedSoilIds.includes(soilItemId)
+                            )
+                            .map((station) => station.itemId),
+                        routeId,
+                        selectedGrowContainer?.itemId
+                    ),
+                    equipmentItemId: selectedGrowContainer?.itemId ?? null,
+                };
                 routes.push({
-                    id: `seed:${seed.seedItemId}:${product.itemId}:${soilItemId}`,
+                    id: routeId,
                     method: 'seed-harvest',
                     outputItemId: product.itemId,
-                    outputQuantity: seed.baseYieldQuantity * product.quantity,
-                    durationMinutesPerBatch: seed.growthTimeMinutes,
+                    outputQuantity:
+                        harvestCount(seed.baseYieldQuantity, selectedGrowContainer?.yieldMultiplier) *
+                        product.quantity,
+                    durationMinutesPerBatch: adjustedGrowthMinutes(
+                        seed.growthTimeMinutes,
+                        selectedGrowContainer?.growSpeedMultiplier
+                    ),
+                    ...equipment,
                     inputs: [
                         { acceptedItemIds: [seed.seedItemId], quantity: 1 },
                         {
@@ -183,6 +239,11 @@ function productionRoutes(
                 outputItemId: shroom.productItemId,
                 outputQuantity: shroom.baseYieldQuantity,
                 durationMinutesPerBatch: shroom.growTimeMinutes,
+                ...requireEquipment(
+                    itemsById,
+                    shroom.acceptedEquipmentItemIds,
+                    `shroom:${shroom.spawnItemId}:${shroom.productItemId}:${soilItemId}`
+                ),
                 inputs: [
                     { acceptedItemIds: [shroom.spawnItemId], quantity: 1 },
                     {
@@ -200,6 +261,11 @@ function productionRoutes(
             outputItemId: recipe.outputItemId,
             outputQuantity: recipe.outputQuantity,
             durationMinutesPerBatch: recipe.cookTimeMinutes,
+            ...requireEquipment(
+                itemsById,
+                recipe.acceptedEquipmentItemIds,
+                `recipe:${recipe.id}`
+            ),
             inputs: recipe.ingredients,
         });
     }
@@ -210,6 +276,13 @@ function productionRoutes(
             outputItemId: transform.outputItemId,
             outputQuantity: transform.outputQuantity,
             durationMinutesPerBatch: transform.cookTimeMinutes,
+            ...requireEquipment(
+                itemsById,
+                catalog.stations
+                    .filter((station) => station.kind === 'lab-oven')
+                    .map((station) => station.itemId),
+                `oven:${transform.inputItemId}:${transform.outputItemId}`
+            ),
             inputs: [{ acceptedItemIds: [transform.inputItemId], quantity: 1 }],
         });
     }
@@ -221,6 +294,11 @@ function productionRoutes(
                 outputItemId: station.outputItemId,
                 outputQuantity: station.outputQuantity,
                 durationMinutesPerBatch: station.cookTimeMinutes,
+                ...requireEquipment(
+                    itemsById,
+                    [station.itemId],
+                    `cauldron:${station.itemId}`
+                ),
                 inputs: [
                     {
                         acceptedItemIds: [station.primaryInputItemId],
@@ -241,6 +319,11 @@ function productionRoutes(
                     outputItemId: transform.outputSpawnItemId,
                     outputQuantity: transform.outputSpawnQuantity,
                     durationMinutesPerBatch: station.workTimeMinutes,
+                    ...requireEquipment(
+                        itemsById,
+                        [station.itemId],
+                        `mushroom-spawn:${station.itemId}:${transform.syringeItemId}`
+                    ),
                     inputs: [
                         {
                             acceptedItemIds: [station.grainBagItemId],
@@ -264,6 +347,60 @@ function soilUseQuantity(itemsById: ReadonlyMap<string, Item>, itemId: string): 
         throw new Error(`Production soil ${JSON.stringify(itemId)} has no positive use count`);
     }
     return 1 / soil.uses;
+}
+
+function requireEquipment(
+    itemsById: ReadonlyMap<string, Item>,
+    itemIds: readonly string[],
+    routeId: string,
+    selectedItemId?: string
+): {
+    readonly acceptedEquipmentItemIds: readonly string[];
+    readonly equipmentItemId: string | null;
+} {
+    const acceptedEquipmentItemIds = [...new Set(itemIds)].sort();
+    if (acceptedEquipmentItemIds.length === 0) {
+        throw new Error(`Production route ${JSON.stringify(routeId)} has no equipment`);
+    }
+    for (const itemId of acceptedEquipmentItemIds) {
+        if (!itemsById.has(itemId)) {
+            throw new Error(
+                `Production route ${JSON.stringify(routeId)} references unknown equipment ${JSON.stringify(itemId)}`
+            );
+        }
+    }
+    if (selectedItemId !== undefined && !acceptedEquipmentItemIds.includes(selectedItemId)) {
+        throw new Error(
+            `Production route ${JSON.stringify(routeId)} does not accept equipment ${JSON.stringify(selectedItemId)}`
+        );
+    }
+    return {
+        acceptedEquipmentItemIds,
+        equipmentItemId:
+            selectedItemId ?? (acceptedEquipmentItemIds.length === 1 ? acceptedEquipmentItemIds[0]! : null),
+    };
+}
+
+function selectGrowContainer(
+    catalog: ProductionCatalog,
+    itemId: string | undefined
+): Extract<ProductionCatalog['stations'][number], { readonly kind: 'grow-container' }> | null {
+    if (itemId === undefined) return null;
+    const station = catalog.stations.find((candidate) => candidate.itemId === itemId);
+    if (station?.kind !== 'grow-container') {
+        throw new Error(`Unknown grow container ${JSON.stringify(itemId)}`);
+    }
+    return station;
+}
+
+function harvestCount(baseYieldQuantity: number, yieldMultiplier = 1): number {
+    return Math.max(1, Math.round(baseYieldQuantity * yieldMultiplier));
+}
+
+function adjustedGrowthMinutes(growthTimeMinutes: number, growSpeedMultiplier = 1): number {
+    const duration = growthTimeMinutes / growSpeedMultiplier;
+    const nearestMinute = Math.round(duration);
+    return Math.abs(duration - nearestMinute) <= 1e-3 ? nearestMinute : Math.ceil(duration);
 }
 
 function indexRoutes(routes: readonly ProductionRoute[]): ReadonlyMap<string, readonly ProductionRoute[]> {
