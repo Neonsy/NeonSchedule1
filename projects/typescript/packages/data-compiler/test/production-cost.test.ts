@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    ProductionBatchPlanner,
     ProductionMaterialCostEvaluator,
     type Item,
     type ProductionCatalog,
@@ -117,6 +118,112 @@ describe('production material costs', () => {
         );
 
         expect(() => evaluator.evaluate('left')).toThrow('No complete material-cost route for "left"');
+    });
+});
+
+describe('production batch plans', () => {
+    it('expands whole batches and rounds each purchase once', () => {
+        const items = [
+            item('seed', 100),
+            item('leaf'),
+            item('fuel', 5),
+            item('base'),
+            item('cocaine', 80),
+            item('soil', 10, 1),
+            item('reusable-soil', 15, 2),
+            item('cauldron'),
+        ];
+        const source = catalog();
+        const costs = new ProductionMaterialCostEvaluator(
+            new Map(items.map((entry) => [entry.id, entry])),
+            {
+                ...source,
+                seeds: source.seeds.map((seed) => ({ ...seed, baseYieldQuantity: 12 })),
+                shrooms: [],
+                stationRecipes: [],
+                ovenTransforms: source.ovenTransforms.filter(
+                    (transform) => transform.outputItemId === 'cocaine'
+                ),
+                stations: source.stations.filter((station) => station.kind === 'cauldron'),
+            }
+        );
+
+        expect(new ProductionBatchPlanner(costs).plan('cocaine', 100)).toEqual({
+            targetItemId: 'cocaine',
+            targetQuantity: 100,
+            productionSteps: [
+                {
+                    itemId: 'leaf',
+                    routeId: 'seed:seed:leaf:reusable-soil',
+                    method: 'seed-harvest',
+                    requiredQuantity: 200,
+                    batchCount: 17,
+                    outputQuantityPerBatch: 12,
+                    producedQuantity: 204,
+                    leftoverQuantity: 4,
+                    inputs: [
+                        { itemId: 'seed', quantityPerBatch: 1, totalQuantity: 17 },
+                        { itemId: 'reusable-soil', quantityPerBatch: 0.5, totalQuantity: 8.5 },
+                    ],
+                },
+                {
+                    itemId: 'base',
+                    routeId: 'cauldron:cauldron',
+                    method: 'cauldron',
+                    requiredQuantity: 100,
+                    batchCount: 10,
+                    outputQuantityPerBatch: 10,
+                    producedQuantity: 100,
+                    leftoverQuantity: 0,
+                    inputs: [
+                        { itemId: 'leaf', quantityPerBatch: 20, totalQuantity: 200 },
+                        { itemId: 'fuel', quantityPerBatch: 1, totalQuantity: 10 },
+                    ],
+                },
+                {
+                    itemId: 'cocaine',
+                    routeId: 'oven:base:cocaine',
+                    method: 'oven',
+                    requiredQuantity: 100,
+                    batchCount: 100,
+                    outputQuantityPerBatch: 1,
+                    producedQuantity: 100,
+                    leftoverQuantity: 0,
+                    inputs: [{ itemId: 'base', quantityPerBatch: 1, totalQuantity: 100 }],
+                },
+            ],
+            purchases: [
+                {
+                    itemId: 'fuel',
+                    requiredQuantity: 10,
+                    purchaseQuantity: 10,
+                    leftoverQuantity: 0,
+                    unitCost: 5,
+                    requiredCost: 50,
+                    purchaseCost: 50,
+                },
+                {
+                    itemId: 'reusable-soil',
+                    requiredQuantity: 8.5,
+                    purchaseQuantity: 9,
+                    leftoverQuantity: 0.5,
+                    unitCost: 15,
+                    requiredCost: 127.5,
+                    purchaseCost: 135,
+                },
+                {
+                    itemId: 'seed',
+                    requiredQuantity: 17,
+                    purchaseQuantity: 17,
+                    leftoverQuantity: 0,
+                    unitCost: 100,
+                    requiredCost: 1700,
+                    purchaseCost: 1700,
+                },
+            ],
+            requiredMaterialCost: 1877.5,
+            purchaseCost: 1885,
+        });
     });
 });
 
