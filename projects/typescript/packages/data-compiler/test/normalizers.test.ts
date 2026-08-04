@@ -6,6 +6,7 @@ import { Integrity } from '#data-compiler/integrity';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
+import { normalizeProduction } from '#data-compiler/normalize/production';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 
 const noAssets: VerifiedAssets = {
@@ -192,6 +193,71 @@ describe('domain normalization', () => {
         expect(integrity.errors).toContain('Property "barn" business flag and business record differ');
     });
 
+    it('normalizes production definitions with item references intact', () => {
+        const report = emptyReport();
+        report.seeds.push({
+            itemId: 'seed',
+            plantRuntimeType: 'Plant',
+            growthTime: 9,
+            baseYieldQuantity: 12,
+            harvestTarget: 'buds',
+            harvestables: [{ productId: 'product', quantity: 1 }],
+        });
+        report.recipes.push({
+            id: 'liquid',
+            title: 'Liquid',
+            cookTimeMinutes: 60,
+            cookTemperature: 100,
+            cookTemperatureTolerance: 5,
+            qualityCalculationMethod: 'Additive',
+            ingredients: [{ quantity: 1, acceptedItemIds: ['input'] }],
+            outputItemId: 'liquid',
+            outputQuantity: 1,
+        });
+        report.ovenTransforms.push({
+            inputItemId: 'liquid',
+            cookType: 'Liquid',
+            cookTime: 60,
+            outputItemId: 'product',
+            outputQuantity: 10,
+        });
+        report.productionStations.push({
+            itemId: 'mixer',
+            kind: 'mixing',
+            capacity: 10,
+            timePerItem: 6,
+            requiresManualIngredientInsertion: true,
+        });
+        const integrity = new Integrity();
+
+        const production = normalizeProduction(
+            report,
+            new Set(['seed', 'product', 'input', 'liquid', 'mixer']),
+            integrity
+        );
+
+        expect(integrity.errors).toEqual([]);
+        expect(production.seeds[0]).toMatchObject({
+            seedItemId: 'seed',
+            baseYieldQuantity: 12,
+            harvestProducts: [{ itemId: 'product', quantity: 1 }],
+        });
+        expect(production.stationRecipes[0]).toMatchObject({
+            id: 'liquid',
+            ingredients: [{ quantity: 1, acceptedItemIds: ['input'] }],
+        });
+        expect(production.ovenTransforms[0]).toMatchObject({
+            inputItemId: 'liquid',
+            outputItemId: 'product',
+            outputQuantity: 10,
+        });
+        expect(production.stations[0]).toMatchObject({
+            itemId: 'mixer',
+            kind: 'mixing',
+            capacity: 10,
+        });
+    });
+
     it('classifies intentional iconless definitions and reports unexplained ones', () => {
         const report = emptyReport();
         report.items.push(
@@ -262,6 +328,11 @@ function emptyReport(): RawReport {
         packaging: [],
         additives: [],
         soils: [],
+        recipes: [],
+        seeds: [],
+        shroomSpawns: [],
+        ovenTransforms: [],
+        productionStations: [],
         shops: [],
         mixing: {
             maxProperties: 8,

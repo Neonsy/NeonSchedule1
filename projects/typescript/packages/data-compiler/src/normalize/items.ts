@@ -114,6 +114,7 @@ export function normalizeItems(report: RawReport, assets: VerifiedAssets, integr
             };
             if (item.product !== null) {
                 requireReferences(item.product.validPackagingIds, itemIds, `product ${id}`, integrity);
+                if (product !== undefined) validateProductEconomics(id, product, item, integrity);
             }
             if (mixingIngredient !== undefined) {
                 validateMixingIngredient(id, mixingIngredient, item, integrity);
@@ -198,6 +199,14 @@ function normalizeProduct(raw: JsonObject, path: string): Product {
         effectIds: stringArrayField(raw, 'effectIds', path),
         validPackagingIds: stringArrayField(raw, 'validPackagingIds', path).sort(),
     };
+}
+
+function validateProductEconomics(id: string, raw: JsonObject, item: Item, integrity: Integrity): void {
+    const path = `report.products[${JSON.stringify(id)}]`;
+    const productPurchasePrice = numberField(raw, 'basePurchasePrice', path);
+    if (productPurchasePrice !== item.basePurchasePrice) {
+        integrity.addError(`Product ${JSON.stringify(id)} basePurchasePrice differs from its item`);
+    }
 }
 
 function normalizePackaging(raw: JsonObject, path: string): Packaging {

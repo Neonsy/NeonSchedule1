@@ -10,6 +10,11 @@ export interface RawReport {
     readonly packaging: JsonObject[];
     readonly additives: JsonObject[];
     readonly soils: JsonObject[];
+    readonly recipes: JsonObject[];
+    readonly seeds: JsonObject[];
+    readonly shroomSpawns: JsonObject[];
+    readonly ovenTransforms: JsonObject[];
+    readonly productionStations: JsonObject[];
     readonly shops: JsonObject[];
     readonly mixing: {
         readonly maxProperties: number;

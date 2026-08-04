@@ -9,19 +9,19 @@ import { sha256Text } from '#data-compiler/json';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
+import { normalizeProduction } from '#data-compiler/normalize/production';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.6';
+export const NORMALIZER_VERSION = '0.0.7';
 
 const deferredDomains = [
     'buildable-geometry',
     'people',
     'property-layouts',
     'relationships',
-    'seeds-and-production',
     'world-and-navigation',
 ] as const;
 
@@ -33,6 +33,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const items = normalizeItems(acquisition.report, assets, integrity);
     const mixing = normalizeMixing(acquisition.report, effects, items, integrity);
     const itemIds = new Set(items.map((item) => item.id));
+    const production = normalizeProduction(acquisition.report, itemIds, integrity);
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
@@ -53,6 +54,11 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         mixingOracleCases: acquisition.report.mixing.oracles.length,
         shops: shops.length,
         properties: properties.length,
+        seeds: production.seeds.length,
+        shroomSpawns: production.shrooms.length,
+        stationRecipes: production.stationRecipes.length,
+        ovenTransforms: production.ovenTransforms.length,
+        productionStations: production.stations.length,
         directAssetFiles: assets.directFileCount,
         offlineAssetFiles: assets.offlineFileCount,
         meshAssets: visuals.meshes.length,
@@ -76,6 +82,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         documents.set(`properties/${entityDirectoryName(property.code)}/summary.json`, property);
     }
     documents.set('mixing/rules.json', mixing);
+    documents.set('production/catalog.json', production);
     documents.set('visuals/assets.json', visuals);
     documents.set('reports/integrity.json', report);
 

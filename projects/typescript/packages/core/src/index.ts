@@ -4,6 +4,7 @@ export * from '#core/data/effect';
 export * from '#core/data/item';
 export * from '#core/data/mixing';
 export * from '#core/data/property';
+export * from '#core/data/production';
 export * from '#core/data/shop';
 export * from '#core/data/visual';
 export * from '#core/mixing/engine';

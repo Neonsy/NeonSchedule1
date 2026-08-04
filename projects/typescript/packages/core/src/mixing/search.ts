@@ -33,6 +33,8 @@ interface SearchState {
     readonly ingredientCost: number;
 }
 
+type CostedProduct = Product & { readonly baseProductCost: number };
+
 export class RecipeSearchLimitError extends Error {
     readonly depth: number;
     readonly maxStates: number;
@@ -137,6 +139,7 @@ export class RecipeSearch {
                             key,
                             recipeScore(
                                 this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
+                                product.baseProductCost,
                                 candidate.ingredientCost,
                                 objective
                             )
@@ -160,11 +163,14 @@ export class RecipeSearch {
             .slice(0, input.limit);
     }
 
-    #product(id: string): Product {
+    #product(id: string): CostedProduct {
         const item = this.#itemsById.get(id);
         if (item === undefined) throw new Error(`Unknown product ${JSON.stringify(id)}`);
         if (item.product === null) throw new Error(`Item ${JSON.stringify(id)} is not a product`);
-        return item.product;
+        if (item.basePurchasePrice === null) {
+            throw new Error(`Product ${JSON.stringify(id)} has no base purchase price`);
+        }
+        return { ...item.product, baseProductCost: item.basePurchasePrice };
     }
 
     #ingredients(ids: readonly string[]): IngredientAction[] {
@@ -198,7 +204,15 @@ class RecipeScoreCutoff {
         this.#limit = limit;
         for (const [key, recipe] of recipes) {
             if (constraints.matches(recipe.effectIds)) {
-                this.add(key, recipeScore(recipe.productValue, recipe.ingredientCost, objective));
+                this.add(
+                    key,
+                    recipeScore(
+                        recipe.productValue,
+                        recipe.baseProductCost,
+                        recipe.ingredientCost,
+                        objective
+                    )
+                );
             }
         }
     }
@@ -224,7 +238,7 @@ class RecipeScoreCutoff {
 
 class RecipeValueBound {
     readonly #engine: MixingEngine;
-    readonly #product: Product;
+    readonly #product: CostedProduct;
     readonly #actions: readonly IngredientAction[];
     readonly #objective: RecipeSearchObjective;
     readonly #minimumActionCost: number;
@@ -233,7 +247,7 @@ class RecipeValueBound {
 
     constructor(
         engine: MixingEngine,
-        product: Product,
+        product: CostedProduct,
         actions: readonly IngredientAction[],
         objective: RecipeSearchObjective
     ) {
@@ -264,7 +278,7 @@ class RecipeValueBound {
         }
         const upperValue = this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
         const lowerCost = ingredientCost + this.#minimumActionCost * remainingIngredients;
-        return recipeScore(upperValue, lowerCost, this.#objective);
+        return recipeScore(upperValue, this.#product.baseProductCost, lowerCost, this.#objective);
     }
 
     exactShortHorizon(
@@ -279,6 +293,7 @@ class RecipeValueBound {
                 key: stateKey(effectIds),
                 value: recipeScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
+                    this.#product.baseProductCost,
                     ingredientCost,
                     this.#objective
                 ),
@@ -315,6 +330,7 @@ class RecipeValueBound {
                 const key = stateKey(result.effectIds);
                 const value = recipeScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, result.effectIds),
+                    this.#product.baseProductCost,
                     ingredientCost + result.additionalIngredientCost,
                     this.#objective
                 );
@@ -419,16 +435,21 @@ function effectIdSet(
 
 function evaluateState(
     productId: string,
-    product: Product,
+    product: CostedProduct,
     state: SearchState,
     engine: MixingEngine
 ): RecipeEvaluation {
+    const productValue = engine.calculateProductValue(product.basePrice, state.effectIds);
+    const totalCost = product.baseProductCost + state.ingredientCost;
     return {
         productId,
         ingredientIds: state.ingredientIds,
         effectIds: state.effectIds,
-        productValue: engine.calculateProductValue(product.basePrice, state.effectIds),
+        productValue,
+        baseProductCost: product.baseProductCost,
         ingredientCost: state.ingredientCost,
+        totalCost,
+        netValue: productValue - totalCost,
         ingredientCount: state.ingredientIds.length,
     };
 }
@@ -439,8 +460,8 @@ function compareRecipes(
     objective: RecipeSearchObjective
 ): number {
     return (
-        recipeScore(right.productValue, right.ingredientCost, objective) -
-            recipeScore(left.productValue, left.ingredientCost, objective) ||
+        recipeScore(right.productValue, right.baseProductCost, right.ingredientCost, objective) -
+            recipeScore(left.productValue, left.baseProductCost, left.ingredientCost, objective) ||
         comparePaths(left, right) ||
         compareStrings(left.effectIds, right.effectIds)
     );
@@ -448,10 +469,13 @@ function compareRecipes(
 
 function recipeScore(
     productValue: number,
+    baseProductCost: number,
     ingredientCost: number,
     objective: RecipeSearchObjective
 ): number {
-    return objective === 'productValue' ? productValue : productValue - ingredientCost;
+    return objective === 'productValue'
+        ? productValue
+        : productValue - baseProductCost - ingredientCost;
 }
 
 function comparePaths(

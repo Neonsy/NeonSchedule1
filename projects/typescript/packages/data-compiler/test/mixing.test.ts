@@ -59,7 +59,7 @@ describe('mixing engine', () => {
                 },
             ],
         };
-        const items = [product('product', ['a'], 35), ingredient('ingredient', 'shift', 2)];
+        const items = [product('product', ['a'], 35, 5), ingredient('ingredient', 'shift', 2)];
         const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
         const evaluator = new RecipeEvaluator(engine, new Map(items.map((entry) => [entry.id, entry])));
 
@@ -68,11 +68,19 @@ describe('mixing engine', () => {
             ingredientIds: ['ingredient'],
             effectIds: ['b', 'shift'],
             productValue: 35,
+            baseProductCost: 5,
             ingredientCost: 2,
+            totalCost: 7,
+            netValue: 28,
             ingredientCount: 1,
         });
         expect(() => evaluator.evaluate({ productId: 'product', ingredientIds: ['missing'] })).toThrow(
             'Unknown mixing ingredient "missing"'
+        );
+        const unpricedProduct = { ...items[0]!, basePurchasePrice: null };
+        const unpricedEvaluator = new RecipeEvaluator(engine, new Map([['product', unpricedProduct]]));
+        expect(() => unpricedEvaluator.evaluate({ productId: 'product', ingredientIds: [] })).toThrow(
+            'Product "product" has no base purchase price'
         );
     });
 
@@ -109,7 +117,10 @@ describe('mixing engine', () => {
                 ingredientIds: ['ingredient'],
                 effectIds: ['b', 'shift'],
                 productValue: 46,
+                baseProductCost: 0,
                 ingredientCost: 2,
+                totalCost: 2,
+                netValue: 44,
                 ingredientCount: 1,
             },
             {
@@ -117,7 +128,10 @@ describe('mixing engine', () => {
                 ingredientIds: [],
                 effectIds: ['a'],
                 productValue: 38,
+                baseProductCost: 0,
                 ingredientCost: 0,
+                totalCost: 0,
+                netValue: 38,
                 ingredientCount: 0,
             },
         ]);
@@ -144,7 +158,7 @@ describe('mixing engine', () => {
             ],
         };
         const items = [
-            product('product', ['base'], 10),
+            product('product', ['base'], 10, 3),
             ingredient('expensive', 'valuable', 15),
             ingredient('cheap', 'efficient', 1),
         ];
@@ -160,12 +174,18 @@ describe('mixing engine', () => {
         expect(search.search({ ...input, objective: 'productValue' })[0]).toMatchObject({
             ingredientIds: ['expensive'],
             productValue: 20,
+            baseProductCost: 3,
             ingredientCost: 15,
+            totalCost: 18,
+            netValue: 2,
         });
         expect(search.search({ ...input, objective: 'netValue' })[0]).toMatchObject({
             ingredientIds: ['cheap'],
             productValue: 15,
+            baseProductCost: 3,
             ingredientCost: 1,
+            totalCost: 4,
+            netValue: 11,
         });
     });
 
@@ -250,7 +270,10 @@ describe('mixing engine', () => {
                 ingredientIds: ['high-ingredient'],
                 effectIds: ['high'],
                 productValue: 20,
+                baseProductCost: 0,
                 ingredientCost: 1,
+                totalCost: 1,
+                netValue: 19,
                 ingredientCount: 1,
             },
         ]);
@@ -305,7 +328,10 @@ describe('mixing engine', () => {
                 ingredientIds: ['step', 'step'],
                 effectIds: ['required'],
                 productValue: 20,
+                baseProductCost: 0,
                 ingredientCost: 2,
+                totalCost: 2,
+                netValue: 18,
                 ingredientCount: 2,
             },
         ]);
@@ -379,15 +405,18 @@ function color() {
     return { r: 0, g: 0, b: 0, a: 1, htmlRgba: '#000000FF' };
 }
 
-function product(id: string, effectIds: string[], basePrice: number): Item {
-    return item(id, {
-        drugType: 'Test',
-        basePrice,
-        marketValue: basePrice,
-        baseAddictiveness: 0,
-        effectIds,
-        validPackagingIds: [],
-    });
+function product(id: string, effectIds: string[], basePrice: number, baseProductCost = 0): Item {
+    return {
+        ...item(id, {
+            drugType: 'Test',
+            basePrice,
+            marketValue: basePrice,
+            baseAddictiveness: 0,
+            effectIds,
+            validPackagingIds: [],
+        }),
+        basePurchasePrice: baseProductCost,
+    };
 }
 
 function ingredient(id: string, effectId: string, basePurchasePrice: number): Item {

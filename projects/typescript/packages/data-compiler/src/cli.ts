@@ -29,14 +29,21 @@ async function main(): Promise<number> {
 
     try {
         const result = await compileDataset(options.acquisition, options.output);
+        const { counts } = result.manifest;
+        const productionCount =
+            counts.seeds +
+            counts.shroomSpawns +
+            counts.stationRecipes +
+            counts.ovenTransforms +
+            counts.productionStations;
         console.log(`Normalized dataset: ${result.directory}`);
         console.log(`Dataset SHA-256: ${result.manifest.datasetSha256}`);
         console.log(
-            `Items=${result.manifest.counts.items} Effects=${result.manifest.counts.effects} ` +
-                `MixingMaps=${result.manifest.counts.mixingMaps} ` +
-                `Oracles=${result.manifest.counts.mixingOracleCases} ` +
-                `Shops=${result.manifest.counts.shops} ` +
-                `Properties=${result.manifest.counts.properties} Assets=${result.manifest.counts.directAssetFiles + result.manifest.counts.offlineAssetFiles}`
+            `Items=${counts.items} Effects=${counts.effects} ` +
+                `MixingMaps=${counts.mixingMaps} Oracles=${counts.mixingOracleCases} ` +
+                `Shops=${counts.shops} Properties=${counts.properties} ` +
+                `Production=${productionCount} ` +
+                `Assets=${counts.directAssetFiles + counts.offlineAssetFiles}`
         );
         if (result.reusedExisting) console.log('Existing hash-addressed dataset verified and reused.');
         return 0;

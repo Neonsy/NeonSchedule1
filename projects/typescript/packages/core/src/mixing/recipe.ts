@@ -12,7 +12,10 @@ export interface RecipeEvaluation {
     readonly ingredientIds: readonly string[];
     readonly effectIds: readonly string[];
     readonly productValue: number;
+    readonly baseProductCost: number;
     readonly ingredientCost: number;
+    readonly totalCost: number;
+    readonly netValue: number;
     readonly ingredientCount: number;
 }
 
@@ -29,6 +32,9 @@ export class RecipeEvaluator {
         const product = this.#item(input.productId, 'product');
         if (product.product === null) {
             throw new Error(`Item ${JSON.stringify(product.id)} is not a product`);
+        }
+        if (product.basePurchasePrice === null) {
+            throw new Error(`Product ${JSON.stringify(product.id)} has no base purchase price`);
         }
 
         let effectIds = [...product.product.effectIds];
@@ -48,12 +54,17 @@ export class RecipeEvaluator {
             ingredientCost += ingredient.basePurchasePrice;
         }
 
+        const productValue = this.#engine.calculateProductValue(product.product.basePrice, effectIds);
+        const totalCost = product.basePurchasePrice + ingredientCost;
         return {
             productId: product.id,
             ingredientIds: [...input.ingredientIds],
             effectIds,
-            productValue: this.#engine.calculateProductValue(product.product.basePrice, effectIds),
+            productValue,
+            baseProductCost: product.basePurchasePrice,
             ingredientCost,
+            totalCost,
+            netValue: productValue - totalCost,
             ingredientCount: input.ingredientIds.length,
         };
     }

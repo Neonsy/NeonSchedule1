@@ -12,6 +12,7 @@ The repository currently supports:
 
 - Evaluate ordered mixes with deterministic effect transformations
 - Search recipes exactly under explicit constraints
+- Calculate production materials, time, cost, equipment, and quality
 
 ## Planned player features
 
