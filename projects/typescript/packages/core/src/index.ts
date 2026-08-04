@@ -7,3 +7,4 @@ export * from './data/property.js';
 export * from './data/shop.js';
 export * from './data/visual.js';
 export * from './mixing/engine.js';
+export * from './mixing/recipe.js';

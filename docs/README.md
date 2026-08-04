@@ -6,9 +6,11 @@ It is intended for players who want to compare recipes by ingredients, effects, 
 > [!IMPORTANT]
 > NeonSchedule1 is in early development and does not have a public calculator.
 
-## Current state
+## Contributor capabilities
 
-The repository is being established and does not yet contain a usable calculation engine.
+The repository currently supports:
+
+- Evaluate ordered mixes with deterministic effect transformations
 
 ## Planned player features
 
