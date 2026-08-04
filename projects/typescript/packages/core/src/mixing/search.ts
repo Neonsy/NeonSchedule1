@@ -3,6 +3,7 @@ import { MixingEngine } from '#core/mixing/engine';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
 
 const defaultMaxStates = 100_000;
+const maxValueBoundDepth = 32;
 
 export interface RecipeSearchInput {
     readonly productId: string;
@@ -69,10 +70,21 @@ export class RecipeSearch {
         let exploredStates = 1;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
+        const valueBound = new RecipeValueBound(this.#engine, product, actions);
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
-            for (const state of layer.values()) {
+            const cutoff = new ProductValueCutoff(outcomes.values(), input.limit);
+            const remainingIngredients = input.maxIngredients - depth + 1;
+            const rankedStates = [...layer.values()]
+                .map((state) => ({ state, upperValue: valueBound.upperValue(state.effectIds, remainingIngredients) }))
+                .sort(
+                    (left, right) =>
+                        right.upperValue - left.upperValue ||
+                        compareStrings(left.state.effectIds, right.state.effectIds)
+                );
+            for (const { state, upperValue } of rankedStates) {
+                if (cutoff.value !== null && upperValue < cutoff.value) continue;
                 for (const action of actions) {
                     const candidate: SearchState = {
                         effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
@@ -88,6 +100,9 @@ export class RecipeSearch {
                         throw new RecipeSearchLimitError(depth, this.#maxStates);
                     }
                     next.set(key, candidate);
+                    if (current === undefined && !outcomes.has(key)) {
+                        cutoff.add(this.#engine.calculateProductValue(product.basePrice, candidate.effectIds));
+                    }
                 }
             }
 
@@ -124,6 +139,110 @@ export class RecipeSearch {
             }
             return { id, effectId, cost: item.basePurchasePrice };
         });
+    }
+}
+
+class ProductValueCutoff {
+    readonly #limit: number;
+    readonly #values: number[] = [];
+
+    constructor(recipes: Iterable<RecipeEvaluation>, limit: number) {
+        this.#limit = limit;
+        for (const recipe of recipes) this.add(recipe.productValue);
+    }
+
+    get value(): number | null {
+        return this.#values.length < this.#limit ? null : (this.#values[this.#limit - 1] ?? null);
+    }
+
+    add(value: number): void {
+        const index = this.#values.findIndex((current) => value > current);
+        if (index === -1) this.#values.push(value);
+        else this.#values.splice(index, 0, value);
+        if (this.#values.length > this.#limit) this.#values.pop();
+    }
+}
+
+class RecipeValueBound {
+    readonly #engine: MixingEngine;
+    readonly #product: Product;
+    readonly #actions: readonly IngredientAction[];
+    readonly #bestEffectCache = new Map<string, string>();
+    readonly #bestNewEffectCache = new Map<number, string | null>();
+
+    constructor(engine: MixingEngine, product: Product, actions: readonly IngredientAction[]) {
+        this.#engine = engine;
+        this.#product = product;
+        this.#actions = actions;
+    }
+
+    upperValue(effectIds: readonly string[], remainingIngredients: number): number {
+        if (this.#product.basePrice < 0 || remainingIngredients > maxValueBoundDepth) {
+            return Number.POSITIVE_INFINITY;
+        }
+        if (remainingIngredients === 1) return this.#exactOneStepValue(effectIds);
+
+        const upperEffectIds = effectIds.map((effectId) => this.#bestEffect(effectId, remainingIngredients));
+        const newEffectCount = Math.min(
+            remainingIngredients,
+            Math.max(0, this.#engine.rules.maxProperties - effectIds.length)
+        );
+        for (let index = 0; index < newEffectCount; index++) {
+            const effectId = this.#bestNewEffect(remainingIngredients - index - 1);
+            if (effectId !== null && this.#effectMultiple(effectId) > 0) upperEffectIds.push(effectId);
+        }
+        return this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
+    }
+
+    #exactOneStepValue(effectIds: readonly string[]): number {
+        let best = this.#engine.calculateProductValue(this.#product.basePrice, effectIds);
+        for (const action of this.#actions) {
+            const next = this.#engine.mixEffectIds(this.#product.drugType, effectIds, action.effectId);
+            best = Math.max(best, this.#engine.calculateProductValue(this.#product.basePrice, next));
+        }
+        return best;
+    }
+
+    #bestEffect(effectId: string, remainingIngredients: number): string {
+        const key = `${remainingIngredients}:${effectId}`;
+        const cached = this.#bestEffectCache.get(key);
+        if (cached !== undefined) return cached;
+
+        let best = effectId;
+        if (remainingIngredients > 0) {
+            for (const action of this.#actions) {
+                const transitioned = this.#engine.mixEffectIds(this.#product.drugType, [effectId], action.effectId)[0];
+                if (transitioned === undefined) continue;
+                const candidate = this.#bestEffect(transitioned, remainingIngredients - 1);
+                if (this.#compareEffects(candidate, best) < 0) best = candidate;
+            }
+        }
+        this.#bestEffectCache.set(key, best);
+        return best;
+    }
+
+    #bestNewEffect(remainingIngredients: number): string | null {
+        const cached = this.#bestNewEffectCache.get(remainingIngredients);
+        if (cached !== undefined) return cached;
+
+        let best: string | null = null;
+        for (const action of this.#actions) {
+            const candidate = this.#bestEffect(action.effectId, remainingIngredients);
+            if (best === null || this.#compareEffects(candidate, best) < 0) best = candidate;
+        }
+        this.#bestNewEffectCache.set(remainingIngredients, best);
+        return best;
+    }
+
+    #compareEffects(leftId: string, rightId: string): number {
+        if (leftId === rightId) return 0;
+        return this.#effectMultiple(rightId) - this.#effectMultiple(leftId) || (leftId < rightId ? -1 : 1);
+    }
+
+    #effectMultiple(effectId: string): number {
+        const effect = this.#engine.effectsById.get(effectId);
+        if (effect === undefined) throw new Error(`Unknown mixing effect ${JSON.stringify(effectId)}`);
+        return effect.value.addBaseValueMultiple;
     }
 }
 

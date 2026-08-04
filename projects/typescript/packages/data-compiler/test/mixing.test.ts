@@ -154,6 +154,61 @@ describe('mixing engine', () => {
             })
         ).toThrow(RecipeSearchLimitError);
     });
+
+    it('prunes states whose best possible value cannot reach the result cutoff', () => {
+        const effects = [
+            effect('base', 0, 0),
+            effect('high', 1, 10, 1),
+            effect('low', 1, 1),
+            effect('lower', 0, 0),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 10,
+                    effects: [
+                        mapEffect('base', 0),
+                        mapEffect('low', 1),
+                        mapEffect('lower', 2),
+                        mapEffect('high', 10),
+                    ],
+                },
+            ],
+        };
+        const items = [
+            product('product', ['base'], 10),
+            ingredient('high-ingredient', 'high', 1),
+            ingredient('low-ingredient', 'low', 1),
+        ];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])), {
+            maxStates: 3,
+        });
+
+        expect(
+            search.search({
+                productId: 'product',
+                availableIngredientIds: ['high-ingredient', 'low-ingredient'],
+                maxIngredients: 2,
+                limit: 1,
+            })
+        ).toEqual([
+            {
+                productId: 'product',
+                ingredientIds: ['high-ingredient'],
+                effectIds: ['high'],
+                productValue: 20,
+                ingredientCost: 1,
+                ingredientCount: 1,
+            },
+        ]);
+    });
 });
 
 function effect(id: string, directionX: number, magnitude: number, addBaseValueMultiple = 0): Effect {
