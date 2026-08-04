@@ -2,6 +2,12 @@
   "name": "@neonschedule1/typescript",
   "private": true,
   "license": "Apache-2.0",
+  "scripts": {
+    "build": "pnpm --recursive --if-present build",
+    "check": "pnpm --recursive --if-present check",
+    "test": "pnpm --recursive --if-present test",
+    "data:normalize": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler normalize"
+  },
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
@@ -14,5 +20,9 @@
       "onFail": "download"
     }
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
 }

@@ -1,0 +1,17 @@
+{
+    "name": "@neonschedule1/data-compiler",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "license": "Apache-2.0",
+    "scripts": {
+        "build": "tsc -p tsconfig.build.json",
+        "check": "tsc -p tsconfig.json",
+        "test": "vitest run",
+        "normalize": "node dist/cli.js"
+    },
+    "dependencies": {
+        "@neonschedule1/core": "workspace:*",
+        "arktype": "2.2.3"
+    }
+}
