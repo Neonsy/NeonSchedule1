@@ -69,6 +69,7 @@ describe('mixing engine', () => {
             effectIds: ['b', 'shift'],
             productValue: 35,
             baseProductCost: 5,
+            baseProductCostBasis: 'base-purchase-price',
             ingredientCost: 2,
             totalCost: 7,
             netValue: 28,
@@ -82,6 +83,15 @@ describe('mixing engine', () => {
         expect(() => unpricedEvaluator.evaluate({ productId: 'product', ingredientIds: [] })).toThrow(
             'Product "product" has no base purchase price'
         );
+        const producedEvaluator = new RecipeEvaluator(engine, new Map(items.map((entry) => [entry.id, entry])), {
+            productionCosts: { unitCost: () => 4 },
+        });
+        expect(producedEvaluator.evaluate({ productId: 'product', ingredientIds: [] })).toMatchObject({
+            baseProductCost: 4,
+            baseProductCostBasis: 'production-materials',
+            totalCost: 4,
+            netValue: 34,
+        });
     });
 
     it('finds exact recipes and keeps the cheapest path to each outcome', () => {
@@ -118,6 +128,7 @@ describe('mixing engine', () => {
                 effectIds: ['b', 'shift'],
                 productValue: 46,
                 baseProductCost: 0,
+                baseProductCostBasis: 'base-purchase-price',
                 ingredientCost: 2,
                 totalCost: 2,
                 netValue: 44,
@@ -129,6 +140,7 @@ describe('mixing engine', () => {
                 effectIds: ['a'],
                 productValue: 38,
                 baseProductCost: 0,
+                baseProductCostBasis: 'base-purchase-price',
                 ingredientCost: 0,
                 totalCost: 0,
                 netValue: 38,
@@ -163,7 +175,9 @@ describe('mixing engine', () => {
             ingredient('cheap', 'efficient', 1),
         ];
         const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
-        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])), {
+            productionCosts: { unitCost: () => 4 },
+        });
         const input = {
             productId: 'product',
             availableIngredientIds: ['expensive', 'cheap'],
@@ -174,18 +188,20 @@ describe('mixing engine', () => {
         expect(search.search({ ...input, objective: 'productValue' })[0]).toMatchObject({
             ingredientIds: ['expensive'],
             productValue: 20,
-            baseProductCost: 3,
+            baseProductCost: 4,
+            baseProductCostBasis: 'production-materials',
             ingredientCost: 15,
-            totalCost: 18,
-            netValue: 2,
+            totalCost: 19,
+            netValue: 1,
         });
         expect(search.search({ ...input, objective: 'netValue' })[0]).toMatchObject({
             ingredientIds: ['cheap'],
             productValue: 15,
-            baseProductCost: 3,
+            baseProductCost: 4,
+            baseProductCostBasis: 'production-materials',
             ingredientCost: 1,
-            totalCost: 4,
-            netValue: 11,
+            totalCost: 5,
+            netValue: 10,
         });
     });
 
@@ -271,6 +287,7 @@ describe('mixing engine', () => {
                 effectIds: ['high'],
                 productValue: 20,
                 baseProductCost: 0,
+                baseProductCostBasis: 'base-purchase-price',
                 ingredientCost: 1,
                 totalCost: 1,
                 netValue: 19,
@@ -329,6 +346,7 @@ describe('mixing engine', () => {
                 effectIds: ['required'],
                 productValue: 20,
                 baseProductCost: 0,
+                baseProductCostBasis: 'base-purchase-price',
                 ingredientCost: 2,
                 totalCost: 2,
                 netValue: 18,

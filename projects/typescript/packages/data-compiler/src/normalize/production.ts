@@ -21,6 +21,13 @@ import {
     type JsonObject,
 } from '#data-compiler/json';
 
+// These batch literals come from the current game's production methods because the raw collector
+// identifies the related items but does not yet expose the quantities.
+const cauldronSecondaryInputQuantity = 1;
+const cauldronOutputQuantity = 10;
+const mushroomSpawnInputQuantity = 1;
+const mushroomSpawnOutputQuantity = 1;
+
 export function normalizeProduction(
     report: RawReport,
     itemIds: ReadonlySet<string>,
@@ -264,7 +271,9 @@ function normalizeStation(
                 ),
                 primaryInputItemId,
                 secondaryInputItemId,
+                secondaryInputQuantity: cauldronSecondaryInputQuantity,
                 outputItemId,
+                outputQuantity: cauldronOutputQuantity,
             };
         }
         case 'drying-rack':
@@ -299,6 +308,7 @@ function normalizeStation(
                     const transformPath = `${path}.sporeSyringes[${index}]`;
                     return {
                         syringeItemId: referencedId(transform, 'itemId', transformPath, itemIds, integrity),
+                        syringeQuantity: mushroomSpawnInputQuantity,
                         outputSpawnItemId: referencedId(
                             transform,
                             'outputSpawnItemId',
@@ -306,10 +316,17 @@ function normalizeStation(
                             itemIds,
                             integrity
                         ),
+                        outputSpawnQuantity: mushroomSpawnOutputQuantity,
                     };
                 }
             );
-            return { ...base, kind, grainBagItemId, sporeSyringes };
+            return {
+                ...base,
+                kind,
+                grainBagItemId,
+                grainBagQuantity: mushroomSpawnInputQuantity,
+                sporeSyringes,
+            };
         }
         case 'packaging':
         case 'packaging-mk2':

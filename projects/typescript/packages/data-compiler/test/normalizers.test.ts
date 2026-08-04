@@ -228,11 +228,42 @@ describe('domain normalization', () => {
             timePerItem: 6,
             requiresManualIngredientInsertion: true,
         });
+        report.productionStations.push(
+            {
+                itemId: 'cauldron',
+                kind: 'cauldron',
+                cookTime: 6,
+                requiredPrimaryInputQuantity: 20,
+                primaryInputItemId: 'leaf',
+                secondaryInputItemId: 'fuel',
+                outputItemId: 'base',
+            },
+            {
+                itemId: 'spawn-station',
+                kind: 'mushroom-spawn',
+                grainBagItemId: 'grain-bag',
+                sporeSyringes: [{ itemId: 'syringe', outputSpawnItemId: 'spawn' }],
+            }
+        );
         const integrity = new Integrity();
 
         const production = normalizeProduction(
             report,
-            new Set(['seed', 'product', 'input', 'liquid', 'mixer']),
+            new Set([
+                'seed',
+                'product',
+                'input',
+                'liquid',
+                'mixer',
+                'cauldron',
+                'leaf',
+                'fuel',
+                'base',
+                'spawn-station',
+                'grain-bag',
+                'syringe',
+                'spawn',
+            ]),
             integrity
         );
 
@@ -252,9 +283,21 @@ describe('domain normalization', () => {
             outputQuantity: 10,
         });
         expect(production.stations[0]).toMatchObject({
+            itemId: 'cauldron',
+            kind: 'cauldron',
+            secondaryInputQuantity: 1,
+            outputQuantity: 10,
+        });
+        expect(production.stations[1]).toMatchObject({
             itemId: 'mixer',
             kind: 'mixing',
             capacity: 10,
+        });
+        expect(production.stations[2]).toMatchObject({
+            itemId: 'spawn-station',
+            kind: 'mushroom-spawn',
+            grainBagQuantity: 1,
+            sporeSyringes: [{ syringeQuantity: 1, outputSpawnQuantity: 1 }],
         });
     });
 

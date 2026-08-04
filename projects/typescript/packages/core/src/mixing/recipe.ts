@@ -1,6 +1,7 @@
 import type { Item } from '#core/data/item';
 
 import { MixingEngine } from '#core/mixing/engine';
+import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 export interface RecipeInput {
     readonly productId: string;
@@ -13,19 +14,30 @@ export interface RecipeEvaluation {
     readonly effectIds: readonly string[];
     readonly productValue: number;
     readonly baseProductCost: number;
+    readonly baseProductCostBasis: 'base-purchase-price' | 'production-materials';
     readonly ingredientCost: number;
     readonly totalCost: number;
     readonly netValue: number;
     readonly ingredientCount: number;
 }
 
+export interface RecipeEvaluatorOptions {
+    readonly productionCosts?: ProductionMaterialCostResolver;
+}
+
 export class RecipeEvaluator {
     readonly #engine: MixingEngine;
     readonly #itemsById: ReadonlyMap<string, Item>;
+    readonly #productionCosts: ProductionMaterialCostResolver | undefined;
 
-    constructor(engine: MixingEngine, itemsById: ReadonlyMap<string, Item>) {
+    constructor(
+        engine: MixingEngine,
+        itemsById: ReadonlyMap<string, Item>,
+        options: RecipeEvaluatorOptions = {}
+    ) {
         this.#engine = engine;
         this.#itemsById = itemsById;
+        this.#productionCosts = options.productionCosts;
     }
 
     evaluate(input: RecipeInput): RecipeEvaluation {
@@ -33,8 +45,18 @@ export class RecipeEvaluator {
         if (product.product === null) {
             throw new Error(`Item ${JSON.stringify(product.id)} is not a product`);
         }
-        if (product.basePurchasePrice === null) {
-            throw new Error(`Product ${JSON.stringify(product.id)} has no base purchase price`);
+        const productionCost = this.#productionCosts?.unitCost(product.id);
+        let baseProductCost: number;
+        let baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
+        if (productionCost !== undefined) {
+            baseProductCost = productionCost;
+            baseProductCostBasis = 'production-materials';
+        } else {
+            if (product.basePurchasePrice === null) {
+                throw new Error(`Product ${JSON.stringify(product.id)} has no base purchase price`);
+            }
+            baseProductCost = product.basePurchasePrice;
+            baseProductCostBasis = 'base-purchase-price';
         }
 
         let effectIds = [...product.product.effectIds];
@@ -55,13 +77,14 @@ export class RecipeEvaluator {
         }
 
         const productValue = this.#engine.calculateProductValue(product.product.basePrice, effectIds);
-        const totalCost = product.basePurchasePrice + ingredientCost;
+        const totalCost = baseProductCost + ingredientCost;
         return {
             productId: product.id,
             ingredientIds: [...input.ingredientIds],
             effectIds,
             productValue,
-            baseProductCost: product.basePurchasePrice,
+            baseProductCost,
+            baseProductCostBasis,
             ingredientCost,
             totalCost,
             netValue: productValue - totalCost,

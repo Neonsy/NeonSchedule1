@@ -1,6 +1,7 @@
 import type { Item, Product } from '#core/data/item';
 import { MixingEngine } from '#core/mixing/engine';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
+import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 const defaultMaxStates = 100_000;
 const maxValueBoundDepth = 32;
@@ -19,6 +20,7 @@ export interface RecipeSearchInput {
 
 export interface RecipeSearchOptions {
     readonly maxStates?: number;
+    readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
 interface IngredientAction {
@@ -33,7 +35,10 @@ interface SearchState {
     readonly ingredientCost: number;
 }
 
-type CostedProduct = Product & { readonly baseProductCost: number };
+type CostedProduct = Product & {
+    readonly baseProductCost: number;
+    readonly baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
+};
 
 export class RecipeSearchLimitError extends Error {
     readonly depth: number;
@@ -51,6 +56,7 @@ export class RecipeSearch {
     readonly #engine: MixingEngine;
     readonly #itemsById: ReadonlyMap<string, Item>;
     readonly #maxStates: number;
+    readonly #productionCosts: ProductionMaterialCostResolver | undefined;
 
     constructor(
         engine: MixingEngine,
@@ -60,6 +66,7 @@ export class RecipeSearch {
         this.#engine = engine;
         this.#itemsById = itemsById;
         this.#maxStates = options.maxStates ?? defaultMaxStates;
+        this.#productionCosts = options.productionCosts;
         requirePositiveInteger(this.#maxStates, 'maxStates');
     }
 
@@ -167,10 +174,24 @@ export class RecipeSearch {
         const item = this.#itemsById.get(id);
         if (item === undefined) throw new Error(`Unknown product ${JSON.stringify(id)}`);
         if (item.product === null) throw new Error(`Item ${JSON.stringify(id)} is not a product`);
-        if (item.basePurchasePrice === null) {
-            throw new Error(`Product ${JSON.stringify(id)} has no base purchase price`);
+        const productionCost = this.#productionCosts?.unitCost(id);
+        let baseProductCost: number;
+        let baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
+        if (productionCost !== undefined) {
+            baseProductCost = productionCost;
+            baseProductCostBasis = 'production-materials';
+        } else {
+            if (item.basePurchasePrice === null) {
+                throw new Error(`Product ${JSON.stringify(id)} has no base purchase price`);
+            }
+            baseProductCost = item.basePurchasePrice;
+            baseProductCostBasis = 'base-purchase-price';
         }
-        return { ...item.product, baseProductCost: item.basePurchasePrice };
+        return {
+            ...item.product,
+            baseProductCost,
+            baseProductCostBasis,
+        };
     }
 
     #ingredients(ids: readonly string[]): IngredientAction[] {
@@ -447,6 +468,7 @@ function evaluateState(
         effectIds: state.effectIds,
         productValue,
         baseProductCost: product.baseProductCost,
+        baseProductCostBasis: product.baseProductCostBasis,
         ingredientCost: state.ingredientCost,
         totalCost,
         netValue: productValue - totalCost,

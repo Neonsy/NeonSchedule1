@@ -100,7 +100,9 @@ export const CauldronStationSchema = type({
     requiredPrimaryInputQuantity: 'number',
     primaryInputItemId: 'string',
     secondaryInputItemId: 'string',
+    secondaryInputQuantity: 'number',
     outputItemId: 'string',
+    outputQuantity: 'number',
 });
 
 export const DryingRackStationSchema = type({
@@ -125,13 +127,16 @@ export const MixingStationSchema = type({
 
 export const SporeSyringeTransformSchema = type({
     syringeItemId: 'string',
+    syringeQuantity: 'number',
     outputSpawnItemId: 'string',
+    outputSpawnQuantity: 'number',
 });
 
 export const MushroomSpawnStationSchema = type({
     ...stationBase,
     kind: "'mushroom-spawn'",
     grainBagItemId: 'string',
+    grainBagQuantity: 'number',
     sporeSyringes: SporeSyringeTransformSchema.array(),
 });
 
