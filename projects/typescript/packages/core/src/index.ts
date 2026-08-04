@@ -8,3 +8,4 @@ export * from '#core/data/shop';
 export * from '#core/data/visual';
 export * from '#core/mixing/engine';
 export * from '#core/mixing/recipe';
+export * from '#core/mixing/search';

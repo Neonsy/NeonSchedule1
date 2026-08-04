@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { MixingEngine, RecipeEvaluator, type Effect, type Item, type MixingRules } from '@neonschedule1/core';
+import {
+    MixingEngine,
+    RecipeEvaluator,
+    RecipeSearch,
+    RecipeSearchLimitError,
+    type Effect,
+    type Item,
+    type MixingRules,
+} from '@neonschedule1/core';
 
 describe('mixing engine', () => {
     it('applies map replacements in game order and preserves occupied effects', () => {
@@ -66,6 +74,85 @@ describe('mixing engine', () => {
         expect(() => evaluator.evaluate({ productId: 'product', ingredientIds: ['missing'] })).toThrow(
             'Unknown mixing ingredient "missing"'
         );
+    });
+
+    it('finds exact recipes and keeps the cheapest path to each outcome', () => {
+        const effects = [effect('a', 0, 0, 0.1), effect('b', 0, 0, 0.2), effect('shift', 1, 1, 0.1)];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 8,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 4,
+                    effects: [mapEffect('a', 0), mapEffect('b', 1), mapEffect('shift', 2)],
+                },
+            ],
+        };
+        const items = [product('product', ['a'], 35), ingredient('ingredient', 'shift', 2)];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])));
+
+        expect(
+            search.search({
+                productId: 'product',
+                availableIngredientIds: ['ingredient'],
+                maxIngredients: 2,
+                limit: 5,
+            })
+        ).toEqual([
+            {
+                productId: 'product',
+                ingredientIds: ['ingredient'],
+                effectIds: ['b', 'shift'],
+                productValue: 46,
+                ingredientCost: 2,
+                ingredientCount: 1,
+            },
+            {
+                productId: 'product',
+                ingredientIds: [],
+                effectIds: ['a'],
+                productValue: 38,
+                ingredientCost: 0,
+                ingredientCount: 0,
+            },
+        ]);
+    });
+
+    it('fails explicitly before an exact search exceeds its state budget', () => {
+        const effects = [effect('a', 0, 0), effect('shift', 1, 1)];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 8,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 4,
+                    effects: [mapEffect('a', 0), mapEffect('shift', 1)],
+                },
+            ],
+        };
+        const items = [product('product', ['a'], 35), ingredient('ingredient', 'shift', 2)];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])), {
+            maxStates: 1,
+        });
+
+        expect(() =>
+            search.search({
+                productId: 'product',
+                availableIngredientIds: ['ingredient'],
+                maxIngredients: 1,
+                limit: 1,
+            })
+        ).toThrow(RecipeSearchLimitError);
     });
 });
 

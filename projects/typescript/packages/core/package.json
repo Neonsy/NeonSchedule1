@@ -5,7 +5,10 @@
   "type": "module",
   "license": "Apache-2.0",
   "imports": {
-    "#core/*": "./dist/*.js"
+    "#core/*": {
+      "types": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
   },
   "exports": {
     ".": {

@@ -11,6 +11,7 @@ It is intended for players who want to compare recipes by ingredients, effects, 
 The repository currently supports:
 
 - Evaluate ordered mixes with deterministic effect transformations
+- Search recipes exactly under explicit constraints
 
 ## Planned player features
 

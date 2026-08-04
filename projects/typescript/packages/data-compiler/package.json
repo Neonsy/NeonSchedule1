@@ -5,7 +5,10 @@
     "type": "module",
     "license": "Apache-2.0",
     "imports": {
-        "#data-compiler/*": "./dist/*.js"
+        "#data-compiler/*": {
+            "types": "./src/*.ts",
+            "default": "./dist/*.js"
+        }
     },
     "scripts": {
         "build": "tsc -p tsconfig.build.json",
