@@ -2,8 +2,7 @@ import type { Effect } from '#core/data/effect';
 import type { MixingMap, MixingMapEffect, MixingRules } from '#core/data/mixing';
 
 interface IndexedMap {
-    readonly source: MixingMap;
-    readonly effectsById: ReadonlyMap<string, MixingMapEffect>;
+    readonly replacementsByOrigin: ReadonlyMap<string, ReadonlyMap<string, string | null>>;
 }
 
 export class MixingEngine {
@@ -13,7 +12,8 @@ export class MixingEngine {
     readonly #mapsByDrugType: ReadonlyMap<string, IndexedMap>;
 
     constructor(rules: MixingRules, effectsById: ReadonlyMap<string, Effect>) {
-        const unsupported = [...effectsById.values()].find(
+        const indexedEffects = new Map(effectsById);
+        const unsupported = [...indexedEffects.values()].find(
             (effect) => effect.value.change !== 0 || effect.value.multiplier !== 1
         );
         if (unsupported !== undefined) {
@@ -22,12 +22,9 @@ export class MixingEngine {
             );
         }
         this.rules = rules;
-        this.effectsById = effectsById;
+        this.effectsById = indexedEffects;
         this.#mapsByDrugType = new Map(
-            rules.maps.map((map) => [
-                map.drugType,
-                { source: map, effectsById: uniqueIndex(map.effects, 'effectId', `mixing map ${map.drugType}`) },
-            ])
+            rules.maps.map((map) => [map.drugType, indexMixingMap(map, indexedEffects)])
         );
         if (this.#mapsByDrugType.size !== rules.maps.length) {
             throw new Error('Mixing rules contain duplicate drug types');
@@ -43,17 +40,16 @@ export class MixingEngine {
         for (let index = 0; index < result.length; index++) {
             const currentId = result[index];
             if (currentId === undefined) continue;
-            const origin = map.effectsById.get(currentId);
-            if (origin === undefined) {
+            const replacements = map.replacementsByOrigin.get(currentId);
+            if (replacements === undefined) {
                 throw new Error(`Effect ${JSON.stringify(currentId)} is absent from the ${drugType} mixing map`);
             }
-            const targetX =
-                origin.position.x + addedEffect.mixing.direction.x * addedEffect.mixing.magnitude;
-            const targetY =
-                origin.position.y + addedEffect.mixing.direction.y * addedEffect.mixing.magnitude;
-            const replacement = closestEffect(map.source.effects, targetX, targetY);
-            if (replacement !== null && !result.includes(replacement.effectId)) {
-                result[index] = replacement.effectId;
+            const replacementId = replacements.get(addedEffect.id);
+            if (replacementId === undefined) {
+                throw new Error(`Effect ${JSON.stringify(addedEffect.id)} has no indexed mixing transition`);
+            }
+            if (replacementId !== null && !result.includes(replacementId)) {
+                result[index] = replacementId;
             }
         }
 
@@ -80,6 +76,26 @@ export class MixingEngine {
         if (effect === undefined) throw new Error(`Unknown mixing effect ${JSON.stringify(id)}`);
         return effect;
     }
+}
+
+function indexMixingMap(source: MixingMap, effectsById: ReadonlyMap<string, Effect>): IndexedMap {
+    uniqueIndex(source.effects, 'effectId', `mixing map ${source.drugType}`);
+    const replacementsByOrigin = new Map<string, ReadonlyMap<string, string | null>>();
+    for (const origin of source.effects) {
+        const replacements = new Map<string, string | null>();
+        for (const addedEffect of effectsById.values()) {
+            const targetX =
+                origin.position.x + addedEffect.mixing.direction.x * addedEffect.mixing.magnitude;
+            const targetY =
+                origin.position.y + addedEffect.mixing.direction.y * addedEffect.mixing.magnitude;
+            replacements.set(
+                addedEffect.id,
+                closestEffect(source.effects, targetX, targetY)?.effectId ?? null
+            );
+        }
+        replacementsByOrigin.set(origin.effectId, replacements);
+    }
+    return { replacementsByOrigin };
 }
 
 function closestEffect(entries: readonly MixingMapEffect[], x: number, y: number): MixingMapEffect | null {

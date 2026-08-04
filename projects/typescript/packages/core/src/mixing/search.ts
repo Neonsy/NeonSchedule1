@@ -74,17 +74,28 @@ export class RecipeSearch {
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
-            const cutoff = new ProductValueCutoff(outcomes.values(), input.limit);
+            const cutoff = new ProductValueCutoff(outcomes, input.limit);
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
-                .map((state) => ({ state, upperValue: valueBound.upperValue(state.effectIds, remainingIngredients) }))
+                .map((state) => ({
+                    state,
+                    upperValue: valueBound.relaxedUpperValue(state.effectIds, remainingIngredients),
+                }))
                 .sort(
                     (left, right) =>
                         right.upperValue - left.upperValue ||
                         compareStrings(left.state.effectIds, right.state.effectIds)
                 );
-            for (const { state, upperValue } of rankedStates) {
+            for (const ranked of rankedStates) {
+                const { state } = ranked;
+                let { upperValue } = ranked;
                 if (cutoff.value !== null && upperValue < cutoff.value) continue;
+                if (remainingIngredients <= 2) {
+                    const exact = valueBound.exactShortHorizon(state.effectIds, remainingIngredients);
+                    cutoff.add(exact.key, exact.value);
+                    upperValue = exact.value;
+                    if (cutoff.value !== null && upperValue < cutoff.value) continue;
+                }
                 for (const action of actions) {
                     const candidate: SearchState = {
                         effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
@@ -101,7 +112,7 @@ export class RecipeSearch {
                     }
                     next.set(key, candidate);
                     if (current === undefined && !outcomes.has(key)) {
-                        cutoff.add(this.#engine.calculateProductValue(product.basePrice, candidate.effectIds));
+                        cutoff.add(key, this.#engine.calculateProductValue(product.basePrice, candidate.effectIds));
                     }
                 }
             }
@@ -144,18 +155,21 @@ export class RecipeSearch {
 
 class ProductValueCutoff {
     readonly #limit: number;
+    readonly #keys = new Set<string>();
     readonly #values: number[] = [];
 
-    constructor(recipes: Iterable<RecipeEvaluation>, limit: number) {
+    constructor(recipes: Iterable<readonly [string, RecipeEvaluation]>, limit: number) {
         this.#limit = limit;
-        for (const recipe of recipes) this.add(recipe.productValue);
+        for (const [key, recipe] of recipes) this.add(key, recipe.productValue);
     }
 
     get value(): number | null {
         return this.#values.length < this.#limit ? null : (this.#values[this.#limit - 1] ?? null);
     }
 
-    add(value: number): void {
+    add(key: string, value: number): void {
+        if (this.#keys.has(key)) return;
+        this.#keys.add(key);
         const index = this.#values.findIndex((current) => value > current);
         if (index === -1) this.#values.push(value);
         else this.#values.splice(index, 0, value);
@@ -176,11 +190,10 @@ class RecipeValueBound {
         this.#actions = actions;
     }
 
-    upperValue(effectIds: readonly string[], remainingIngredients: number): number {
+    relaxedUpperValue(effectIds: readonly string[], remainingIngredients: number): number {
         if (this.#product.basePrice < 0 || remainingIngredients > maxValueBoundDepth) {
             return Number.POSITIVE_INFINITY;
         }
-        if (remainingIngredients === 1) return this.#exactOneStepValue(effectIds);
 
         const upperEffectIds = effectIds.map((effectId) => this.#bestEffect(effectId, remainingIngredients));
         const newEffectCount = Math.min(
@@ -194,13 +207,32 @@ class RecipeValueBound {
         return this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
     }
 
-    #exactOneStepValue(effectIds: readonly string[]): number {
-        let best = this.#engine.calculateProductValue(this.#product.basePrice, effectIds);
-        for (const action of this.#actions) {
-            const next = this.#engine.mixEffectIds(this.#product.drugType, effectIds, action.effectId);
-            best = Math.max(best, this.#engine.calculateProductValue(this.#product.basePrice, next));
+    exactShortHorizon(
+        effectIds: readonly string[],
+        remainingIngredients: number
+    ): { readonly key: string; readonly value: number } {
+        let bestKey = stateKey(effectIds);
+        let bestValue = this.#engine.calculateProductValue(this.#product.basePrice, effectIds);
+        let layer = new Map([[stateKey(effectIds), effectIds]]);
+        for (let depth = 0; depth < remainingIngredients; depth++) {
+            const next = new Map<string, readonly string[]>();
+            for (const current of layer.values()) {
+                for (const action of this.#actions) {
+                    const result = this.#engine.mixEffectIds(this.#product.drugType, current, action.effectId);
+                    next.set(stateKey(result), result);
+                }
+            }
+            for (const result of next.values()) {
+                const key = stateKey(result);
+                const value = this.#engine.calculateProductValue(this.#product.basePrice, result);
+                if (value > bestValue || (value === bestValue && key < bestKey)) {
+                    bestKey = key;
+                    bestValue = value;
+                }
+            }
+            layer = next;
         }
-        return best;
+        return { key: bestKey, value: bestValue };
     }
 
     #bestEffect(effectId: string, remainingIngredients: number): string {
