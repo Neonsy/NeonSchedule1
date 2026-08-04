@@ -123,6 +123,52 @@ describe('mixing engine', () => {
         ]);
     });
 
+    it('ranks recipes by product value or value after ingredient cost', () => {
+        const effects = [
+            effect('base', 0, 0),
+            effect('valuable', 1, 1, 1),
+            effect('efficient', 2, 1, 0.5),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 2,
+                    effects: [mapEffect('base', 0), mapEffect('valuable', 1), mapEffect('efficient', 2)],
+                },
+            ],
+        };
+        const items = [
+            product('product', ['base'], 10),
+            ingredient('expensive', 'valuable', 15),
+            ingredient('cheap', 'efficient', 1),
+        ];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new RecipeSearch(engine, new Map(items.map((entry) => [entry.id, entry])));
+        const input = {
+            productId: 'product',
+            availableIngredientIds: ['expensive', 'cheap'],
+            maxIngredients: 1,
+            limit: 1,
+        } as const;
+
+        expect(search.search({ ...input, objective: 'productValue' })[0]).toMatchObject({
+            ingredientIds: ['expensive'],
+            productValue: 20,
+            ingredientCost: 15,
+        });
+        expect(search.search({ ...input, objective: 'netValue' })[0]).toMatchObject({
+            ingredientIds: ['cheap'],
+            productValue: 15,
+            ingredientCost: 1,
+        });
+    });
+
     it('fails explicitly before an exact search exceeds its state budget', () => {
         const effects = [effect('a', 0, 0), effect('shift', 1, 1)];
         const rules: MixingRules = {

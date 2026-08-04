@@ -5,6 +5,8 @@ import type { RecipeEvaluation } from '#core/mixing/recipe';
 const defaultMaxStates = 100_000;
 const maxValueBoundDepth = 32;
 
+export type RecipeSearchObjective = 'productValue' | 'netValue';
+
 export interface RecipeSearchInput {
     readonly productId: string;
     readonly availableIngredientIds: readonly string[];
@@ -12,6 +14,7 @@ export interface RecipeSearchInput {
     readonly limit: number;
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
+    readonly objective?: RecipeSearchObjective;
 }
 
 export interface RecipeSearchOptions {
@@ -64,6 +67,7 @@ export class RecipeSearch {
 
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
+        const objective = requireObjective(input.objective ?? 'productValue');
         const constraints = new FinalEffectConstraints(
             this.#engine,
             input.requiredEffectIds ?? [],
@@ -77,36 +81,41 @@ export class RecipeSearch {
         let exploredStates = 1;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
-        const valueBound = new RecipeValueBound(this.#engine, product, actions);
+        const valueBound = new RecipeValueBound(this.#engine, product, actions, objective);
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
-            const cutoff = new ProductValueCutoff(outcomes, input.limit, constraints);
+            const cutoff = new RecipeScoreCutoff(outcomes, input.limit, constraints, objective);
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
                     state,
-                    upperValue: valueBound.relaxedUpperValue(state.effectIds, remainingIngredients),
+                    upperScore: valueBound.relaxedUpperScore(
+                        state.effectIds,
+                        state.ingredientCost,
+                        remainingIngredients
+                    ),
                 }))
                 .sort(
                     (left, right) =>
-                        right.upperValue - left.upperValue ||
+                        right.upperScore - left.upperScore ||
                         compareStrings(left.state.effectIds, right.state.effectIds)
                 );
             for (const ranked of rankedStates) {
                 const { state } = ranked;
-                let { upperValue } = ranked;
-                if (cutoff.value !== null && upperValue < cutoff.value) continue;
+                let { upperScore } = ranked;
+                if (cutoff.value !== null && upperScore < cutoff.value) continue;
                 if (remainingIngredients <= 2) {
                     const exact = valueBound.exactShortHorizon(
                         state.effectIds,
+                        state.ingredientCost,
                         remainingIngredients,
                         constraints
                     );
                     if (exact === null) continue;
                     cutoff.add(exact.key, exact.value);
-                    upperValue = exact.value;
-                    if (cutoff.value !== null && upperValue < cutoff.value) continue;
+                    upperScore = exact.value;
+                    if (cutoff.value !== null && upperScore < cutoff.value) continue;
                 }
                 for (const action of actions) {
                     const candidate: SearchState = {
@@ -123,14 +132,14 @@ export class RecipeSearch {
                         throw new RecipeSearchLimitError(depth, this.#maxStates);
                     }
                     next.set(key, candidate);
-                    if (
-                        current === undefined &&
-                        !outcomes.has(key) &&
-                        constraints.matches(candidate.effectIds)
-                    ) {
+                    if (constraints.matches(candidate.effectIds)) {
                         cutoff.add(
                             key,
-                            this.#engine.calculateProductValue(product.basePrice, candidate.effectIds)
+                            recipeScore(
+                                this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
+                                candidate.ingredientCost,
+                                objective
+                            )
                         );
                     }
                 }
@@ -147,7 +156,7 @@ export class RecipeSearch {
 
         return [...outcomes.values()]
             .filter((recipe) => constraints.matches(recipe.effectIds))
-            .sort(compareRecipes)
+            .sort((left, right) => compareRecipes(left, right, objective))
             .slice(0, input.limit);
     }
 
@@ -175,19 +184,22 @@ export class RecipeSearch {
     }
 }
 
-class ProductValueCutoff {
+class RecipeScoreCutoff {
     readonly #limit: number;
-    readonly #keys = new Set<string>();
+    readonly #scoresByKey = new Map<string, number>();
     readonly #values: number[] = [];
 
     constructor(
         recipes: Iterable<readonly [string, RecipeEvaluation]>,
         limit: number,
-        constraints: FinalEffectConstraints
+        constraints: FinalEffectConstraints,
+        objective: RecipeSearchObjective
     ) {
         this.#limit = limit;
         for (const [key, recipe] of recipes) {
-            if (constraints.matches(recipe.effectIds)) this.add(key, recipe.productValue);
+            if (constraints.matches(recipe.effectIds)) {
+                this.add(key, recipeScore(recipe.productValue, recipe.ingredientCost, objective));
+            }
         }
     }
 
@@ -196,8 +208,13 @@ class ProductValueCutoff {
     }
 
     add(key: string, value: number): void {
-        if (this.#keys.has(key)) return;
-        this.#keys.add(key);
+        const prior = this.#scoresByKey.get(key);
+        if (prior !== undefined && prior >= value) return;
+        this.#scoresByKey.set(key, value);
+        if (prior !== undefined) {
+            const priorIndex = this.#values.indexOf(prior);
+            if (priorIndex !== -1) this.#values.splice(priorIndex, 1);
+        }
         const index = this.#values.findIndex((current) => value > current);
         if (index === -1) this.#values.push(value);
         else this.#values.splice(index, 0, value);
@@ -209,16 +226,29 @@ class RecipeValueBound {
     readonly #engine: MixingEngine;
     readonly #product: Product;
     readonly #actions: readonly IngredientAction[];
+    readonly #objective: RecipeSearchObjective;
+    readonly #minimumActionCost: number;
     readonly #bestEffectCache = new Map<string, string>();
     readonly #bestNewEffectCache = new Map<number, string | null>();
 
-    constructor(engine: MixingEngine, product: Product, actions: readonly IngredientAction[]) {
+    constructor(
+        engine: MixingEngine,
+        product: Product,
+        actions: readonly IngredientAction[],
+        objective: RecipeSearchObjective
+    ) {
         this.#engine = engine;
         this.#product = product;
         this.#actions = actions;
+        this.#objective = objective;
+        this.#minimumActionCost = Math.min(0, ...actions.map((action) => action.cost));
     }
 
-    relaxedUpperValue(effectIds: readonly string[], remainingIngredients: number): number {
+    relaxedUpperScore(
+        effectIds: readonly string[],
+        ingredientCost: number,
+        remainingIngredients: number
+    ): number {
         if (this.#product.basePrice < 0 || remainingIngredients > maxValueBoundDepth) {
             return Number.POSITIVE_INFINITY;
         }
@@ -232,11 +262,14 @@ class RecipeValueBound {
             const effectId = this.#bestNewEffect(remainingIngredients - index - 1);
             if (effectId !== null && this.#effectMultiple(effectId) > 0) upperEffectIds.push(effectId);
         }
-        return this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
+        const upperValue = this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
+        const lowerCost = ingredientCost + this.#minimumActionCost * remainingIngredients;
+        return recipeScore(upperValue, lowerCost, this.#objective);
     }
 
     exactShortHorizon(
         effectIds: readonly string[],
+        ingredientCost: number,
         remainingIngredients: number,
         constraints: FinalEffectConstraints
     ): { readonly key: string; readonly value: number } | null {
@@ -244,22 +277,47 @@ class RecipeValueBound {
         if (constraints.matches(effectIds)) {
             best = {
                 key: stateKey(effectIds),
-                value: this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
+                value: recipeScore(
+                    this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
+                    ingredientCost,
+                    this.#objective
+                ),
             };
         }
-        let layer = new Map([[stateKey(effectIds), effectIds]]);
+        let layer = new Map([
+            [stateKey(effectIds), { effectIds, additionalIngredientCost: 0 }],
+        ]);
         for (let depth = 0; depth < remainingIngredients; depth++) {
-            const next = new Map<string, readonly string[]>();
+            const next = new Map<
+                string,
+                { readonly effectIds: readonly string[]; readonly additionalIngredientCost: number }
+            >();
             for (const current of layer.values()) {
                 for (const action of this.#actions) {
-                    const result = this.#engine.mixEffectIds(this.#product.drugType, current, action.effectId);
-                    next.set(stateKey(result), result);
+                    const result = this.#engine.mixEffectIds(
+                        this.#product.drugType,
+                        current.effectIds,
+                        action.effectId
+                    );
+                    const key = stateKey(result);
+                    const additionalIngredientCost = current.additionalIngredientCost + action.cost;
+                    const existing = next.get(key);
+                    if (
+                        existing === undefined ||
+                        additionalIngredientCost < existing.additionalIngredientCost
+                    ) {
+                        next.set(key, { effectIds: result, additionalIngredientCost });
+                    }
                 }
             }
             for (const result of next.values()) {
-                if (!constraints.matches(result)) continue;
-                const key = stateKey(result);
-                const value = this.#engine.calculateProductValue(this.#product.basePrice, result);
+                if (!constraints.matches(result.effectIds)) continue;
+                const key = stateKey(result.effectIds);
+                const value = recipeScore(
+                    this.#engine.calculateProductValue(this.#product.basePrice, result.effectIds),
+                    ingredientCost + result.additionalIngredientCost,
+                    this.#objective
+                );
                 if (best === null || value > best.value || (value === best.value && key < best.key)) {
                     best = { key, value };
                 }
@@ -375,12 +433,25 @@ function evaluateState(
     };
 }
 
-function compareRecipes(left: RecipeEvaluation, right: RecipeEvaluation): number {
+function compareRecipes(
+    left: RecipeEvaluation,
+    right: RecipeEvaluation,
+    objective: RecipeSearchObjective
+): number {
     return (
-        right.productValue - left.productValue ||
+        recipeScore(right.productValue, right.ingredientCost, objective) -
+            recipeScore(left.productValue, left.ingredientCost, objective) ||
         comparePaths(left, right) ||
         compareStrings(left.effectIds, right.effectIds)
     );
+}
+
+function recipeScore(
+    productValue: number,
+    ingredientCost: number,
+    objective: RecipeSearchObjective
+): number {
+    return objective === 'productValue' ? productValue : productValue - ingredientCost;
 }
 
 function comparePaths(
@@ -406,6 +477,13 @@ function compareStrings(left: readonly string[], right: readonly string[]): numb
 
 function stateKey(effectIds: readonly string[]): string {
     return JSON.stringify(effectIds);
+}
+
+function requireObjective(objective: string): RecipeSearchObjective {
+    if (objective !== 'productValue' && objective !== 'netValue') {
+        throw new Error(`Unknown recipe search objective ${JSON.stringify(objective)}`);
+    }
+    return objective;
 }
 
 function requireNonNegativeInteger(value: number, name: string): void {
