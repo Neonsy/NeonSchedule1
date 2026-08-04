@@ -253,6 +253,17 @@ describe('domain normalization', () => {
                 allowedAdditiveIds: [],
             },
             {
+                itemId: 'growtent',
+                kind: 'grow-container',
+                yieldMultiplier: 0.6666667,
+                growSpeedMultiplier: 1.333333,
+                maxTemperatureGrowthMultiplier: 1.5,
+                minimumTemperatureThreshold: 20,
+                maximumTemperatureThreshold: 40,
+                allowedSoilIds: ['soil'],
+                allowedAdditiveIds: [],
+            },
+            {
                 itemId: 'cauldron',
                 kind: 'cauldron',
                 cookTime: 6,
@@ -282,6 +293,7 @@ describe('domain normalization', () => {
                 'liquid',
                 'mixer',
                 'pot',
+                'growtent',
                 'cauldron',
                 'leaf',
                 'fuel',
@@ -330,11 +342,21 @@ describe('domain normalization', () => {
             outputQuantity: 10,
         });
         expect(production.stations[1]).toMatchObject({
+            itemId: 'growtent',
+            kind: 'grow-container',
+            requiresExternalGrowLight: false,
+        });
+        expect(production.stations[2]).toMatchObject({
             itemId: 'mixer',
             kind: 'mixing',
             capacity: 10,
         });
         expect(production.stations[3]).toMatchObject({
+            itemId: 'pot',
+            kind: 'grow-container',
+            requiresExternalGrowLight: true,
+        });
+        expect(production.stations[4]).toMatchObject({
             itemId: 'spawn-station',
             kind: 'mushroom-spawn',
             grainBagQuantity: 1,

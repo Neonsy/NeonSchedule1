@@ -27,6 +27,7 @@ const cauldronSecondaryInputQuantity = 1;
 const cauldronOutputQuantity = 10;
 const chemistryStationItemId = 'chemistrystation';
 const mushroomBedItemId = 'mushroombed';
+const growTentItemId = 'growtent';
 const mushroomSpawnInputQuantity = 1;
 const mushroomSpawnOutputQuantity = 1;
 const mushroomSpawnWorkTimeMinutes = 6;
@@ -65,7 +66,7 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-3',
+        schema: 'neonschedule1-production-catalog-4',
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),
@@ -286,7 +287,7 @@ function normalizeStation(
     const path = `report.productionStations[${JSON.stringify(itemId)}]`;
     const kind = stringField(raw, 'kind', path);
     requireItem(itemId, itemIds, `${path}.itemId`, integrity);
-    const base = { schema: 'neonschedule1-production-station-2' as const, itemId };
+    const base = { schema: 'neonschedule1-production-station-3' as const, itemId };
 
     switch (kind) {
         case 'grow-container': {
@@ -297,6 +298,7 @@ function normalizeStation(
                 kind,
                 yieldMultiplier: positiveNumber(raw, 'yieldMultiplier', path, integrity),
                 growSpeedMultiplier: positiveNumber(raw, 'growSpeedMultiplier', path, integrity),
+                requiresExternalGrowLight: itemId !== growTentItemId,
                 maxTemperatureGrowthMultiplier: positiveNumber(
                     raw,
                     'maxTemperatureGrowthMultiplier',

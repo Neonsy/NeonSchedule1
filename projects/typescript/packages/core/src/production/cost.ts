@@ -33,6 +33,7 @@ export interface ProducedMaterialCost {
     readonly durationMinutesPerBatch: number;
     readonly acceptedEquipmentItemIds: readonly string[];
     readonly equipmentItemId: string | null;
+    readonly growLightItemId: string | null;
     readonly batchCost: number;
     readonly unitCost: number;
     readonly inputs: readonly ProductionMaterialInput[];
@@ -46,6 +47,7 @@ export interface ProductionMaterialCostResolver {
 
 export interface ProductionMaterialCostOptions {
     readonly growContainerItemId?: string;
+    readonly growLightItemId?: string;
 }
 
 interface RouteInput {
@@ -61,6 +63,7 @@ interface ProductionRoute {
     readonly durationMinutesPerBatch: number;
     readonly acceptedEquipmentItemIds: readonly string[];
     readonly equipmentItemId: string | null;
+    readonly growLightItemId: string | null;
     readonly inputs: readonly RouteInput[];
 }
 
@@ -151,6 +154,7 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
             durationMinutesPerBatch: route.durationMinutesPerBatch,
             acceptedEquipmentItemIds: route.acceptedEquipmentItemIds,
             equipmentItemId: route.equipmentItemId,
+            growLightItemId: route.growLightItemId,
             batchCost,
             unitCost: batchCost / route.outputQuantity,
             inputs,
@@ -165,6 +169,8 @@ function productionRoutes(
 ): ProductionRoute[] {
     const routes: ProductionRoute[] = [];
     const selectedGrowContainer = selectGrowContainer(catalog, options.growContainerItemId);
+    const selectedGrowLight = selectGrowLight(itemsById, catalog, options.growLightItemId);
+    validateGrowLighting(selectedGrowContainer, selectedGrowLight);
     for (const seed of catalog.seeds) {
         if (seed.soilItemIds.length === 0) {
             throw new Error(`Seed production ${JSON.stringify(seed.seedItemId)} has no soil`);
@@ -187,6 +193,7 @@ function productionRoutes(
                     product.itemId,
                     soilItemId,
                     selectedGrowContainer?.itemId,
+                    selectedGrowLight?.itemId,
                 ]
                     .filter((part) => part !== undefined)
                     .join(':');
@@ -214,8 +221,10 @@ function productionRoutes(
                         product.quantity,
                     durationMinutesPerBatch: adjustedGrowthMinutes(
                         seed.growthTimeMinutes,
-                        selectedGrowContainer?.growSpeedMultiplier
+                        selectedGrowContainer?.growSpeedMultiplier,
+                        selectedGrowLight?.growSpeedMultiplier
                     ),
+                    growLightItemId: selectedGrowLight?.itemId ?? null,
                     ...equipment,
                     inputs: [
                         { acceptedItemIds: [seed.seedItemId], quantity: 1 },
@@ -239,6 +248,7 @@ function productionRoutes(
                 outputItemId: shroom.productItemId,
                 outputQuantity: shroom.baseYieldQuantity,
                 durationMinutesPerBatch: shroom.growTimeMinutes,
+                growLightItemId: null,
                 ...requireEquipment(
                     itemsById,
                     shroom.acceptedEquipmentItemIds,
@@ -261,6 +271,7 @@ function productionRoutes(
             outputItemId: recipe.outputItemId,
             outputQuantity: recipe.outputQuantity,
             durationMinutesPerBatch: recipe.cookTimeMinutes,
+            growLightItemId: null,
             ...requireEquipment(
                 itemsById,
                 recipe.acceptedEquipmentItemIds,
@@ -276,6 +287,7 @@ function productionRoutes(
             outputItemId: transform.outputItemId,
             outputQuantity: transform.outputQuantity,
             durationMinutesPerBatch: transform.cookTimeMinutes,
+            growLightItemId: null,
             ...requireEquipment(
                 itemsById,
                 catalog.stations
@@ -294,6 +306,7 @@ function productionRoutes(
                 outputItemId: station.outputItemId,
                 outputQuantity: station.outputQuantity,
                 durationMinutesPerBatch: station.cookTimeMinutes,
+                growLightItemId: null,
                 ...requireEquipment(
                     itemsById,
                     [station.itemId],
@@ -319,6 +332,7 @@ function productionRoutes(
                     outputItemId: transform.outputSpawnItemId,
                     outputQuantity: transform.outputSpawnQuantity,
                     durationMinutesPerBatch: station.workTimeMinutes,
+                    growLightItemId: null,
                     ...requireEquipment(
                         itemsById,
                         [station.itemId],
@@ -393,12 +407,44 @@ function selectGrowContainer(
     return station;
 }
 
+function selectGrowLight(
+    itemsById: ReadonlyMap<string, Item>,
+    catalog: ProductionCatalog,
+    itemId: string | undefined
+): Extract<ProductionCatalog['stations'][number], { readonly kind: 'grow-light' }> | null {
+    if (itemId === undefined) return null;
+    const station = catalog.stations.find((candidate) => candidate.itemId === itemId);
+    if (station?.kind !== 'grow-light') throw new Error(`Unknown grow light ${JSON.stringify(itemId)}`);
+    if (!itemsById.has(itemId)) throw new Error(`Unknown grow light equipment ${JSON.stringify(itemId)}`);
+    return station;
+}
+
+function validateGrowLighting(
+    container: Extract<ProductionCatalog['stations'][number], { readonly kind: 'grow-container' }> | null,
+    light: Extract<ProductionCatalog['stations'][number], { readonly kind: 'grow-light' }> | null
+): void {
+    if (container === null) {
+        if (light !== null) throw new Error('A grow light cannot be selected without a grow container');
+        return;
+    }
+    if (container.requiresExternalGrowLight && light === null) {
+        throw new Error(`Grow container ${JSON.stringify(container.itemId)} requires a grow light`);
+    }
+    if (!container.requiresExternalGrowLight && light !== null) {
+        throw new Error(`Grow container ${JSON.stringify(container.itemId)} uses built-in lighting`);
+    }
+}
+
 function harvestCount(baseYieldQuantity: number, yieldMultiplier = 1): number {
     return Math.max(1, Math.round(baseYieldQuantity * yieldMultiplier));
 }
 
-function adjustedGrowthMinutes(growthTimeMinutes: number, growSpeedMultiplier = 1): number {
-    const duration = growthTimeMinutes / growSpeedMultiplier;
+function adjustedGrowthMinutes(
+    growthTimeMinutes: number,
+    containerSpeedMultiplier = 1,
+    lightSpeedMultiplier = 1
+): number {
+    const duration = growthTimeMinutes / (containerSpeedMultiplier * lightSpeedMultiplier);
     const nearestMinute = Math.round(duration);
     return Math.abs(duration - nearestMinute) <= 1e-3 ? nearestMinute : Math.ceil(duration);
 }

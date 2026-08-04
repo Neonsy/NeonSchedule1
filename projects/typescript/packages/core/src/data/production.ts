@@ -60,7 +60,7 @@ export const OvenTransformSchema = type({
 export type OvenTransform = typeof OvenTransformSchema.infer;
 
 const stationBase = {
-    schema: "'neonschedule1-production-station-2'",
+    schema: "'neonschedule1-production-station-3'",
     itemId: 'string',
 } as const;
 
@@ -69,6 +69,7 @@ export const GrowContainerStationSchema = type({
     kind: "'grow-container'",
     yieldMultiplier: 'number',
     growSpeedMultiplier: 'number',
+    requiresExternalGrowLight: 'boolean',
     maxTemperatureGrowthMultiplier: 'number',
     minimumTemperatureThreshold: 'number',
     maximumTemperatureThreshold: 'number',
@@ -163,7 +164,7 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-3'",
+    schema: "'neonschedule1-production-catalog-4'",
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

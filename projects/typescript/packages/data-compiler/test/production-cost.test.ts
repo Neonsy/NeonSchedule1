@@ -46,6 +46,7 @@ describe('production material costs', () => {
             durationMinutesPerBatch: 60,
             acceptedEquipmentItemIds: ['pot'],
             equipmentItemId: null,
+            growLightItemId: null,
             unitCost: 10.75,
             inputs: [
                 { itemId: 'seed', quantity: 1, totalCost: 100 },
@@ -199,6 +200,7 @@ describe('production batch plans', () => {
                     durationMinutesPerBatch: 60,
                     acceptedEquipmentItemIds: ['pot'],
                     equipmentItemId: null,
+                    growLightItemId: null,
                     totalProcessMinutes: 1_020,
                     producedQuantity: 204,
                     leftoverQuantity: 4,
@@ -217,6 +219,7 @@ describe('production batch plans', () => {
                     durationMinutesPerBatch: 1,
                     acceptedEquipmentItemIds: ['cauldron'],
                     equipmentItemId: 'cauldron',
+                    growLightItemId: null,
                     totalProcessMinutes: 10,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -235,6 +238,7 @@ describe('production batch plans', () => {
                     durationMinutesPerBatch: 1,
                     acceptedEquipmentItemIds: ['oven'],
                     equipmentItemId: 'oven',
+                    growLightItemId: null,
                     totalProcessMinutes: 100,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -279,11 +283,12 @@ describe('production batch plans', () => {
     it('applies the selected grow container to yield and duration', () => {
         const source = catalog();
         const tent = {
-            schema: 'neonschedule1-production-station-2' as const,
+            schema: 'neonschedule1-production-station-3' as const,
             itemId: 'tent',
             kind: 'grow-container' as const,
             yieldMultiplier: 0.6666667,
             growSpeedMultiplier: 1.333333,
+            requiresExternalGrowLight: false,
             maxTemperatureGrowthMultiplier: 1,
             minimumTemperatureThreshold: 1,
             maximumTemperatureThreshold: 1,
@@ -320,9 +325,66 @@ describe('production batch plans', () => {
                     leftoverQuantity: 4,
                     acceptedEquipmentItemIds: ['tent'],
                     equipmentItemId: 'tent',
+                    growLightItemId: null,
                 },
             ],
         });
+    });
+
+    it('applies a selected external grow light at full exposure', () => {
+        const source = catalog();
+        const light = {
+            schema: 'neonschedule1-production-station-3' as const,
+            itemId: 'light',
+            kind: 'grow-light' as const,
+            growSpeedMultiplier: 1.3,
+        };
+        const selectedCatalog: ProductionCatalog = {
+            ...emptyCatalog(),
+            seeds: source.seeds.map((seed) => ({
+                ...seed,
+                soilItemIds: ['soil'],
+                baseYieldQuantity: 12,
+            })),
+            stations: [source.stations[0]!, light],
+        };
+        const items = [
+            item('seed', 100),
+            item('leaf'),
+            item('soil', 10, 1),
+            item('pot'),
+            item('light'),
+        ];
+        const itemsById = new Map(items.map((entry) => [entry.id, entry]));
+        const costs = new ProductionMaterialCostEvaluator(itemsById, selectedCatalog, {
+            growContainerItemId: 'pot',
+            growLightItemId: 'light',
+        });
+
+        expect(new ProductionBatchPlanner(costs).plan('leaf', 100)).toMatchObject({
+            totalProcessMinutes: 423,
+            requiredMaterialCost: 990,
+            purchaseCost: 990,
+            productionSteps: [
+                {
+                    routeId: 'seed:seed:leaf:soil:pot:light',
+                    outputQuantityPerBatch: 12,
+                    durationMinutesPerBatch: 47,
+                    batchCount: 9,
+                    producedQuantity: 108,
+                    leftoverQuantity: 8,
+                    acceptedEquipmentItemIds: ['pot'],
+                    equipmentItemId: 'pot',
+                    growLightItemId: 'light',
+                },
+            ],
+        });
+        expect(
+            () =>
+                new ProductionMaterialCostEvaluator(itemsById, selectedCatalog, {
+                    growContainerItemId: 'pot',
+                })
+        ).toThrow('Grow container "pot" requires a grow light');
     });
 });
 
@@ -393,11 +455,12 @@ function catalog(): ProductionCatalog {
         ],
         stations: [
             {
-                schema: 'neonschedule1-production-station-2',
+                schema: 'neonschedule1-production-station-3',
                 itemId: 'pot',
                 kind: 'grow-container',
                 yieldMultiplier: 1,
                 growSpeedMultiplier: 1,
+                requiresExternalGrowLight: true,
                 maxTemperatureGrowthMultiplier: 1,
                 minimumTemperatureThreshold: 1,
                 maximumTemperatureThreshold: 1,
@@ -406,7 +469,7 @@ function catalog(): ProductionCatalog {
             },
             labOvenStation(),
             {
-                schema: 'neonschedule1-production-station-2',
+                schema: 'neonschedule1-production-station-3',
                 itemId: 'cauldron',
                 kind: 'cauldron',
                 cookTimeMinutes: 1,
@@ -418,7 +481,7 @@ function catalog(): ProductionCatalog {
                 outputQuantity: 10,
             },
             {
-                schema: 'neonschedule1-production-station-2',
+                schema: 'neonschedule1-production-station-3',
                 itemId: 'spawn-station',
                 kind: 'mushroom-spawn',
                 grainBagItemId: 'grain-bag',
@@ -439,7 +502,7 @@ function catalog(): ProductionCatalog {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-3',
+        schema: 'neonschedule1-production-catalog-4',
         seeds: [],
         shrooms: [],
         stationRecipes: [],
@@ -450,7 +513,7 @@ function emptyCatalog(): ProductionCatalog {
 
 function labOvenStation(): ProductionCatalog['stations'][number] {
     return {
-        schema: 'neonschedule1-production-station-2',
+        schema: 'neonschedule1-production-station-3',
         itemId: 'oven',
         kind: 'lab-oven',
     };
