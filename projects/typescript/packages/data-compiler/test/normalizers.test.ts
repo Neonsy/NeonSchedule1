@@ -298,6 +298,7 @@ describe('domain normalization', () => {
         expect(production.seeds[0]).toMatchObject({
             seedItemId: 'seed',
             soilItemIds: ['soil'],
+            growthTimeMinutes: 540,
             baseYieldQuantity: 12,
             harvestProducts: [{ itemId: 'product', quantity: 1 }],
         });
@@ -305,6 +306,7 @@ describe('domain normalization', () => {
             spawnItemId: 'spawn',
             soilItemIds: ['substrate'],
             productItemId: 'shroom',
+            growTimeMinutes: 1_080,
         });
         expect(production.stationRecipes[0]).toMatchObject({
             id: 'liquid',
@@ -312,12 +314,14 @@ describe('domain normalization', () => {
         });
         expect(production.ovenTransforms[0]).toMatchObject({
             inputItemId: 'liquid',
+            cookTimeMinutes: 60,
             outputItemId: 'product',
             outputQuantity: 10,
         });
         expect(production.stations[0]).toMatchObject({
             itemId: 'cauldron',
             kind: 'cauldron',
+            cookTimeMinutes: 6,
             secondaryInputQuantity: 1,
             outputQuantity: 10,
         });
@@ -330,6 +334,7 @@ describe('domain normalization', () => {
             itemId: 'spawn-station',
             kind: 'mushroom-spawn',
             grainBagQuantity: 1,
+            workTimeMinutes: 6,
             sporeSyringes: [{ syringeQuantity: 1, outputSpawnQuantity: 1 }],
         });
     });

@@ -4,11 +4,11 @@ export const HarvestProductSchema = type({ itemId: 'string', quantity: 'number' 
 export type HarvestProduct = typeof HarvestProductSchema.infer;
 
 export const SeedProductionSchema = type({
-    schema: "'neonschedule1-seed-production-1'",
+    schema: "'neonschedule1-seed-production-2'",
     seedItemId: 'string',
     soilItemIds: 'string[]',
     plantRuntimeType: 'string',
-    growthTime: 'number',
+    growthTimeMinutes: 'number',
     baseYieldQuantity: 'number',
     harvestTarget: 'string',
     harvestProducts: HarvestProductSchema.array(),
@@ -16,11 +16,11 @@ export const SeedProductionSchema = type({
 export type SeedProduction = typeof SeedProductionSchema.infer;
 
 export const ShroomProductionSchema = type({
-    schema: "'neonschedule1-shroom-production-1'",
+    schema: "'neonschedule1-shroom-production-2'",
     spawnItemId: 'string',
     soilItemIds: 'string[]',
     productItemId: 'string',
-    growTime: 'number',
+    growTimeMinutes: 'number',
     baseYieldQuantity: 'number',
     maximumTemperatureForGrowth: 'number',
     minimumSoilMoistureForGrowth: 'number',
@@ -48,17 +48,17 @@ export const StationRecipeSchema = type({
 export type StationRecipe = typeof StationRecipeSchema.infer;
 
 export const OvenTransformSchema = type({
-    schema: "'neonschedule1-oven-transform-1'",
+    schema: "'neonschedule1-oven-transform-2'",
     inputItemId: 'string',
     cookType: 'string',
-    cookTime: 'number',
+    cookTimeMinutes: 'number',
     outputItemId: 'string',
     outputQuantity: 'number',
 });
 export type OvenTransform = typeof OvenTransformSchema.infer;
 
 const stationBase = {
-    schema: "'neonschedule1-production-station-1'",
+    schema: "'neonschedule1-production-station-2'",
     itemId: 'string',
 } as const;
 
@@ -98,7 +98,7 @@ export const BrickPressStationSchema = type({
 export const CauldronStationSchema = type({
     ...stationBase,
     kind: "'cauldron'",
-    cookTime: 'number',
+    cookTimeMinutes: 'number',
     requiredPrimaryInputQuantity: 'number',
     primaryInputItemId: 'string',
     secondaryInputItemId: 'string',
@@ -139,6 +139,7 @@ export const MushroomSpawnStationSchema = type({
     kind: "'mushroom-spawn'",
     grainBagItemId: 'string',
     grainBagQuantity: 'number',
+    workTimeMinutes: 'number',
     sporeSyringes: SporeSyringeTransformSchema.array(),
 });
 
@@ -160,7 +161,7 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-1'",
+    schema: "'neonschedule1-production-catalog-2'",
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

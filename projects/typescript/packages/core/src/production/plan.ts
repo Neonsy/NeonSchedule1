@@ -19,6 +19,8 @@ export interface ProductionBatchStep {
     readonly requiredQuantity: number;
     readonly batchCount: number;
     readonly outputQuantityPerBatch: number;
+    readonly durationMinutesPerBatch: number;
+    readonly totalProcessMinutes: number;
     readonly producedQuantity: number;
     readonly leftoverQuantity: number;
     readonly inputs: readonly ProductionStepInput[];
@@ -39,6 +41,7 @@ export interface ProductionBatchPlan {
     readonly targetQuantity: number;
     readonly productionSteps: readonly ProductionBatchStep[];
     readonly purchases: readonly ProductionPurchase[];
+    readonly totalProcessMinutes: number;
     readonly requiredMaterialCost: number;
     readonly purchaseCost: number;
 }
@@ -70,6 +73,10 @@ export class ProductionBatchPlanner {
             targetQuantity,
             productionSteps: [...expansion.steps].reverse(),
             purchases,
+            totalProcessMinutes: expansion.steps.reduce(
+                (total, step) => total + step.totalProcessMinutes,
+                0
+            ),
             requiredMaterialCost: purchases.reduce((total, entry) => total + entry.requiredCost, 0),
             purchaseCost: purchases.reduce((total, entry) => total + entry.purchaseCost, 0),
         };
@@ -116,6 +123,7 @@ function expandProduction(
         const route = produced.get(itemId);
         if (route === undefined) throw new Error(`Missing production route for ${JSON.stringify(itemId)}`);
         requirePositive(route.outputQuantity, `${route.routeId} output quantity`);
+        requirePositive(route.durationMinutesPerBatch, `${route.routeId} duration`);
         const requiredQuantity = demands.get(itemId) ?? 0;
         requirePositive(requiredQuantity, `${itemId} required quantity`);
         const batchCount = ceilWhole(requiredQuantity / route.outputQuantity);
@@ -136,6 +144,8 @@ function expandProduction(
             requiredQuantity,
             batchCount,
             outputQuantityPerBatch: route.outputQuantity,
+            durationMinutesPerBatch: route.durationMinutesPerBatch,
+            totalProcessMinutes: route.durationMinutesPerBatch * batchCount,
             producedQuantity,
             leftoverQuantity: cleanZero(producedQuantity - requiredQuantity),
             inputs,

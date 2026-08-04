@@ -39,6 +39,7 @@ describe('production material costs', () => {
         expect(evaluator.evaluate('leaf')).toMatchObject({
             kind: 'production',
             method: 'seed-harvest',
+            durationMinutesPerBatch: 60,
             unitCost: 10.75,
             inputs: [
                 { itemId: 'seed', quantity: 1, totalCost: 100 },
@@ -48,6 +49,7 @@ describe('production material costs', () => {
         expect(evaluator.evaluate('cocaine')).toMatchObject({
             kind: 'production',
             method: 'oven',
+            durationMinutesPerBatch: 1,
             unitCost: 22,
             inputs: [
                 {
@@ -55,6 +57,7 @@ describe('production material costs', () => {
                     unitCost: 22,
                     cost: {
                         method: 'cauldron',
+                        durationMinutesPerBatch: 1,
                         outputQuantity: 10,
                         batchCost: 220,
                     },
@@ -64,11 +67,13 @@ describe('production material costs', () => {
         expect(evaluator.evaluate('meth')).toMatchObject({
             kind: 'production',
             method: 'oven',
+            durationMinutesPerBatch: 1,
             unitCost: 14,
             inputs: [
                 {
                     cost: {
                         method: 'station-recipe',
+                        durationMinutesPerBatch: 1,
                         batchCost: 140,
                         inputs: [{ itemId: 'acid' }, { itemId: 'low-pseudo' }, { itemId: 'phosphorus' }],
                     },
@@ -78,12 +83,17 @@ describe('production material costs', () => {
         expect(evaluator.evaluate('shroom')).toMatchObject({
             kind: 'production',
             method: 'shroom-harvest',
+            durationMinutesPerBatch: 60,
             unitCost: 12.5,
             inputs: [
                 {
                     itemId: 'spawn',
                     unitCost: 140,
-                    cost: { method: 'mushroom-spawn', batchCost: 140 },
+                    cost: {
+                        method: 'mushroom-spawn',
+                        durationMinutesPerBatch: 6,
+                        batchCost: 140,
+                    },
                 },
                 { itemId: 'substrate', quantity: 1, totalCost: 60 },
             ],
@@ -95,18 +105,18 @@ describe('production material costs', () => {
             ...emptyCatalog(),
             ovenTransforms: [
                 {
-                    schema: 'neonschedule1-oven-transform-1',
+                    schema: 'neonschedule1-oven-transform-2',
                     inputItemId: 'right',
                     cookType: 'Test',
-                    cookTime: 1,
+                    cookTimeMinutes: 1,
                     outputItemId: 'left',
                     outputQuantity: 1,
                 },
                 {
-                    schema: 'neonschedule1-oven-transform-1',
+                    schema: 'neonschedule1-oven-transform-2',
                     inputItemId: 'left',
                     cookType: 'Test',
-                    cookTime: 1,
+                    cookTimeMinutes: 1,
                     outputItemId: 'right',
                     outputQuantity: 1,
                 },
@@ -159,6 +169,8 @@ describe('production batch plans', () => {
                     requiredQuantity: 200,
                     batchCount: 17,
                     outputQuantityPerBatch: 12,
+                    durationMinutesPerBatch: 60,
+                    totalProcessMinutes: 1_020,
                     producedQuantity: 204,
                     leftoverQuantity: 4,
                     inputs: [
@@ -173,6 +185,8 @@ describe('production batch plans', () => {
                     requiredQuantity: 100,
                     batchCount: 10,
                     outputQuantityPerBatch: 10,
+                    durationMinutesPerBatch: 1,
+                    totalProcessMinutes: 10,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
                     inputs: [
@@ -187,6 +201,8 @@ describe('production batch plans', () => {
                     requiredQuantity: 100,
                     batchCount: 100,
                     outputQuantityPerBatch: 1,
+                    durationMinutesPerBatch: 1,
+                    totalProcessMinutes: 100,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
                     inputs: [{ itemId: 'base', quantityPerBatch: 1, totalQuantity: 100 }],
@@ -221,6 +237,7 @@ describe('production batch plans', () => {
                     purchaseCost: 1700,
                 },
             ],
+            totalProcessMinutes: 1_130,
             requiredMaterialCost: 1877.5,
             purchaseCost: 1885,
         });
@@ -232,11 +249,11 @@ function catalog(): ProductionCatalog {
         ...emptyCatalog(),
         seeds: [
             {
-                schema: 'neonschedule1-seed-production-1',
+                schema: 'neonschedule1-seed-production-2',
                 seedItemId: 'seed',
                 soilItemIds: ['soil', 'reusable-soil'],
                 plantRuntimeType: 'Plant',
-                growthTime: 1,
+                growthTimeMinutes: 60,
                 baseYieldQuantity: 10,
                 harvestTarget: 'leaf',
                 harvestProducts: [{ itemId: 'leaf', quantity: 1 }],
@@ -244,11 +261,11 @@ function catalog(): ProductionCatalog {
         ],
         shrooms: [
             {
-                schema: 'neonschedule1-shroom-production-1',
+                schema: 'neonschedule1-shroom-production-2',
                 spawnItemId: 'spawn',
                 soilItemIds: ['substrate'],
                 productItemId: 'shroom',
-                growTime: 1,
+                growTimeMinutes: 60,
                 baseYieldQuantity: 16,
                 maximumTemperatureForGrowth: 1,
                 minimumSoilMoistureForGrowth: 0,
@@ -274,28 +291,28 @@ function catalog(): ProductionCatalog {
         ],
         ovenTransforms: [
             {
-                schema: 'neonschedule1-oven-transform-1',
+                schema: 'neonschedule1-oven-transform-2',
                 inputItemId: 'base',
                 cookType: 'Solid',
-                cookTime: 1,
+                cookTimeMinutes: 1,
                 outputItemId: 'cocaine',
                 outputQuantity: 1,
             },
             {
-                schema: 'neonschedule1-oven-transform-1',
+                schema: 'neonschedule1-oven-transform-2',
                 inputItemId: 'liquid-meth',
                 cookType: 'Liquid',
-                cookTime: 1,
+                cookTimeMinutes: 1,
                 outputItemId: 'meth',
                 outputQuantity: 10,
             },
         ],
         stations: [
             {
-                schema: 'neonschedule1-production-station-1',
+                schema: 'neonschedule1-production-station-2',
                 itemId: 'cauldron',
                 kind: 'cauldron',
-                cookTime: 1,
+                cookTimeMinutes: 1,
                 requiredPrimaryInputQuantity: 20,
                 primaryInputItemId: 'leaf',
                 secondaryInputItemId: 'fuel',
@@ -304,11 +321,12 @@ function catalog(): ProductionCatalog {
                 outputQuantity: 10,
             },
             {
-                schema: 'neonschedule1-production-station-1',
+                schema: 'neonschedule1-production-station-2',
                 itemId: 'spawn-station',
                 kind: 'mushroom-spawn',
                 grainBagItemId: 'grain-bag',
                 grainBagQuantity: 1,
+                workTimeMinutes: 6,
                 sporeSyringes: [
                     {
                         syringeItemId: 'syringe',
@@ -324,7 +342,7 @@ function catalog(): ProductionCatalog {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-1',
+        schema: 'neonschedule1-production-catalog-2',
         seeds: [],
         shrooms: [],
         stationRecipes: [],

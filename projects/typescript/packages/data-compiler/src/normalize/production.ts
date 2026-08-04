@@ -21,12 +21,14 @@ import {
     type JsonObject,
 } from '#data-compiler/json';
 
-// These batch literals come from the current game's production methods because the raw collector
-// identifies the related items but does not yet expose the quantities.
+// These literals come from the current game's production methods because the raw collector
+// identifies the related items but does not expose their quantities or manual work duration.
 const cauldronSecondaryInputQuantity = 1;
 const cauldronOutputQuantity = 10;
 const mushroomSpawnInputQuantity = 1;
 const mushroomSpawnOutputQuantity = 1;
+const mushroomSpawnWorkTimeMinutes = 6;
+const minutesPerHour = 60;
 
 export function normalizeProduction(
     report: RawReport,
@@ -49,7 +51,7 @@ export function normalizeProduction(
     const soils = productionSoils(report, normalizedStations, itemIds, integrity);
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-1',
+        schema: 'neonschedule1-production-catalog-2',
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),
@@ -137,11 +139,11 @@ function normalizeSeed(
         `${path}.harvestables must not be empty`
     );
     return {
-        schema: 'neonschedule1-seed-production-1',
+        schema: 'neonschedule1-seed-production-2',
         seedItemId,
         soilItemIds: [...soilItemIds],
         plantRuntimeType: stringField(raw, 'plantRuntimeType', path),
-        growthTime: positiveNumber(raw, 'growthTime', path, integrity),
+        growthTimeMinutes: positiveNumber(raw, 'growthTime', path, integrity) * minutesPerHour,
         baseYieldQuantity: positiveNumber(raw, 'baseYieldQuantity', path, integrity),
         harvestTarget: stringField(raw, 'harvestTarget', path),
         harvestProducts,
@@ -160,11 +162,11 @@ function normalizeShroom(
     requireItem(spawnItemId, itemIds, `${path}.itemId`, integrity);
     requireItem(productItemId, itemIds, `${path}.productId`, integrity);
     return {
-        schema: 'neonschedule1-shroom-production-1',
+        schema: 'neonschedule1-shroom-production-2',
         spawnItemId,
         soilItemIds: [...soilItemIds],
         productItemId,
-        growTime: positiveNumber(raw, 'growTime', path, integrity),
+        growTimeMinutes: positiveNumber(raw, 'growTime', path, integrity) * minutesPerHour,
         baseYieldQuantity: positiveNumber(raw, 'baseYieldQuantity', path, integrity),
         maximumTemperatureForGrowth: numberField(raw, 'maximumTemperatureForGrowth', path),
         minimumSoilMoistureForGrowth: numberField(raw, 'minimumSoilMoistureForGrowth', path),
@@ -231,10 +233,10 @@ function normalizeOvenTransforms(
             requireItem(inputItemId, itemIds, `${path}.inputItemId`, integrity);
             requireItem(outputItemId, itemIds, `${path}.outputItemId`, integrity);
             return {
-                schema: 'neonschedule1-oven-transform-1',
+                schema: 'neonschedule1-oven-transform-2',
                 inputItemId,
                 cookType: stringField(raw, 'cookType', path),
-                cookTime: positiveNumber(raw, 'cookTime', path, integrity),
+                cookTimeMinutes: positiveNumber(raw, 'cookTime', path, integrity),
                 outputItemId,
                 outputQuantity: positiveNumber(raw, 'outputQuantity', path, integrity),
             };
@@ -255,7 +257,7 @@ function normalizeStation(
     const path = `report.productionStations[${JSON.stringify(itemId)}]`;
     const kind = stringField(raw, 'kind', path);
     requireItem(itemId, itemIds, `${path}.itemId`, integrity);
-    const base = { schema: 'neonschedule1-production-station-1' as const, itemId };
+    const base = { schema: 'neonschedule1-production-station-2' as const, itemId };
 
     switch (kind) {
         case 'grow-container': {
@@ -308,7 +310,7 @@ function normalizeStation(
             return {
                 ...base,
                 kind,
-                cookTime: positiveNumber(raw, 'cookTime', path, integrity),
+                cookTimeMinutes: positiveNumber(raw, 'cookTime', path, integrity),
                 requiredPrimaryInputQuantity: positiveNumber(
                     raw,
                     'requiredPrimaryInputQuantity',
@@ -371,6 +373,7 @@ function normalizeStation(
                 kind,
                 grainBagItemId,
                 grainBagQuantity: mushroomSpawnInputQuantity,
+                workTimeMinutes: mushroomSpawnWorkTimeMinutes,
                 sporeSyringes,
             };
         }

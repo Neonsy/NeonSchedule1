@@ -30,6 +30,7 @@ export interface ProducedMaterialCost {
     readonly routeId: string;
     readonly method: ProductionMethod;
     readonly outputQuantity: number;
+    readonly durationMinutesPerBatch: number;
     readonly batchCost: number;
     readonly unitCost: number;
     readonly inputs: readonly ProductionMaterialInput[];
@@ -51,6 +52,7 @@ interface ProductionRoute {
     readonly method: ProductionMethod;
     readonly outputItemId: string;
     readonly outputQuantity: number;
+    readonly durationMinutesPerBatch: number;
     readonly inputs: readonly RouteInput[];
 }
 
@@ -134,6 +136,7 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
             routeId: route.id,
             method: route.method,
             outputQuantity: route.outputQuantity,
+            durationMinutesPerBatch: route.durationMinutesPerBatch,
             batchCost,
             unitCost: batchCost / route.outputQuantity,
             inputs,
@@ -157,6 +160,7 @@ function productionRoutes(
                     method: 'seed-harvest',
                     outputItemId: product.itemId,
                     outputQuantity: seed.baseYieldQuantity * product.quantity,
+                    durationMinutesPerBatch: seed.growthTimeMinutes,
                     inputs: [
                         { acceptedItemIds: [seed.seedItemId], quantity: 1 },
                         {
@@ -178,6 +182,7 @@ function productionRoutes(
                 method: 'shroom-harvest',
                 outputItemId: shroom.productItemId,
                 outputQuantity: shroom.baseYieldQuantity,
+                durationMinutesPerBatch: shroom.growTimeMinutes,
                 inputs: [
                     { acceptedItemIds: [shroom.spawnItemId], quantity: 1 },
                     {
@@ -194,6 +199,7 @@ function productionRoutes(
             method: 'station-recipe',
             outputItemId: recipe.outputItemId,
             outputQuantity: recipe.outputQuantity,
+            durationMinutesPerBatch: recipe.cookTimeMinutes,
             inputs: recipe.ingredients,
         });
     }
@@ -203,6 +209,7 @@ function productionRoutes(
             method: 'oven',
             outputItemId: transform.outputItemId,
             outputQuantity: transform.outputQuantity,
+            durationMinutesPerBatch: transform.cookTimeMinutes,
             inputs: [{ acceptedItemIds: [transform.inputItemId], quantity: 1 }],
         });
     }
@@ -213,6 +220,7 @@ function productionRoutes(
                 method: 'cauldron',
                 outputItemId: station.outputItemId,
                 outputQuantity: station.outputQuantity,
+                durationMinutesPerBatch: station.cookTimeMinutes,
                 inputs: [
                     {
                         acceptedItemIds: [station.primaryInputItemId],
@@ -232,6 +240,7 @@ function productionRoutes(
                     method: 'mushroom-spawn',
                     outputItemId: transform.outputSpawnItemId,
                     outputQuantity: transform.outputSpawnQuantity,
+                    durationMinutesPerBatch: station.workTimeMinutes,
                     inputs: [
                         {
                             acceptedItemIds: [station.grainBagItemId],
