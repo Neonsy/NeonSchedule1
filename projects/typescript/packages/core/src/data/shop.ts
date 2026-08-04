@@ -1,6 +1,6 @@
 import { type } from 'arktype';
 
-import { Vector3Schema } from './common.js';
+import { Vector3Schema } from '#core/data/common';
 
 export const ShopListingSchema = type({
     itemId: 'string',

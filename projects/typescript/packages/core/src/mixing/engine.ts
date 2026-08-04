@@ -1,5 +1,5 @@
-import type { Effect } from '../data/effect.js';
-import type { MixingMap, MixingMapEffect, MixingRules } from '../data/mixing.js';
+import type { Effect } from '#core/data/effect';
+import type { MixingMap, MixingMapEffect, MixingRules } from '#core/data/mixing';
 
 interface IndexedMap {
     readonly source: MixingMap;

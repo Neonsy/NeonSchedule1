@@ -4,8 +4,8 @@ import path from 'node:path';
 
 import { DatasetManifestSchema, type DatasetManifest, type IntegrityCounts } from '@neonschedule1/core';
 
-import { canonicalJson, sha256Text } from './json.js';
-import { sha256File } from './acquisition/load.js';
+import { sha256File } from '#data-compiler/acquisition/load';
+import { canonicalJson, sha256Text } from '#data-compiler/json';
 
 export interface WriteDatasetOptions {
     readonly outputRoot: string;

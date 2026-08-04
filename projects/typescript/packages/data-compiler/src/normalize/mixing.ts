@@ -7,8 +7,8 @@ import {
     type MixingRules,
 } from '@neonschedule1/core';
 
-import type { RawReport } from '../acquisition/types.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import {
     nullableStringField,
     numberField,
@@ -16,7 +16,7 @@ import {
     stringArrayField,
     stringField,
     type JsonObject,
-} from '../json.js';
+} from '#data-compiler/json';
 
 export function normalizeMixing(
     report: RawReport,

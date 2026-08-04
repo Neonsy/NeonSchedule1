@@ -1,6 +1,6 @@
 import { type } from 'arktype';
 
-import { BoundsSchema, ColorSchema, Vector2Schema } from './common.js';
+import { BoundsSchema, ColorSchema, Vector2Schema } from '#core/data/common';
 
 export const AssetFileSchema = type({
     id: 'string',

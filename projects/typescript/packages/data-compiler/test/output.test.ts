@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { writeDataset, type WriteDatasetOptions } from '../src/output.js';
+import { writeDataset, type WriteDatasetOptions } from '#data-compiler/output';
 
 const temporaryDirectories: string[] = [];
 

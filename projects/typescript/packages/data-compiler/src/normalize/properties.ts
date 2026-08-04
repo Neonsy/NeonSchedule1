@@ -1,8 +1,8 @@
 import { PropertySchema, type Business, type Property } from '@neonschedule1/core';
 
-import type { RawReport } from '../acquisition/types.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
-import { booleanField, numberField, stringField, vector3, type JsonObject } from '../json.js';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
+import { booleanField, numberField, stringField, vector3, type JsonObject } from '#data-compiler/json';
 
 export function normalizeProperties(report: RawReport, integrity: Integrity): Property[] {
     const properties = indexUnique(report.world.properties, 'code', 'report.world.properties', integrity);

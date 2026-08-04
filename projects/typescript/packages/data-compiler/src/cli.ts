@@ -1,8 +1,8 @@
 import path from 'node:path';
 import process from 'node:process';
 
-import { compileDataset } from './compile.js';
-import { IntegrityError } from './integrity.js';
+import { compileDataset } from '#data-compiler/compile';
+import { IntegrityError } from '#data-compiler/integrity';
 
 const usage = `Usage: pnpm data:normalize -- --acquisition <directory> [--output <directory>]`;
 

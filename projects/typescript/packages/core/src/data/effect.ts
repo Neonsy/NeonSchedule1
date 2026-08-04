@@ -1,6 +1,6 @@
 import { type } from 'arktype';
 
-import { ColorSchema, Vector2Schema } from './common.js';
+import { ColorSchema, Vector2Schema } from '#core/data/common';
 
 export const EffectSchema = type({
     schema: "'neonschedule1-effect-1'",

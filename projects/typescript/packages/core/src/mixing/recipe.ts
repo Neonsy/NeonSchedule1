@@ -1,6 +1,6 @@
-import type { Item } from '../data/item.js';
+import type { Item } from '#core/data/item';
 
-import { MixingEngine } from './engine.js';
+import { MixingEngine } from '#core/mixing/engine';
 
 export interface RecipeInput {
     readonly productId: string;

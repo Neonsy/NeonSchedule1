@@ -4,6 +4,9 @@
     "private": true,
     "type": "module",
     "license": "Apache-2.0",
+    "imports": {
+        "#data-compiler/*": "./dist/*.js"
+    },
     "scripts": {
         "build": "tsc -p tsconfig.build.json",
         "check": "tsc -p tsconfig.json",

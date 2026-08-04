@@ -1,6 +1,6 @@
 import { type } from 'arktype';
 
-import { Vector2Schema } from './common.js';
+import { Vector2Schema } from '#core/data/common';
 
 export const MixingMapEffectSchema = type({
     effectId: 'string',

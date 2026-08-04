@@ -4,7 +4,9 @@
         "noEmit": false,
         "declaration": true,
         "declarationMap": true,
-        "paths": {},
+        "paths": {
+            "#data-compiler/*": ["./src/*"]
+        },
         "rootDir": "src",
         "outDir": "dist"
     },

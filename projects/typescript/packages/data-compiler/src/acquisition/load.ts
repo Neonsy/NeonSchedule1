@@ -12,8 +12,8 @@ import {
     stringArrayField,
     stringField,
     type JsonObject,
-} from '../json.js';
-import type { LoadedAcquisition, RawManifest, RawReport } from './types.js';
+} from '#data-compiler/json';
+import type { LoadedAcquisition, RawManifest, RawReport } from '#data-compiler/acquisition/types';
 
 const reportShape = type({
     schemaVersion: "'neonschedule1-game-data-export-1'",

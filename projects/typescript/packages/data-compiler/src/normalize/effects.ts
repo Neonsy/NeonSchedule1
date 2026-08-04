@@ -1,8 +1,8 @@
 import { EffectSchema, type Effect } from '@neonschedule1/core';
 
-import type { RawReport } from '../acquisition/types.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
-import { booleanField, color, numberField, stringArrayField, stringField } from '../json.js';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
+import { booleanField, color, numberField, stringArrayField, stringField } from '#data-compiler/json';
 
 export function normalizeEffects(report: RawReport, integrity: Integrity): Effect[] {
     const effectIndex = indexUnique(report.mixing.effects, 'id', 'report.mixing.effects', integrity);

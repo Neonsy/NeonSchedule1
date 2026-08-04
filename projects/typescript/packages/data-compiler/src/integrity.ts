@@ -1,5 +1,4 @@
-import type { JsonObject } from './json.js';
-import { stringField } from './json.js';
+import { stringField, type JsonObject } from '#data-compiler/json';
 
 export class IntegrityError extends Error {
     readonly issues: readonly string[];

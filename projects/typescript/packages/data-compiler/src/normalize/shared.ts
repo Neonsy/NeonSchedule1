@@ -2,9 +2,9 @@ import path from 'node:path';
 
 import type { Vector3 } from '@neonschedule1/core';
 
-import type { VerifiedAssets } from '../acquisition/assets.js';
-import { Integrity } from '../integrity.js';
-import { asObject, stringField, vector3, type JsonObject } from '../json.js';
+import type { VerifiedAssets } from '#data-compiler/acquisition/assets';
+import { Integrity } from '#data-compiler/integrity';
+import { asObject, stringField, vector3, type JsonObject } from '#data-compiler/json';
 
 export function fileIdForDescriptor(
     descriptorValue: unknown,

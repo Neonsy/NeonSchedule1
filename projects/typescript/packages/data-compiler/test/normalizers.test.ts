@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { VerifiedAssets } from '../src/acquisition/assets.js';
-import type { RawReport } from '../src/acquisition/types.js';
-import { Integrity } from '../src/integrity.js';
-import { normalizeEffects } from '../src/normalize/effects.js';
-import { normalizeItems } from '../src/normalize/items.js';
-import { normalizeProperties } from '../src/normalize/properties.js';
-import { normalizeShops } from '../src/normalize/shops.js';
+import type { VerifiedAssets } from '#data-compiler/acquisition/assets';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { Integrity } from '#data-compiler/integrity';
+import { normalizeEffects } from '#data-compiler/normalize/effects';
+import { normalizeItems } from '#data-compiler/normalize/items';
+import { normalizeProperties } from '#data-compiler/normalize/properties';
+import { normalizeShops } from '#data-compiler/normalize/shops';
 
 const noAssets: VerifiedAssets = {
     files: [],

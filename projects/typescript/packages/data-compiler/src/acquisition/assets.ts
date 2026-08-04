@@ -3,10 +3,10 @@ import path from 'node:path';
 
 import type { AssetFile } from '@neonschedule1/core';
 
-import { Integrity } from '../integrity.js';
-import { asArray, asObject, numberField, stringArrayField, stringField, type JsonObject } from '../json.js';
-import { sha256File } from './load.js';
-import type { LoadedAcquisition } from './types.js';
+import { sha256File } from '#data-compiler/acquisition/load';
+import type { LoadedAcquisition } from '#data-compiler/acquisition/types';
+import { Integrity } from '#data-compiler/integrity';
+import { asArray, asObject, numberField, stringArrayField, stringField, type JsonObject } from '#data-compiler/json';
 
 interface DirectDescriptor {
     readonly relativePath: string;

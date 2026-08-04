@@ -1,7 +1,7 @@
 import { ShopSchema, type Shop, type ShopListing } from '@neonschedule1/core';
 
-import type { RawReport } from '../acquisition/types.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import {
     booleanField,
     nullableNumberField,
@@ -9,8 +9,8 @@ import {
     numberField,
     objectArray,
     stringField,
-} from '../json.js';
-import { nullableVector3, optionalVector3 } from './shared.js';
+} from '#data-compiler/json';
+import { nullableVector3, optionalVector3 } from '#data-compiler/normalize/shared';
 
 export function normalizeShops(report: RawReport, itemIds: ReadonlySet<string>, integrity: Integrity): Shop[] {
     const shops = indexUnique(report.shops, 'code', 'report.shops', integrity);

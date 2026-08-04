@@ -1,4 +1,4 @@
-import type { JsonObject } from '../json.js';
+import type { JsonObject } from '#data-compiler/json';
 
 export interface RawReport {
     readonly document: JsonObject;

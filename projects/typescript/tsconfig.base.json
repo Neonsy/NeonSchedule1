@@ -5,7 +5,9 @@
         "module": "NodeNext",
         "moduleResolution": "NodeNext",
         "paths": {
-            "@neonschedule1/core": ["./packages/core/src/index.ts"]
+            "@neonschedule1/core": ["./packages/core/src/index.ts"],
+            "#core/*": ["./packages/core/src/*"],
+            "#data-compiler/*": ["./packages/data-compiler/src/*"]
         },
         "strict": true,
         "noUncheckedIndexedAccess": true,

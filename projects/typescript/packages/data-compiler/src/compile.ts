@@ -2,17 +2,17 @@ import path from 'node:path';
 
 import { IntegrityReportSchema, type IntegrityCounts, type IntegrityReport } from '@neonschedule1/core';
 
-import { verifyAssets } from './acquisition/assets.js';
-import { loadAcquisition } from './acquisition/load.js';
-import { indexUnique, Integrity, requireReferences } from './integrity.js';
-import { sha256Text } from './json.js';
-import { normalizeEffects } from './normalize/effects.js';
-import { normalizeItems } from './normalize/items.js';
-import { normalizeMixing } from './normalize/mixing.js';
-import { normalizeProperties } from './normalize/properties.js';
-import { normalizeShops } from './normalize/shops.js';
-import { normalizeVisuals } from './normalize/visuals.js';
-import { writeDataset, type WrittenDataset } from './output.js';
+import { verifyAssets } from '#data-compiler/acquisition/assets';
+import { loadAcquisition } from '#data-compiler/acquisition/load';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
+import { sha256Text } from '#data-compiler/json';
+import { normalizeEffects } from '#data-compiler/normalize/effects';
+import { normalizeItems } from '#data-compiler/normalize/items';
+import { normalizeMixing } from '#data-compiler/normalize/mixing';
+import { normalizeProperties } from '#data-compiler/normalize/properties';
+import { normalizeShops } from '#data-compiler/normalize/shops';
+import { normalizeVisuals } from '#data-compiler/normalize/visuals';
+import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
 export const NORMALIZER_VERSION = '0.0.6';
 

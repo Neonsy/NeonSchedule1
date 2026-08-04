@@ -9,9 +9,9 @@ import {
     type Soil,
 } from '@neonschedule1/core';
 
-import type { RawReport } from '../acquisition/types.js';
-import type { VerifiedAssets } from '../acquisition/assets.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
+import type { VerifiedAssets } from '#data-compiler/acquisition/assets';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import {
     asObject,
     booleanField,
@@ -21,8 +21,8 @@ import {
     stringArrayField,
     stringField,
     type JsonObject,
-} from '../json.js';
-import { fileIdForDescriptor } from './shared.js';
+} from '#data-compiler/json';
+import { fileIdForDescriptor } from '#data-compiler/normalize/shared';
 
 const runtimeOnlyItemIds = new Set(['cuke_effects', 'defaultweed', 'energy_drink_effects']);
 

@@ -7,9 +7,9 @@ import {
     type VisualRegistry,
 } from '@neonschedule1/core';
 
-import type { VerifiedAssets } from '../acquisition/assets.js';
-import type { RawReport } from '../acquisition/types.js';
-import { indexUnique, Integrity, requireReferences } from '../integrity.js';
+import type { VerifiedAssets } from '#data-compiler/acquisition/assets';
+import type { RawReport } from '#data-compiler/acquisition/types';
+import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import {
     asArray,
     asObject,
@@ -21,8 +21,8 @@ import {
     vector2,
     vector3,
     type JsonObject,
-} from '../json.js';
-import { fileIdForDescriptor } from './shared.js';
+} from '#data-compiler/json';
+import { fileIdForDescriptor } from '#data-compiler/normalize/shared';
 
 export function normalizeVisuals(report: RawReport, assets: VerifiedAssets, integrity: Integrity): VisualRegistry {
     const meshIndex = indexUnique(
