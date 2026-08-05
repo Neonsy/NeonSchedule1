@@ -1,0 +1,21 @@
+{
+  "name": "@neonschedule1/solver",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "imports": {
+    "#solver/*": {
+      "types": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json",
+    "benchmark": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@neonschedule1/core": "workspace:*"
+  }
+}

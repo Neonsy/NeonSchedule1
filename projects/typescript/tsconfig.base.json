@@ -7,7 +7,8 @@
         "paths": {
             "@neonschedule1/core": ["./packages/core/src/index.ts"],
             "#core/*": ["./packages/core/src/*"],
-            "#data-compiler/*": ["./packages/data-compiler/src/*"]
+            "#data-compiler/*": ["./packages/data-compiler/src/*"],
+            "#solver/*": ["./packages/solver/src/*"]
         },
         "strict": true,
         "noUncheckedIndexedAccess": true,
