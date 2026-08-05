@@ -1,5 +1,13 @@
 import type { Item } from '#core/data/item';
 import type { ProductionCatalog } from '#core/data/production';
+import {
+    adjustedGrowthMinutes,
+    harvestCount,
+    harvestQuality,
+    selectGrowAdditives,
+    stackedYieldMultiplier,
+    type HarvestQuality,
+} from '#core/production/growing';
 
 export type ProductionMethod =
     | 'cauldron'
@@ -35,6 +43,7 @@ export interface ProducedMaterialCost {
     readonly equipmentItemId: string | null;
     readonly growLightItemId: string | null;
     readonly additiveItemIds: readonly string[];
+    readonly quality: HarvestQuality | null;
     readonly batchCost: number;
     readonly unitCost: number;
     readonly inputs: readonly ProductionMaterialInput[];
@@ -67,13 +76,8 @@ interface ProductionRoute {
     readonly equipmentItemId: string | null;
     readonly growLightItemId: string | null;
     readonly additiveItemIds: readonly string[];
+    readonly quality: HarvestQuality | null;
     readonly inputs: readonly RouteInput[];
-}
-
-interface SelectedAdditive {
-    readonly itemId: string;
-    readonly yieldMultiplier: number;
-    readonly instantGrowth: number;
 }
 
 export class ProductionMaterialCostEvaluator implements ProductionMaterialCostResolver {
@@ -165,6 +169,7 @@ export class ProductionMaterialCostEvaluator implements ProductionMaterialCostRe
             equipmentItemId: route.equipmentItemId,
             growLightItemId: route.growLightItemId,
             additiveItemIds: route.additiveItemIds,
+            quality: route.quality,
             batchCost,
             unitCost: batchCost / route.outputQuantity,
             inputs,
@@ -181,9 +186,10 @@ function productionRoutes(
     const selectedGrowContainer = selectGrowContainer(catalog, options.growContainerItemId);
     const selectedGrowLight = selectGrowLight(itemsById, catalog, options.growLightItemId);
     validateGrowLighting(selectedGrowContainer, selectedGrowLight);
-    const selectedAdditives = selectAdditives(
+    const selectedAdditives = selectGrowAdditives(
         itemsById,
-        selectedGrowContainer,
+        selectedGrowContainer?.itemId ?? null,
+        selectedGrowContainer?.allowedAdditiveIds ?? [],
         options.additiveItemIds ?? []
     );
     for (const seed of catalog.seeds) {
@@ -252,6 +258,7 @@ function productionRoutes(
                     ),
                     growLightItemId: selectedGrowLight?.itemId ?? null,
                     additiveItemIds: selectedAdditives.map((additive) => additive.itemId),
+                    quality: harvestQuality(catalog.quality, selectedAdditives),
                     ...equipment,
                     inputs: [
                         { acceptedItemIds: [seed.seedItemId], quantity: 1 },
@@ -281,6 +288,7 @@ function productionRoutes(
                 durationMinutesPerBatch: shroom.growTimeMinutes,
                 growLightItemId: null,
                 additiveItemIds: [],
+                quality: null,
                 ...requireEquipment(
                     itemsById,
                     shroom.acceptedEquipmentItemIds,
@@ -305,6 +313,7 @@ function productionRoutes(
             durationMinutesPerBatch: recipe.cookTimeMinutes,
             growLightItemId: null,
             additiveItemIds: [],
+            quality: null,
             ...requireEquipment(
                 itemsById,
                 recipe.acceptedEquipmentItemIds,
@@ -322,6 +331,7 @@ function productionRoutes(
             durationMinutesPerBatch: transform.cookTimeMinutes,
             growLightItemId: null,
             additiveItemIds: [],
+            quality: null,
             ...requireEquipment(
                 itemsById,
                 catalog.stations
@@ -342,6 +352,7 @@ function productionRoutes(
                 durationMinutesPerBatch: station.cookTimeMinutes,
                 growLightItemId: null,
                 additiveItemIds: [],
+                quality: null,
                 ...requireEquipment(
                     itemsById,
                     [station.itemId],
@@ -369,6 +380,7 @@ function productionRoutes(
                     durationMinutesPerBatch: station.workTimeMinutes,
                     growLightItemId: null,
                     additiveItemIds: [],
+                    quality: null,
                     ...requireEquipment(
                         itemsById,
                         [station.itemId],
@@ -469,65 +481,6 @@ function validateGrowLighting(
     if (!container.requiresExternalGrowLight && light !== null) {
         throw new Error(`Grow container ${JSON.stringify(container.itemId)} uses built-in lighting`);
     }
-}
-
-function selectAdditives(
-    itemsById: ReadonlyMap<string, Item>,
-    container: Extract<ProductionCatalog['stations'][number], { readonly kind: 'grow-container' }> | null,
-    itemIds: readonly string[]
-): readonly SelectedAdditive[] {
-    if (itemIds.length === 0) return [];
-    if (container === null) throw new Error('Additives cannot be selected without a grow container');
-
-    const uniqueItemIds = new Set(itemIds);
-    if (uniqueItemIds.size !== itemIds.length) throw new Error('A grow additive can only be selected once');
-
-    return [...uniqueItemIds].sort().map((itemId) => {
-        const additive = itemsById.get(itemId)?.additive;
-        if (additive === null || additive === undefined) {
-            throw new Error(`Unknown grow additive ${JSON.stringify(itemId)}`);
-        }
-        if (!container.allowedAdditiveIds.includes(itemId)) {
-            throw new Error(
-                `Grow container ${JSON.stringify(container.itemId)} does not accept additive ${JSON.stringify(itemId)}`
-            );
-        }
-        return {
-            itemId,
-            yieldMultiplier: additive.yieldMultiplier,
-            instantGrowth: additive.instantGrowth,
-        };
-    });
-}
-
-function stackedYieldMultiplier(
-    initial: number,
-    additives: readonly SelectedAdditive[]
-): number {
-    return additives.reduce(
-        (result, additive) =>
-            additive.yieldMultiplier === 0
-                ? result
-                : Math.max(0, result * additive.yieldMultiplier),
-        initial
-    );
-}
-
-function harvestCount(baseYieldQuantity: number, yieldMultiplier = 1): number {
-    return Math.max(1, Math.round(baseYieldQuantity * yieldMultiplier));
-}
-
-function adjustedGrowthMinutes(
-    growthTimeMinutes: number,
-    containerSpeedMultiplier = 1,
-    lightSpeedMultiplier = 1,
-    instantGrowth = 0
-): number {
-    const remainingGrowth = Math.max(0, 1 - Math.max(0, instantGrowth));
-    const duration =
-        (growthTimeMinutes * remainingGrowth) / (containerSpeedMultiplier * lightSpeedMultiplier);
-    const nearestMinute = Math.round(duration);
-    return Math.abs(duration - nearestMinute) <= 1e-3 ? nearestMinute : Math.ceil(duration);
 }
 
 function indexRoutes(routes: readonly ProductionRoute[]): ReadonlyMap<string, readonly ProductionRoute[]> {

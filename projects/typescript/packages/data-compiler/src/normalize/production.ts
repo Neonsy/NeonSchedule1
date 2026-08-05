@@ -12,6 +12,7 @@ import {
 
 import type { RawReport } from '#data-compiler/acquisition/types';
 import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
+import { normalizeProductionQuality } from '#data-compiler/normalize/quality';
 import {
     booleanField,
     numberField,
@@ -66,7 +67,8 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-4',
+        schema: 'neonschedule1-production-catalog-5',
+        quality: normalizeProductionQuality(report, itemIds, integrity),
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),
@@ -165,7 +167,7 @@ function normalizeSeed(
         `${path}.harvestables must not be empty`
     );
     return {
-        schema: 'neonschedule1-seed-production-2',
+        schema: 'neonschedule1-seed-production-3',
         seedItemId,
         soilItemIds: [...soilItemIds],
         plantRuntimeType: stringField(raw, 'plantRuntimeType', path),

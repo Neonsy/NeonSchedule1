@@ -7,6 +7,7 @@ import { type } from 'arktype';
 
 import {
     asObject,
+    booleanField,
     numberField,
     objectArray,
     stringArrayField,
@@ -29,6 +30,8 @@ const reportShape = type({
     shroomSpawns: 'unknown[]',
     ovenTransforms: 'unknown[]',
     productionStations: 'unknown[]',
+    qualityValues: 'unknown[]',
+    qualityMechanics: 'object',
     shops: 'unknown[]',
     mixing: 'object',
     world: 'object',
@@ -127,6 +130,7 @@ function parseReport(document: JsonObject): RawReport {
     const mixing = asObject(document.mixing, 'report.mixing');
     const world = asObject(document.world, 'report.world');
     const discovery = asObject(document.discovery, 'report.discovery');
+    const qualityMechanics = asObject(document.qualityMechanics, 'report.qualityMechanics');
     const visualAssets = asObject(discovery.visualAssets, 'report.discovery.visualAssets');
     return {
         document,
@@ -143,6 +147,23 @@ function parseReport(document: JsonObject): RawReport {
         shroomSpawns: objectArray(document.shroomSpawns, 'report.shroomSpawns'),
         ovenTransforms: objectArray(document.ovenTransforms, 'report.ovenTransforms'),
         productionStations: objectArray(document.productionStations, 'report.productionStations'),
+        qualityValues: objectArray(document.qualityValues, 'report.qualityValues'),
+        qualityMechanics: {
+            customerQualityMaxEffect: numberField(
+                qualityMechanics,
+                'customerQualityMaxEffect',
+                'report.qualityMechanics'
+            ),
+            monetaryValueVariesByQuality: booleanField(
+                qualityMechanics,
+                'monetaryValueVariesByQuality',
+                'report.qualityMechanics'
+            ),
+            qualityScalars: objectArray(
+                qualityMechanics.qualityScalars,
+                'report.qualityMechanics.qualityScalars'
+            ),
+        },
         shops: objectArray(document.shops, 'report.shops'),
         mixing: {
             maxProperties: numberField(mixing, 'maxProperties', 'report.mixing'),

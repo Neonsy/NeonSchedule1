@@ -4,7 +4,7 @@ export const HarvestProductSchema = type({ itemId: 'string', quantity: 'number' 
 export type HarvestProduct = typeof HarvestProductSchema.infer;
 
 export const SeedProductionSchema = type({
-    schema: "'neonschedule1-seed-production-2'",
+    schema: "'neonschedule1-seed-production-3'",
     seedItemId: 'string',
     soilItemIds: 'string[]',
     plantRuntimeType: 'string',
@@ -14,6 +14,21 @@ export const SeedProductionSchema = type({
     harvestProducts: HarvestProductSchema.array(),
 });
 export type SeedProduction = typeof SeedProductionSchema.infer;
+
+export const ProductionQualityTierSchema = type({
+    name: 'string',
+    minimumLevelExclusive: 'number | null',
+    customerScalar: 'number',
+});
+export type ProductionQualityTier = typeof ProductionQualityTierSchema.infer;
+
+export const ProductionQualityRulesSchema = type({
+    basePlantLevel: 'number',
+    monetaryValueVariesByQuality: 'false',
+    customerQualityMaxEffect: 'number',
+    tiers: ProductionQualityTierSchema.array(),
+});
+export type ProductionQualityRules = typeof ProductionQualityRulesSchema.infer;
 
 export const ShroomProductionSchema = type({
     schema: "'neonschedule1-shroom-production-3'",
@@ -164,7 +179,8 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-4'",
+    schema: "'neonschedule1-production-catalog-5'",
+    quality: ProductionQualityRulesSchema,
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

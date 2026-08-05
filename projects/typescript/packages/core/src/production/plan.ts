@@ -5,6 +5,7 @@ import type {
     ProductionMaterialCost,
     ProductionMethod,
 } from '#core/production/cost';
+import type { HarvestQuality } from '#core/production/growing';
 
 export interface ProductionStepInput {
     readonly itemId: string;
@@ -24,6 +25,7 @@ export interface ProductionBatchStep {
     readonly equipmentItemId: string | null;
     readonly growLightItemId: string | null;
     readonly additiveItemIds: readonly string[];
+    readonly quality: HarvestQuality | null;
     readonly totalProcessMinutes: number;
     readonly producedQuantity: number;
     readonly leftoverQuantity: number;
@@ -153,6 +155,7 @@ function expandProduction(
             equipmentItemId: route.equipmentItemId,
             growLightItemId: route.growLightItemId,
             additiveItemIds: route.additiveItemIds,
+            quality: route.quality,
             totalProcessMinutes: route.durationMinutesPerBatch * batchCount,
             producedQuantity,
             leftoverQuantity: cleanZero(producedQuantity - requiredQuantity),

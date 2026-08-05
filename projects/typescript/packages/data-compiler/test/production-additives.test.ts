@@ -21,6 +21,7 @@ describe('plant production additives', () => {
             outputQuantity: 18,
             durationMinutesPerBatch: 30,
             additiveItemIds: ['pgr', 'speedgrow'],
+            quality: { level: expect.closeTo(0.1), tier: 'Trash', customerScalar: 0 },
             batchCost: 170,
             inputs: [
                 { itemId: 'seed', quantity: 1, totalCost: 100 },
@@ -48,6 +49,40 @@ describe('plant production additives', () => {
                 { itemId: 'soil', requiredQuantity: 6, purchaseCost: 60 },
                 { itemId: 'speedgrow', requiredQuantity: 6, purchaseCost: 180 },
             ],
+        });
+    });
+
+    it('uses game float precision when additive quality lands on a tier boundary', () => {
+        const { catalog, itemsById } = fixture();
+        const fertilizer = item('fertilizer', 30, {
+            qualityChange: 0.3,
+            yieldMultiplier: 1,
+            instantGrowth: 0,
+        });
+        const expandedCatalog: ProductionCatalog = {
+            ...catalog,
+            stations: catalog.stations.map((station) =>
+                station.kind === 'grow-container'
+                    ? { ...station, allowedAdditiveIds: [...station.allowedAdditiveIds, 'fertilizer'] }
+                    : station
+            ),
+        };
+        const expandedItems = new Map(itemsById).set(fertilizer.id, fertilizer);
+
+        const fertilizerQuality = new ProductionMaterialCostEvaluator(expandedItems, expandedCatalog, {
+            growContainerItemId: 'tent',
+            additiveItemIds: ['fertilizer'],
+        }).evaluate('leaf');
+        const allAdditivesQuality = new ProductionMaterialCostEvaluator(expandedItems, expandedCatalog, {
+            growContainerItemId: 'tent',
+            additiveItemIds: ['fertilizer', 'pgr', 'speedgrow'],
+        }).evaluate('leaf');
+
+        expect(fertilizerQuality).toMatchObject({
+            quality: { level: expect.closeTo(0.8), tier: 'Premium', customerScalar: 0.75 },
+        });
+        expect(allAdditivesQuality).toMatchObject({
+            quality: { level: expect.closeTo(0.4), tier: 'Standard', customerScalar: 0.5 },
         });
     });
 
@@ -97,10 +132,22 @@ function fixture(): {
     return {
         itemsById: new Map(items.map((entry) => [entry.id, entry])),
         catalog: {
-            schema: 'neonschedule1-production-catalog-4',
+            schema: 'neonschedule1-production-catalog-5',
+            quality: {
+                basePlantLevel: 0.5,
+                monetaryValueVariesByQuality: false,
+                customerQualityMaxEffect: 0.3,
+                tiers: [
+                    { name: 'Trash', minimumLevelExclusive: null, customerScalar: 0 },
+                    { name: 'Poor', minimumLevelExclusive: 0.25, customerScalar: 0.25 },
+                    { name: 'Standard', minimumLevelExclusive: 0.4, customerScalar: 0.5 },
+                    { name: 'Premium', minimumLevelExclusive: 0.75, customerScalar: 0.75 },
+                    { name: 'Heavenly', minimumLevelExclusive: 0.9, customerScalar: 1 },
+                ],
+            },
             seeds: [
                 {
-                    schema: 'neonschedule1-seed-production-2',
+                    schema: 'neonschedule1-seed-production-3',
                     seedItemId: 'seed',
                     soilItemIds: ['soil'],
                     plantRuntimeType: 'Plant',

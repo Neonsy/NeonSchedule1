@@ -202,6 +202,7 @@ describe('production batch plans', () => {
                     equipmentItemId: null,
                     growLightItemId: null,
                     additiveItemIds: [],
+                    quality: { level: 0.5, tier: 'Standard', customerScalar: 0.5 },
                     totalProcessMinutes: 1_020,
                     producedQuantity: 204,
                     leftoverQuantity: 4,
@@ -222,6 +223,7 @@ describe('production batch plans', () => {
                     equipmentItemId: 'cauldron',
                     growLightItemId: null,
                     additiveItemIds: [],
+                    quality: null,
                     totalProcessMinutes: 10,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -242,6 +244,7 @@ describe('production batch plans', () => {
                     equipmentItemId: 'oven',
                     growLightItemId: null,
                     additiveItemIds: [],
+                    quality: null,
                     totalProcessMinutes: 100,
                     producedQuantity: 100,
                     leftoverQuantity: 0,
@@ -396,7 +399,7 @@ function catalog(): ProductionCatalog {
         ...emptyCatalog(),
         seeds: [
             {
-                schema: 'neonschedule1-seed-production-2',
+                schema: 'neonschedule1-seed-production-3',
                 seedItemId: 'seed',
                 soilItemIds: ['soil', 'reusable-soil'],
                 plantRuntimeType: 'Plant',
@@ -505,12 +508,28 @@ function catalog(): ProductionCatalog {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-4',
+        schema: 'neonschedule1-production-catalog-5',
+        quality: qualityRules(),
         seeds: [],
         shrooms: [],
         stationRecipes: [],
         ovenTransforms: [],
         stations: [],
+    };
+}
+
+function qualityRules(): ProductionCatalog['quality'] {
+    return {
+        basePlantLevel: 0.5,
+        monetaryValueVariesByQuality: false,
+        customerQualityMaxEffect: 0.3,
+        tiers: [
+            { name: 'Trash', minimumLevelExclusive: null, customerScalar: 0 },
+            { name: 'Poor', minimumLevelExclusive: 0.25, customerScalar: 0.25 },
+            { name: 'Standard', minimumLevelExclusive: 0.4, customerScalar: 0.5 },
+            { name: 'Premium', minimumLevelExclusive: 0.75, customerScalar: 0.75 },
+            { name: 'Heavenly', minimumLevelExclusive: 0.9, customerScalar: 1 },
+        ],
     };
 }
 

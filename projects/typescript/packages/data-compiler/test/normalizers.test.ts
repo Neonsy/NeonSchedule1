@@ -195,6 +195,14 @@ describe('domain normalization', () => {
 
     it('normalizes production definitions with item references intact', () => {
         const report = emptyReport();
+        report.products.push({ id: 'product' });
+        report.qualityValues.push(
+            ...['Trash', 'Poor', 'Standard', 'Premium', 'Heavenly'].map((quality) => ({
+                productId: 'product',
+                quality,
+                monetaryValue: 38,
+            }))
+        );
         report.seeds.push({
             itemId: 'seed',
             plantRuntimeType: 'Plant',
@@ -315,6 +323,18 @@ describe('domain normalization', () => {
             growthTimeMinutes: 540,
             baseYieldQuantity: 12,
             harvestProducts: [{ itemId: 'product', quantity: 1 }],
+        });
+        expect(production.quality).toEqual({
+            basePlantLevel: 0.5,
+            monetaryValueVariesByQuality: false,
+            customerQualityMaxEffect: 0.3,
+            tiers: [
+                { name: 'Trash', minimumLevelExclusive: null, customerScalar: 0 },
+                { name: 'Poor', minimumLevelExclusive: 0.25, customerScalar: 0.25 },
+                { name: 'Standard', minimumLevelExclusive: 0.4, customerScalar: 0.5 },
+                { name: 'Premium', minimumLevelExclusive: 0.75, customerScalar: 0.75 },
+                { name: 'Heavenly', minimumLevelExclusive: 0.9, customerScalar: 1 },
+            ],
         });
         expect(production.shrooms[0]).toMatchObject({
             spawnItemId: 'spawn',
@@ -440,6 +460,18 @@ function emptyReport(): RawReport {
         shroomSpawns: [],
         ovenTransforms: [],
         productionStations: [],
+        qualityValues: [],
+        qualityMechanics: {
+            customerQualityMaxEffect: 0.3,
+            monetaryValueVariesByQuality: false,
+            qualityScalars: [
+                { quality: 'Trash', scalar: 0 },
+                { quality: 'Poor', scalar: 0.25 },
+                { quality: 'Standard', scalar: 0.5 },
+                { quality: 'Premium', scalar: 0.75 },
+                { quality: 'Heavenly', scalar: 1 },
+            ],
+        },
         shops: [],
         mixing: {
             maxProperties: 8,

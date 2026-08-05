@@ -15,6 +15,12 @@ export interface RawReport {
     readonly shroomSpawns: JsonObject[];
     readonly ovenTransforms: JsonObject[];
     readonly productionStations: JsonObject[];
+    readonly qualityValues: JsonObject[];
+    readonly qualityMechanics: {
+        readonly customerQualityMaxEffect: number;
+        readonly monetaryValueVariesByQuality: boolean;
+        readonly qualityScalars: JsonObject[];
+    };
     readonly shops: JsonObject[];
     readonly mixing: {
         readonly maxProperties: number;
