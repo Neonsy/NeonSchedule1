@@ -13,12 +13,17 @@ import type {
     CustomerQuality,
 } from '#core/data/customer';
 import type { Item, Product } from '#core/data/item';
+import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import type { MixingEngine } from '#core/mixing/engine';
 import {
     RecipeEvaluator,
     type RecipeEvaluation,
 } from '#core/mixing/recipe';
-import { RecipeSearchLimitError } from '#core/mixing/search';
+import {
+    exactSearchEvidence,
+    RecipeSearchLimitError,
+    type RecipeSearchEvidence,
+} from '#core/mixing/search-evidence';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 const defaultMaxStates = 100_000;
@@ -41,6 +46,11 @@ export interface CustomerRecipeSearchInput {
 export interface CustomerRecipeSearchOptions {
     readonly maxStates?: number;
     readonly productionCosts?: ProductionMaterialCostResolver;
+}
+
+export interface CustomerRecipeSearchResult {
+    readonly recommendations: readonly CustomerRecommendation[];
+    readonly evidence: RecipeSearchEvidence;
 }
 
 interface IngredientAction {
@@ -83,17 +93,18 @@ export class CustomerRecipeSearch {
         requirePositiveSafeInteger(this.#maxStates, 'maxStates');
     }
 
-    search(input: CustomerRecipeSearchInput): CustomerRecommendation[] {
+    search(input: CustomerRecipeSearchInput): CustomerRecipeSearchResult {
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         this.#rank(input, []);
 
         const actions = this.#ingredients(input.availableIngredientIds);
-        const constraints = new EffectConstraints(
+        const constraints = new FinalEffectConstraints(
             this.#engine,
             input.requiredEffectIds ?? [],
             input.forbiddenEffectIds ?? []
         );
         const seenProductIds = new Set<string>();
+        const metrics = { exploredStates: 0, prunedStates: 0 };
         let topCandidates: CustomerRecommendationCandidate[] = [];
         let topRecommendations: CustomerRecommendation[] = [];
 
@@ -121,19 +132,27 @@ export class CustomerRecipeSearch {
                 );
             }
             seenProductIds.add(productId);
-            this.#searchProduct(input, productId, actions, constraints, consider, cutoff);
+            this.#searchProduct(input, productId, actions, constraints, consider, cutoff, metrics);
         }
 
-        return topRecommendations;
+        return {
+            recommendations: topRecommendations,
+            evidence: exactSearchEvidence(
+                metrics.exploredStates,
+                metrics.prunedStates,
+                input.maxIngredients
+            ),
+        };
     }
 
     #searchProduct(
         input: CustomerRecipeSearchInput,
         productId: string,
         actions: readonly IngredientAction[],
-        constraints: EffectConstraints,
+        constraints: FinalEffectConstraints,
         consider: (candidates: readonly CustomerRecommendationCandidate[]) => void,
-        cutoff: () => number | null
+        cutoff: () => number | null,
+        metrics: { exploredStates: number; prunedStates: number }
     ): void {
         const baseRecipe = this.#recipes.evaluate({ productId, ingredientIds: [] });
         const product = this.#product(productId, baseRecipe);
@@ -160,7 +179,8 @@ export class CustomerRecipeSearch {
             ingredientIds: [],
             ingredientCost: 0,
         };
-        let exploredStates = 1;
+        let productExploredStates = 1;
+        metrics.exploredStates++;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map(layer);
         if (constraints.matches(base.effectIds)) {
@@ -182,9 +202,6 @@ export class CustomerRecipeSearch {
                         remainingIngredients
                     ),
                 }))
-                .filter(({ upperExpectedProfit }) =>
-                    upperExpectedProfit !== Number.NEGATIVE_INFINITY
-                )
                 .sort(
                     (left, right) =>
                         right.upperExpectedProfit - left.upperExpectedProfit ||
@@ -192,11 +209,16 @@ export class CustomerRecipeSearch {
                 );
             const next = new Map<string, SearchState>();
             for (const ranked of rankedStates) {
+                if (ranked.upperExpectedProfit === Number.NEGATIVE_INFINITY) {
+                    metrics.prunedStates++;
+                    continue;
+                }
                 const currentCutoff = cutoff();
                 if (
                     currentCutoff !== null &&
                     ranked.upperExpectedProfit < currentCutoff
                 ) {
+                    metrics.prunedStates++;
                     continue;
                 }
 
@@ -213,10 +235,12 @@ export class CustomerRecipeSearch {
                     const key = stateKey(candidateState.effectIds);
                     const prior = outcomes.get(key);
                     if (prior !== undefined && comparePaths(prior, candidateState) <= 0) {
+                        metrics.prunedStates++;
                         continue;
                     }
                     const current = next.get(key);
                     if (current !== undefined && comparePaths(current, candidateState) <= 0) {
+                        metrics.prunedStates++;
                         continue;
                     }
                     const candidateUpper = this.#subtreeUpper(
@@ -233,16 +257,27 @@ export class CustomerRecipeSearch {
                         candidateUpper === Number.NEGATIVE_INFINITY ||
                         (candidateCutoff !== null && candidateUpper < candidateCutoff)
                     ) {
+                        metrics.prunedStates++;
                         continue;
                     }
-                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
-                        throw new RecipeSearchLimitError(depth, this.#maxStates);
+                    if (
+                        current === undefined &&
+                        productExploredStates + next.size >= this.#maxStates
+                    ) {
+                        throw new RecipeSearchLimitError(
+                            depth,
+                            this.#maxStates,
+                            metrics.exploredStates + next.size,
+                            metrics.prunedStates
+                        );
                     }
+                    if (current !== undefined) metrics.prunedStates++;
                     next.set(key, candidateState);
                 }
             }
 
-            exploredStates += next.size;
+            productExploredStates += next.size;
+            metrics.exploredStates += next.size;
             const changed: CustomerRecommendationCandidate[] = [];
             for (const [key, state] of next) {
                 const current = outcomes.get(key);
@@ -269,7 +304,7 @@ export class CustomerRecipeSearch {
         product: SearchProduct,
         state: SearchState,
         actions: readonly IngredientAction[],
-        constraints: EffectConstraints,
+        constraints: FinalEffectConstraints,
         bound: CustomerProfitBound,
         remainingIngredients: number
     ): number {
@@ -300,7 +335,7 @@ export class CustomerRecipeSearch {
         product: SearchProduct,
         initial: SearchState,
         actions: readonly IngredientAction[],
-        constraints: EffectConstraints,
+        constraints: FinalEffectConstraints,
         remainingIngredients: number
     ): number | null {
         let best = constraints.matches(initial.effectIds)
@@ -434,55 +469,6 @@ export class CustomerRecipeSearch {
             return { id, effectId, cost: item.basePurchasePrice };
         });
     }
-}
-
-class EffectConstraints {
-    readonly #required: ReadonlySet<string>;
-    readonly #forbidden: ReadonlySet<string>;
-
-    constructor(
-        engine: MixingEngine,
-        requiredEffectIds: readonly string[],
-        forbiddenEffectIds: readonly string[]
-    ) {
-        this.#required = effectIdSet(engine, requiredEffectIds, 'required');
-        this.#forbidden = effectIdSet(engine, forbiddenEffectIds, 'forbidden');
-        for (const effectId of this.#required) {
-            if (this.#forbidden.has(effectId)) {
-                throw new Error(
-                    `Mixing effect ${JSON.stringify(effectId)} cannot be both required and forbidden`
-                );
-            }
-        }
-    }
-
-    matches(effectIds: readonly string[]): boolean {
-        for (const effectId of this.#required) {
-            if (!effectIds.includes(effectId)) return false;
-        }
-        for (const effectId of this.#forbidden) {
-            if (effectIds.includes(effectId)) return false;
-        }
-        return true;
-    }
-}
-
-function effectIdSet(
-    engine: MixingEngine,
-    effectIds: readonly string[],
-    kind: 'required' | 'forbidden'
-): ReadonlySet<string> {
-    const result = new Set<string>();
-    for (const effectId of effectIds) {
-        if (result.has(effectId)) {
-            throw new Error(`Duplicate ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        if (!engine.effectsById.has(effectId)) {
-            throw new Error(`Unknown ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        result.add(effectId);
-    }
-    return result;
 }
 
 function candidate(

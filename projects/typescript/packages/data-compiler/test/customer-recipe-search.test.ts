@@ -91,9 +91,16 @@ describe('customer recipe search', () => {
             limit: 1,
         });
 
-        expect(ordinary[0]?.ingredientIds).toEqual(['valuable-ingredient']);
-        expect(customer[0]?.recipe.ingredientIds).toEqual(['preferred-ingredient']);
-        expect(customer[0]?.recipe.productValue).toBe(10);
+        expect(ordinary.recipes[0]?.ingredientIds).toEqual(['valuable-ingredient']);
+        expect(customer.recommendations[0]?.recipe.ingredientIds).toEqual([
+            'preferred-ingredient',
+        ]);
+        expect(customer.recommendations[0]?.recipe.productValue).toBe(10);
+        expect(customer.evidence).toMatchObject({
+            proofStatus: 'exact',
+            stopReason: 'completed',
+            completedDepth: 1,
+        });
     });
 
     it('matches exhaustive customer ranking before relying on pruning', () => {
@@ -114,7 +121,7 @@ describe('customer recipe search', () => {
             productIds: ['product'],
         });
 
-        expect(optimized).toEqual(exhaustive);
+        expect(optimized.recommendations).toEqual(exhaustive);
     });
 
     it('accepts drug types supplied by a future normalized dataset', () => {
@@ -146,13 +153,16 @@ describe('customer recipe search', () => {
             },
         });
 
-        expect(result[0]?.recipe.ingredientIds).toEqual(['preferred-ingredient']);
+        expect(result.recommendations[0]?.recipe.ingredientIds).toEqual([
+            'preferred-ingredient',
+        ]);
     });
 
     it('fails instead of returning an incomplete ranking at the state limit', () => {
         const search = new CustomerRecipeSearch(engine, itemsById, catalog(), { maxStates: 1 });
 
-        expect(() =>
+        let failure: unknown;
+        try {
             search.search({
                 productIds: ['product'],
                 availableIngredientIds: ['valuable-ingredient', 'preferred-ingredient'],
@@ -170,8 +180,19 @@ describe('customer recipe search', () => {
                 priceMultiplier: 1,
                 maximumProductionCost: 100,
                 limit: 1,
-            })
-        ).toThrow(RecipeSearchLimitError);
+            });
+        } catch (error) {
+            failure = error;
+        }
+
+        expect(failure).toBeInstanceOf(RecipeSearchLimitError);
+        expect((failure as RecipeSearchLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'state-limit',
+            exploredStates: 1,
+            prunedStates: 1,
+            completedDepth: 0,
+        });
     });
 });
 

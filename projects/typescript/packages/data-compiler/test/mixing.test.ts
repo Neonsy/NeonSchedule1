@@ -120,7 +120,7 @@ describe('mixing engine', () => {
                 availableIngredientIds: ['ingredient'],
                 maxIngredients: 2,
                 limit: 5,
-            })
+            }).recipes
         ).toEqual([
             {
                 productId: 'product',
@@ -185,7 +185,7 @@ describe('mixing engine', () => {
             limit: 1,
         } as const;
 
-        expect(search.search({ ...input, objective: 'productValue' })[0]).toMatchObject({
+        expect(search.search({ ...input, objective: 'productValue' }).recipes[0]).toMatchObject({
             ingredientIds: ['expensive'],
             productValue: 20,
             baseProductCost: 4,
@@ -194,7 +194,7 @@ describe('mixing engine', () => {
             totalCost: 19,
             netValue: 1,
         });
-        expect(search.search({ ...input, objective: 'netValue' })[0]).toMatchObject({
+        expect(search.search({ ...input, objective: 'netValue' }).recipes[0]).toMatchObject({
             ingredientIds: ['cheap'],
             productValue: 15,
             baseProductCost: 4,
@@ -227,14 +227,26 @@ describe('mixing engine', () => {
             maxStates: 1,
         });
 
-        expect(() =>
+        let failure: unknown;
+        try {
             search.search({
                 productId: 'product',
                 availableIngredientIds: ['ingredient'],
                 maxIngredients: 1,
                 limit: 1,
-            })
-        ).toThrow(RecipeSearchLimitError);
+            });
+        } catch (error) {
+            failure = error;
+        }
+
+        expect(failure).toBeInstanceOf(RecipeSearchLimitError);
+        expect((failure as RecipeSearchLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'state-limit',
+            exploredStates: 1,
+            prunedStates: 0,
+            completedDepth: 0,
+        });
     });
 
     it('prunes states whose best possible value cannot reach the result cutoff', () => {
@@ -273,14 +285,14 @@ describe('mixing engine', () => {
             maxStates: 3,
         });
 
-        expect(
-            search.search({
-                productId: 'product',
-                availableIngredientIds: ['high-ingredient', 'low-ingredient'],
-                maxIngredients: 2,
-                limit: 1,
-            })
-        ).toEqual([
+        const result = search.search({
+            productId: 'product',
+            availableIngredientIds: ['high-ingredient', 'low-ingredient'],
+            maxIngredients: 2,
+            limit: 1,
+        });
+
+        expect(result.recipes).toEqual([
             {
                 productId: 'product',
                 ingredientIds: ['high-ingredient'],
@@ -294,6 +306,12 @@ describe('mixing engine', () => {
                 ingredientCount: 1,
             },
         ]);
+        expect(result.evidence).toMatchObject({
+            proofStatus: 'exact',
+            stopReason: 'completed',
+            completedDepth: 2,
+        });
+        expect(result.evidence.prunedStates).toBeGreaterThan(0);
     });
 
     it('applies effect constraints only to final results without corrupting the value cutoff', () => {
@@ -338,7 +356,7 @@ describe('mixing engine', () => {
                 limit: 1,
                 requiredEffectIds: ['required'],
                 forbiddenEffectIds: ['temporary'],
-            })
+            }).recipes
         ).toEqual([
             {
                 productId: 'product',

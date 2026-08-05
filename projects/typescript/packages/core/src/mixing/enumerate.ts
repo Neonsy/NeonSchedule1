@@ -1,11 +1,12 @@
 import type { Item } from '#core/data/item';
+import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import type { MixingEngine } from '#core/mixing/engine';
 import {
     RecipeEvaluator,
     type RecipeEvaluation,
     type RecipeEvaluatorOptions,
 } from '#core/mixing/recipe';
-import { RecipeSearchLimitError } from '#core/mixing/search';
+import { RecipeSearchLimitError } from '#core/mixing/search-evidence';
 
 const defaultMaxStates = 100_000;
 
@@ -55,7 +56,7 @@ export class RecipeOutcomeEnumerator {
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
-        const constraints = new EffectConstraints(
+        const constraints = new FinalEffectConstraints(
             this.#engine,
             input.requiredEffectIds ?? [],
             input.forbiddenEffectIds ?? []
@@ -66,6 +67,7 @@ export class RecipeOutcomeEnumerator {
             ingredientCost: 0,
         };
         let exploredStates = 1;
+        let prunedStates = 0;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map(layer);
 
@@ -84,12 +86,24 @@ export class RecipeOutcomeEnumerator {
                     };
                     const key = stateKey(candidate.effectIds);
                     const prior = outcomes.get(key);
-                    if (prior !== undefined && comparePaths(prior, candidate) <= 0) continue;
-                    const current = next.get(key);
-                    if (current !== undefined && comparePaths(current, candidate) <= 0) continue;
-                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
-                        throw new RecipeSearchLimitError(depth, this.#maxStates);
+                    if (prior !== undefined && comparePaths(prior, candidate) <= 0) {
+                        prunedStates++;
+                        continue;
                     }
+                    const current = next.get(key);
+                    if (current !== undefined && comparePaths(current, candidate) <= 0) {
+                        prunedStates++;
+                        continue;
+                    }
+                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
+                        throw new RecipeSearchLimitError(
+                            depth,
+                            this.#maxStates,
+                            exploredStates + next.size,
+                            prunedStates
+                        );
+                    }
+                    if (current !== undefined) prunedStates++;
                     next.set(key, candidate);
                 }
             }
@@ -144,55 +158,6 @@ export class RecipeOutcomeEnumerator {
             return { id, effectId, cost: item.basePurchasePrice };
         });
     }
-}
-
-class EffectConstraints {
-    readonly #required: ReadonlySet<string>;
-    readonly #forbidden: ReadonlySet<string>;
-
-    constructor(
-        engine: MixingEngine,
-        requiredEffectIds: readonly string[],
-        forbiddenEffectIds: readonly string[]
-    ) {
-        this.#required = effectIdSet(engine, requiredEffectIds, 'required');
-        this.#forbidden = effectIdSet(engine, forbiddenEffectIds, 'forbidden');
-        for (const effectId of this.#required) {
-            if (this.#forbidden.has(effectId)) {
-                throw new Error(
-                    `Mixing effect ${JSON.stringify(effectId)} cannot be both required and forbidden`
-                );
-            }
-        }
-    }
-
-    matches(effectIds: readonly string[]): boolean {
-        for (const effectId of this.#required) {
-            if (!effectIds.includes(effectId)) return false;
-        }
-        for (const effectId of this.#forbidden) {
-            if (effectIds.includes(effectId)) return false;
-        }
-        return true;
-    }
-}
-
-function effectIdSet(
-    engine: MixingEngine,
-    effectIds: readonly string[],
-    kind: 'required' | 'forbidden'
-): ReadonlySet<string> {
-    const result = new Set<string>();
-    for (const effectId of effectIds) {
-        if (result.has(effectId)) {
-            throw new Error(`Duplicate ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        if (!engine.effectsById.has(effectId)) {
-            throw new Error(`Unknown ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        result.add(effectId);
-    }
-    return result;
 }
 
 function comparePaths(left: EnumerationState, right: EnumerationState): number {

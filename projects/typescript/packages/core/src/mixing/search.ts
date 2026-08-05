@@ -1,7 +1,16 @@
 import type { Item, Product } from '#core/data/item';
+import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import { MixingEngine } from '#core/mixing/engine';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
+import {
+    exactSearchEvidence,
+    RecipeSearchLimitError,
+    type RecipeSearchEvidence,
+} from '#core/mixing/search-evidence';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
+
+export { RecipeSearchLimitError } from '#core/mixing/search-evidence';
+export type { RecipeSearchEvidence } from '#core/mixing/search-evidence';
 
 const defaultMaxStates = 100_000;
 const maxValueBoundDepth = 32;
@@ -23,6 +32,11 @@ export interface RecipeSearchOptions {
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
+export interface RecipeSearchResult {
+    readonly recipes: readonly RecipeEvaluation[];
+    readonly evidence: RecipeSearchEvidence;
+}
+
 interface IngredientAction {
     readonly id: string;
     readonly effectId: string;
@@ -39,18 +53,6 @@ type CostedProduct = Product & {
     readonly baseProductCost: number;
     readonly baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
 };
-
-export class RecipeSearchLimitError extends Error {
-    readonly depth: number;
-    readonly maxStates: number;
-
-    constructor(depth: number, maxStates: number) {
-        super(`Recipe search exceeded the ${maxStates}-state limit while building depth ${depth}`);
-        this.name = 'RecipeSearchLimitError';
-        this.depth = depth;
-        this.maxStates = maxStates;
-    }
-}
 
 export class RecipeSearch {
     readonly #engine: MixingEngine;
@@ -70,7 +72,7 @@ export class RecipeSearch {
         requirePositiveInteger(this.#maxStates, 'maxStates');
     }
 
-    search(input: RecipeSearchInput): RecipeEvaluation[] {
+    search(input: RecipeSearchInput): RecipeSearchResult {
         requireNonNegativeInteger(input.maxIngredients, 'maxIngredients');
         requirePositiveInteger(input.limit, 'limit');
 
@@ -88,6 +90,7 @@ export class RecipeSearch {
             ingredientCost: 0,
         };
         let exploredStates = 1;
+        let prunedStates = 0;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
         const valueBound = new RecipeValueBound(this.#engine, product, actions, objective);
@@ -113,7 +116,10 @@ export class RecipeSearch {
             for (const ranked of rankedStates) {
                 const { state } = ranked;
                 let { upperScore } = ranked;
-                if (cutoff.value !== null && upperScore < cutoff.value) continue;
+                if (cutoff.value !== null && upperScore < cutoff.value) {
+                    prunedStates++;
+                    continue;
+                }
                 if (remainingIngredients <= 2) {
                     const exact = valueBound.exactShortHorizon(
                         state.effectIds,
@@ -121,10 +127,16 @@ export class RecipeSearch {
                         remainingIngredients,
                         constraints
                     );
-                    if (exact === null) continue;
+                    if (exact === null) {
+                        prunedStates++;
+                        continue;
+                    }
                     cutoff.add(exact.key, exact.value);
                     upperScore = exact.value;
-                    if (cutoff.value !== null && upperScore < cutoff.value) continue;
+                    if (cutoff.value !== null && upperScore < cutoff.value) {
+                        prunedStates++;
+                        continue;
+                    }
                 }
                 for (const action of actions) {
                     const candidate: SearchState = {
@@ -134,12 +146,24 @@ export class RecipeSearch {
                     };
                     const key = stateKey(candidate.effectIds);
                     const prior = outcomes.get(key);
-                    if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) continue;
-                    const current = next.get(key);
-                    if (current !== undefined && comparePaths(current, candidate) <= 0) continue;
-                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
-                        throw new RecipeSearchLimitError(depth, this.#maxStates);
+                    if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) {
+                        prunedStates++;
+                        continue;
                     }
+                    const current = next.get(key);
+                    if (current !== undefined && comparePaths(current, candidate) <= 0) {
+                        prunedStates++;
+                        continue;
+                    }
+                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
+                        throw new RecipeSearchLimitError(
+                            depth,
+                            this.#maxStates,
+                            exploredStates + next.size,
+                            prunedStates
+                        );
+                    }
+                    if (current !== undefined) prunedStates++;
                     next.set(key, candidate);
                     if (constraints.matches(candidate.effectIds)) {
                         cutoff.add(
@@ -164,10 +188,14 @@ export class RecipeSearch {
             layer = next;
         }
 
-        return [...outcomes.values()]
+        const recipes = [...outcomes.values()]
             .filter((recipe) => constraints.matches(recipe.effectIds))
             .sort((left, right) => compareRecipes(left, right, objective))
             .slice(0, input.limit);
+        return {
+            recipes,
+            evidence: exactSearchEvidence(exploredStates, prunedStates, input.maxIngredients),
+        };
     }
 
     #product(id: string): CostedProduct {
@@ -405,53 +433,6 @@ class RecipeValueBound {
         if (effect === undefined) throw new Error(`Unknown mixing effect ${JSON.stringify(effectId)}`);
         return effect.value.addBaseValueMultiple;
     }
-}
-
-class FinalEffectConstraints {
-    readonly #required: ReadonlySet<string>;
-    readonly #forbidden: ReadonlySet<string>;
-
-    constructor(
-        engine: MixingEngine,
-        requiredEffectIds: readonly string[],
-        forbiddenEffectIds: readonly string[]
-    ) {
-        this.#required = effectIdSet(engine, requiredEffectIds, 'required');
-        this.#forbidden = effectIdSet(engine, forbiddenEffectIds, 'forbidden');
-        for (const effectId of this.#required) {
-            if (this.#forbidden.has(effectId)) {
-                throw new Error(`Mixing effect ${JSON.stringify(effectId)} cannot be both required and forbidden`);
-            }
-        }
-    }
-
-    matches(effectIds: readonly string[]): boolean {
-        for (const effectId of this.#required) {
-            if (!effectIds.includes(effectId)) return false;
-        }
-        for (const effectId of this.#forbidden) {
-            if (effectIds.includes(effectId)) return false;
-        }
-        return true;
-    }
-}
-
-function effectIdSet(
-    engine: MixingEngine,
-    effectIds: readonly string[],
-    kind: 'required' | 'forbidden'
-): ReadonlySet<string> {
-    const result = new Set<string>();
-    for (const effectId of effectIds) {
-        if (result.has(effectId)) {
-            throw new Error(`Duplicate ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        if (!engine.effectsById.has(effectId)) {
-            throw new Error(`Unknown ${kind} mixing effect ${JSON.stringify(effectId)}`);
-        }
-        result.add(effectId);
-    }
-    return result;
 }
 
 function evaluateState(
