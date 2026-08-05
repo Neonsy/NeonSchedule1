@@ -54,6 +54,11 @@ interface SearchState {
     readonly ingredientCost: number;
 }
 
+interface SearchWorkMetrics {
+    transitionEvaluations: number;
+    boundTransitionEvaluations: number;
+}
+
 type CostedProduct = Product & {
     readonly baseProductCost: number;
     readonly baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
@@ -100,9 +105,19 @@ export class RecipeSearch {
         };
         let exploredStates = 1;
         let prunedStates = 0;
+        const work: SearchWorkMetrics = {
+            transitionEvaluations: 0,
+            boundTransitionEvaluations: 0,
+        };
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
-        const valueBound = new RecipeValueBound(this.#engine, product, actions, objective);
+        const valueBound = new RecipeValueBound(
+            this.#engine,
+            product,
+            actions,
+            objective,
+            work
+        );
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
@@ -155,6 +170,7 @@ export class RecipeSearch {
                     }
                 }
                 for (const action of actions) {
+                    work.transitionEvaluations++;
                     const candidate: SearchState = {
                         effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
                         ingredientIds: [...state.ingredientIds, action.id],
@@ -180,7 +196,8 @@ export class RecipeSearch {
                             depth,
                             this.#maxStates,
                             exploredStates + next.size,
-                            prunedStates
+                            prunedStates,
+                            work
                         );
                     }
                     if (current !== undefined) prunedStates++;
@@ -218,7 +235,12 @@ export class RecipeSearch {
             .slice(0, input.limit);
         return {
             recipes,
-            evidence: exactSearchEvidence(exploredStates, prunedStates, input.maxIngredients),
+            evidence: exactSearchEvidence(
+                exploredStates,
+                prunedStates,
+                input.maxIngredients,
+                work
+            ),
         };
     }
 
@@ -323,6 +345,7 @@ class RecipeValueBound {
     readonly #product: CostedProduct;
     readonly #actions: readonly IngredientAction[];
     readonly #objective: RecipeSearchObjective;
+    readonly #work: SearchWorkMetrics;
     readonly #minimumActionCost: number;
     readonly #bestEffectCache = new Map<string, string>();
     readonly #bestNewEffectCache = new Map<number, string | null>();
@@ -331,12 +354,14 @@ class RecipeValueBound {
         engine: MixingEngine,
         product: CostedProduct,
         actions: readonly IngredientAction[],
-        objective: RecipeSearchObjective
+        objective: RecipeSearchObjective,
+        work: SearchWorkMetrics
     ) {
         this.#engine = engine;
         this.#product = product;
         this.#actions = actions;
         this.#objective = objective;
+        this.#work = work;
         this.#minimumActionCost = Math.min(0, ...actions.map((action) => action.cost));
     }
 
@@ -400,6 +425,8 @@ class RecipeValueBound {
             >();
             for (const current of layer.values()) {
                 for (const action of this.#actions) {
+                    this.#work.transitionEvaluations++;
+                    this.#work.boundTransitionEvaluations++;
                     const result = this.#engine.mixEffectIds(
                         this.#product.drugType,
                         current.effectIds,
@@ -446,6 +473,8 @@ class RecipeValueBound {
         let best = effectId;
         if (remainingIngredients > 0) {
             for (const action of this.#actions) {
+                this.#work.transitionEvaluations++;
+                this.#work.boundTransitionEvaluations++;
                 const transitioned = this.#engine.mixEffectIds(this.#product.drugType, [effectId], action.effectId)[0];
                 if (transitioned === undefined) continue;
                 const candidate = this.#bestEffect(transitioned, remainingIngredients - 1);

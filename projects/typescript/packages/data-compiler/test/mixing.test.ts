@@ -277,6 +277,8 @@ describe('mixing engine', () => {
             exploredStates: 1,
             prunedStates: 0,
             completedDepth: 0,
+            transitionEvaluations: 3,
+            boundTransitionEvaluations: 2,
         });
     });
 

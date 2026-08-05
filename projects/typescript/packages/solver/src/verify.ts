@@ -11,7 +11,7 @@ import {
 
 import type { SolverDataset } from '#solver/dataset';
 
-export const reverseSearchAlgorithmVersion = '1';
+export const reverseSearchAlgorithmVersion = '2';
 const maximumVerifiedRequiredEffects = 4;
 
 export interface ReverseSearchVerificationOptions {

@@ -14,7 +14,7 @@ import {
 
 import type { SolverDataset } from '#solver/dataset';
 
-export const recipeSearchAlgorithmVersion = '2';
+export const recipeSearchAlgorithmVersion = '3';
 
 export type BenchmarkCustomerState =
     | 'baseline'

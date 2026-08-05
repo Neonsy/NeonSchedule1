@@ -65,6 +65,13 @@ interface SearchState {
     readonly ingredientCost: number;
 }
 
+interface SearchMetrics {
+    exploredStates: number;
+    prunedStates: number;
+    transitionEvaluations: number;
+    boundTransitionEvaluations: number;
+}
+
 interface SearchProduct extends Product {
     readonly customerDrugType: CustomerDrugType;
     readonly baseProductCost: number;
@@ -104,7 +111,12 @@ export class CustomerRecipeSearch {
             input.forbiddenEffectIds ?? []
         );
         const seenProductIds = new Set<string>();
-        const metrics = { exploredStates: 0, prunedStates: 0 };
+        const metrics: SearchMetrics = {
+            exploredStates: 0,
+            prunedStates: 0,
+            transitionEvaluations: 0,
+            boundTransitionEvaluations: 0,
+        };
         let topCandidates: CustomerRecommendationCandidate[] = [];
         let topRecommendations: CustomerRecommendation[] = [];
 
@@ -140,7 +152,8 @@ export class CustomerRecipeSearch {
             evidence: exactSearchEvidence(
                 metrics.exploredStates,
                 metrics.prunedStates,
-                input.maxIngredients
+                input.maxIngredients,
+                metrics
             ),
         };
     }
@@ -152,7 +165,7 @@ export class CustomerRecipeSearch {
         constraints: FinalEffectConstraints,
         consider: (candidates: readonly CustomerRecommendationCandidate[]) => void,
         cutoff: () => number | null,
-        metrics: { exploredStates: number; prunedStates: number }
+        metrics: SearchMetrics
     ): void {
         const baseRecipe = this.#recipes.evaluate({ productId, ingredientIds: [] });
         const product = this.#product(productId, baseRecipe);
@@ -172,7 +185,8 @@ export class CustomerRecipeSearch {
             actions,
             input.quantity,
             input.priceMultiplier,
-            acceptanceUpper
+            acceptanceUpper,
+            metrics
         );
         const base: SearchState = {
             effectIds: baseRecipe.effectIds,
@@ -199,7 +213,8 @@ export class CustomerRecipeSearch {
                         actions,
                         constraints,
                         bound,
-                        remainingIngredients
+                        remainingIngredients,
+                        metrics
                     ),
                 }))
                 .sort(
@@ -223,6 +238,7 @@ export class CustomerRecipeSearch {
                 }
 
                 for (const action of actions) {
+                    metrics.transitionEvaluations++;
                     const candidateState: SearchState = {
                         effectIds: this.#engine.mixEffectIds(
                             product.drugType,
@@ -250,7 +266,8 @@ export class CustomerRecipeSearch {
                         actions,
                         constraints,
                         bound,
-                        remainingIngredients - 1
+                        remainingIngredients - 1,
+                        metrics
                     );
                     const candidateCutoff = cutoff();
                     if (
@@ -268,7 +285,8 @@ export class CustomerRecipeSearch {
                             depth,
                             this.#maxStates,
                             metrics.exploredStates + next.size,
-                            metrics.prunedStates
+                            metrics.prunedStates,
+                            metrics
                         );
                     }
                     if (current !== undefined) metrics.prunedStates++;
@@ -306,7 +324,8 @@ export class CustomerRecipeSearch {
         actions: readonly IngredientAction[],
         constraints: FinalEffectConstraints,
         bound: CustomerProfitBound,
-        remainingIngredients: number
+        remainingIngredients: number,
+        metrics: SearchMetrics
     ): number {
         const productionCost =
             (product.baseProductCost + state.ingredientCost) * input.quantity;
@@ -319,7 +338,8 @@ export class CustomerRecipeSearch {
                     state,
                     actions,
                     constraints,
-                    remainingIngredients
+                    remainingIngredients,
+                    metrics
                 ) ?? Number.NEGATIVE_INFINITY
             );
         }
@@ -336,7 +356,8 @@ export class CustomerRecipeSearch {
         initial: SearchState,
         actions: readonly IngredientAction[],
         constraints: FinalEffectConstraints,
-        remainingIngredients: number
+        remainingIngredients: number,
+        metrics: SearchMetrics
     ): number | null {
         let best = constraints.matches(initial.effectIds)
             ? this.#expectedProfit(input, product, initial)
@@ -347,6 +368,8 @@ export class CustomerRecipeSearch {
             const next = new Map<string, SearchState>();
             for (const state of layer.values()) {
                 for (const action of actions) {
+                    metrics.transitionEvaluations++;
+                    metrics.boundTransitionEvaluations++;
                     const result: SearchState = {
                         effectIds: this.#engine.mixEffectIds(
                             product.drugType,

@@ -7,12 +7,22 @@ export interface RecipeSearchEvidence {
     readonly prunedStates: number;
     /** Highest ingredient depth fully completed when the search stopped. */
     readonly completedDepth: number;
+    /** Mixing transitions evaluated by producers that support work accounting. */
+    readonly transitionEvaluations?: number;
+    /** Transition evaluations performed only to calculate pruning bounds. */
+    readonly boundTransitionEvaluations?: number;
+}
+
+export interface RecipeSearchWorkEvidence {
+    readonly transitionEvaluations: number;
+    readonly boundTransitionEvaluations: number;
 }
 
 export function exactSearchEvidence(
     exploredStates: number,
     prunedStates: number,
-    completedDepth: number
+    completedDepth: number,
+    work?: RecipeSearchWorkEvidence
 ): RecipeSearchEvidence {
     return {
         proofStatus: 'exact',
@@ -20,6 +30,7 @@ export function exactSearchEvidence(
         exploredStates,
         prunedStates,
         completedDepth,
+        ...work,
     };
 }
 
@@ -32,7 +43,8 @@ export class RecipeSearchLimitError extends Error {
         depth: number,
         maxStates: number,
         exploredStates: number,
-        prunedStates: number
+        prunedStates: number,
+        work?: RecipeSearchWorkEvidence
     ) {
         super(`Recipe search exceeded the ${maxStates}-state limit while building depth ${depth}`);
         this.name = 'RecipeSearchLimitError';
@@ -44,6 +56,7 @@ export class RecipeSearchLimitError extends Error {
             exploredStates,
             prunedStates,
             completedDepth: depth - 1,
+            ...work,
         };
     }
 }

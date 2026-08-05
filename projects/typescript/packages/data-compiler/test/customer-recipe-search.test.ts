@@ -192,6 +192,8 @@ describe('customer recipe search', () => {
             exploredStates: 1,
             prunedStates: 1,
             completedDepth: 0,
+            transitionEvaluations: 4,
+            boundTransitionEvaluations: 2,
         });
     });
 });

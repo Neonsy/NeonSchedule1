@@ -53,6 +53,8 @@ export class ReverseRecipeSearch {
         const recipes: RecipeEvaluation[] = [];
         let exploredStates = 0;
         let prunedStates = 0;
+        let transitionEvaluations = 0;
+        let boundTransitionEvaluations = 0;
 
         // A recipe below one base's top limit already has enough same-base recipes ahead of it
         // to exclude it from the combined top limit.
@@ -76,6 +78,9 @@ export class ReverseRecipeSearch {
             recipes.push(...result.recipes);
             exploredStates += result.evidence.exploredStates;
             prunedStates += result.evidence.prunedStates;
+            transitionEvaluations += result.evidence.transitionEvaluations ?? 0;
+            boundTransitionEvaluations +=
+                result.evidence.boundTransitionEvaluations ?? 0;
         }
 
         return {
@@ -86,7 +91,12 @@ export class ReverseRecipeSearch {
                     ...recipe,
                     ingredientQuantities: groupIngredients(recipe.ingredientIds),
                 })),
-            evidence: exactSearchEvidence(exploredStates, prunedStates, input.maxIngredients),
+            evidence: exactSearchEvidence(
+                exploredStates,
+                prunedStates,
+                input.maxIngredients,
+                { transitionEvaluations, boundTransitionEvaluations }
+            ),
         };
     }
 

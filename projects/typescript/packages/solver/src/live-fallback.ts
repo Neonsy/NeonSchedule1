@@ -22,7 +22,7 @@ import type {
     ProductionRecipeRouteResult,
 } from '#solver/production-router';
 
-export const liveFallbackAlgorithmVersion = '2';
+export const liveFallbackAlgorithmVersion = '3';
 
 export interface LiveFallbackBudget {
     readonly maxStatesPerProduct: number;
