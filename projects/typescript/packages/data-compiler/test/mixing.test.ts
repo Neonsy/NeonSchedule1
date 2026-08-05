@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     MixingEngine,
     RecipeEvaluator,
+    ReverseRecipeSearch,
     RecipeSearch,
     RecipeSearchLimitError,
     type Effect,
@@ -412,6 +413,75 @@ describe('mixing engine', () => {
                 forbiddenEffectIds: ['base'],
             })
         ).toThrow('Mixing effect "base" cannot be both required and forbidden');
+    });
+
+    it('finds an exact effect-constrained recipe across base products', () => {
+        const effects = [
+            effect('base', 0, 0),
+            effect('temporary', 1, 1),
+            effect('required', 1, 1, 1),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [
+                {
+                    drugType: 'Test',
+                    drugTypeValue: 0,
+                    radius: 3,
+                    effects: [
+                        mapEffect('base', 0),
+                        mapEffect('temporary', 1),
+                        mapEffect('required', 2),
+                    ],
+                },
+            ],
+        };
+        const items = [
+            product('slow', ['base'], 10, 2),
+            product('ready', ['required'], 10, 15),
+            ingredient('step', 'temporary', 1),
+        ];
+        const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
+        const search = new ReverseRecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry]))
+        );
+        const input = {
+            availableIngredientIds: ['step'],
+            maxIngredients: 2,
+            limit: 1,
+            requiredEffectIds: ['required'],
+            forbiddenEffectIds: ['temporary'],
+            objective: 'netValue',
+        } as const;
+
+        const result = search.search(input);
+
+        expect(result.recipes[0]).toMatchObject({
+            productId: 'slow',
+            ingredientIds: ['step', 'step'],
+            ingredientQuantities: [{ ingredientId: 'step', quantity: 2 }],
+            effectIds: ['required'],
+            productValue: 20,
+            totalCost: 4,
+            netValue: 16,
+        });
+        expect(result.evidence).toMatchObject({
+            proofStatus: 'exact',
+            stopReason: 'completed',
+            completedDepth: 2,
+        });
+        expect(search.search({ ...input, productIds: ['ready'] }).recipes[0]).toMatchObject({
+            productId: 'ready',
+            ingredientIds: [],
+            ingredientQuantities: [],
+        });
+        expect(() => search.search({ ...input, productIds: ['ready', 'ready'] })).toThrow(
+            'Duplicate available product "ready"'
+        );
     });
 });
 

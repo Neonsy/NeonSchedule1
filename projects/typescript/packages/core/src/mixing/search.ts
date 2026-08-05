@@ -1,6 +1,11 @@
 import type { Item, Product } from '#core/data/item';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import { MixingEngine } from '#core/mixing/engine';
+import {
+    compareRecipeEvaluations,
+    recipeSearchScore,
+    type RecipeSearchObjective,
+} from '#core/mixing/recipe-ranking';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
     exactSearchEvidence,
@@ -11,11 +16,10 @@ import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 export { RecipeSearchLimitError } from '#core/mixing/search-evidence';
 export type { RecipeSearchEvidence } from '#core/mixing/search-evidence';
+export type { RecipeSearchObjective } from '#core/mixing/recipe-ranking';
 
 const defaultMaxStates = 100_000;
 const maxValueBoundDepth = 32;
-
-export type RecipeSearchObjective = 'productValue' | 'netValue';
 
 export interface RecipeSearchInput {
     readonly productId: string;
@@ -168,7 +172,7 @@ export class RecipeSearch {
                     if (constraints.matches(candidate.effectIds)) {
                         cutoff.add(
                             key,
-                            recipeScore(
+                            recipeSearchScore(
                                 this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
                                 product.baseProductCost,
                                 candidate.ingredientCost,
@@ -190,7 +194,7 @@ export class RecipeSearch {
 
         const recipes = [...outcomes.values()]
             .filter((recipe) => constraints.matches(recipe.effectIds))
-            .sort((left, right) => compareRecipes(left, right, objective))
+            .sort((left, right) => compareRecipeEvaluations(left, right, objective))
             .slice(0, input.limit);
         return {
             recipes,
@@ -255,7 +259,7 @@ class RecipeScoreCutoff {
             if (constraints.matches(recipe.effectIds)) {
                 this.add(
                     key,
-                    recipeScore(
+                    recipeSearchScore(
                         recipe.productValue,
                         recipe.baseProductCost,
                         recipe.ingredientCost,
@@ -327,7 +331,12 @@ class RecipeValueBound {
         }
         const upperValue = this.#engine.calculateProductValue(this.#product.basePrice, upperEffectIds);
         const lowerCost = ingredientCost + this.#minimumActionCost * remainingIngredients;
-        return recipeScore(upperValue, this.#product.baseProductCost, lowerCost, this.#objective);
+        return recipeSearchScore(
+            upperValue,
+            this.#product.baseProductCost,
+            lowerCost,
+            this.#objective
+        );
     }
 
     exactShortHorizon(
@@ -340,7 +349,7 @@ class RecipeValueBound {
         if (constraints.matches(effectIds)) {
             best = {
                 key: stateKey(effectIds),
-                value: recipeScore(
+                value: recipeSearchScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
                     this.#product.baseProductCost,
                     ingredientCost,
@@ -377,7 +386,7 @@ class RecipeValueBound {
             for (const result of next.values()) {
                 if (!constraints.matches(result.effectIds)) continue;
                 const key = stateKey(result.effectIds);
-                const value = recipeScore(
+                const value = recipeSearchScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, result.effectIds),
                     this.#product.baseProductCost,
                     ingredientCost + result.additionalIngredientCost,
@@ -455,30 +464,6 @@ function evaluateState(
         netValue: productValue - totalCost,
         ingredientCount: state.ingredientIds.length,
     };
-}
-
-function compareRecipes(
-    left: RecipeEvaluation,
-    right: RecipeEvaluation,
-    objective: RecipeSearchObjective
-): number {
-    return (
-        recipeScore(right.productValue, right.baseProductCost, right.ingredientCost, objective) -
-            recipeScore(left.productValue, left.baseProductCost, left.ingredientCost, objective) ||
-        comparePaths(left, right) ||
-        compareStrings(left.effectIds, right.effectIds)
-    );
-}
-
-function recipeScore(
-    productValue: number,
-    baseProductCost: number,
-    ingredientCost: number,
-    objective: RecipeSearchObjective
-): number {
-    return objective === 'productValue'
-        ? productValue
-        : productValue - baseProductCost - ingredientCost;
 }
 
 function comparePaths(
