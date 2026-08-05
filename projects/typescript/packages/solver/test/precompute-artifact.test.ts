@@ -21,6 +21,7 @@ import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifac
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
 import { loadRecipeCorpusProduction } from '#solver/precompute-production';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
+import { ProductionRequestRouter } from '#solver/production-router';
 import {
     readRecipeCorpusProductionSelection,
     refreshRecipeCorpusProduction,
@@ -161,7 +162,7 @@ describe('recipe corpus artifact', () => {
         expect(before.verification.customerCaseCount).toBeGreaterThan(0);
     });
 
-    it('loads the selected production lookups and rejects a changed verification report', async () => {
+    it('loads and routes selected production lookups and rejects a changed report', async () => {
         const outputRoot = await temporaryDirectory('neonschedule1-production-');
         const reportRoot = path.join(outputRoot, 'reports');
         const source = solverDataset();
@@ -175,11 +176,18 @@ describe('recipe corpus artifact', () => {
             outputRoot,
             reportRoot,
         });
-        const result = await production.recipes.query({
+        const router = new ProductionRequestRouter(production);
+        const recipe = await router.recipe({
+            productIds: ['product-b', 'product-a', 'product-a'],
+            availableIngredientIds: ['ingredient', 'ingredient'],
+            maxIngredients: 1,
             requiredEffectIds: ['mixed-effect'],
             limit: 2,
         });
-        const recommendations = await production.customers.recommend({
+        const customer = await router.customer({
+            productIds: ['product-a', 'product-b'],
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
             profile: customerProfile,
             state: { addiction: 0.2, relationship: 2, orderLimitMultiplier: 1 },
             quality: 'Standard',
@@ -189,14 +197,40 @@ describe('recipe corpus artifact', () => {
             limit: 2,
         });
 
-        expect(result.recipes.map((recipe) => recipe.productId)).toEqual([
+        expect(recipe.kind).toBe('exact');
+        if (recipe.kind !== 'exact') throw new Error('Expected exact recipe route');
+        expect(recipe.request.productIds).toEqual(['product-a', 'product-b']);
+        expect(recipe.result.recipes.map((entry) => entry.productId)).toEqual([
             'product-a',
             'product-b',
         ]);
-        expect(recommendations.recommendations.length).toBeGreaterThan(0);
+        expect(customer.kind).toBe('exact');
+        if (customer.kind !== 'exact') throw new Error('Expected exact customer route');
+        expect(customer.result.recommendations.length).toBeGreaterThan(0);
         expect(production.selection.selectionSha256).toBe(
             refreshed.selection.selectionSha256
         );
+
+        const miss = await router.recipe({
+            productIds: ['missing-product'],
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            limit: 1,
+        });
+        expect(miss.kind).toBe('coverage-miss');
+        if (miss.kind !== 'coverage-miss') throw new Error('Expected coverage miss');
+        expect(miss.miss.issues.map((issue) => issue.field)).toEqual([
+            'productIds',
+            'availableIngredientIds',
+            'maxIngredients',
+        ]);
+        await expect(router.recipe({
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            requiredEffectIds: ['same-effect'],
+            forbiddenEffectIds: ['same-effect'],
+            limit: 1,
+        })).rejects.toThrow('cannot be required and forbidden');
 
         const otherDataset = {
             ...source,
