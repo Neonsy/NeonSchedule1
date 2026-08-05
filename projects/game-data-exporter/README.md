@@ -13,7 +13,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.1` targets *Schedule I* `0.4.6f11`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.2` targets *Schedule I* `0.4.6f11`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -58,6 +58,21 @@ Each run writes a report, SHA-256 sidecar, and matching direct-asset directory u
 
 The schema is explicit and versioned.
 It is not an unrestricted Unity object or save dump.
+
+## Run native validation
+
+Place exactly one validation request in the configured output directory before the save loads.
+The exporter evaluates that request instead of running a full export.
+
+### Validate recipes
+
+Run these commands from `projects/typescript`:
+
+```powershell
+pnpm solver:native prepare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+# Start the game and load the matching save.
+pnpm solver:native compare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+```
 
 ## Build and run the offline extractor
 

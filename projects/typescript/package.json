@@ -8,7 +8,8 @@
     "test": "pnpm --recursive --if-present test",
     "data:normalize": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler normalize",
     "solver:benchmark": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark",
-    "solver:verify": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver verify"
+    "solver:verify": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver verify",
+    "solver:native": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver native"
   },
   "devEngines": {
     "packageManager": {

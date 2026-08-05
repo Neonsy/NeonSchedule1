@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.1";
+    public const string ExporterVersion = "0.0.2";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();
@@ -52,9 +52,17 @@ public sealed class ExporterMod : MelonMod
     {
         try
         {
+            Directory.CreateDirectory(OutputDirectory);
+            if (GameDataCollector.TryRunNativeRecipeValidation(
+                    OutputDirectory,
+                    ExporterVersion,
+                    message => LoggerInstance.Msg(message)))
+            {
+                return;
+            }
+
             LoggerInstance.Msg(
                 "Reading item, map, layout, shop, people, production, and visual metadata.");
-            Directory.CreateDirectory(OutputDirectory);
             var exportedAtUtc = DateTimeOffset.UtcNow;
             var runId = exportedAtUtc.UtcDateTime.ToString(
                 "yyyyMMdd'T'HHmmssfff'Z'",
