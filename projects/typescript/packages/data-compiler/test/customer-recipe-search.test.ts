@@ -5,6 +5,7 @@ import {
     RecipeOutcomeEnumerator,
     RecipeSearch,
     RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
     type CustomerCatalog,
     type CustomerRecipeSearchInput,
     type Effect,
@@ -158,29 +159,30 @@ describe('customer recipe search', () => {
         ]);
     });
 
-    it('fails instead of returning an incomplete ranking at the state limit', () => {
+    it('fails instead of returning an incomplete ranking at either limit', () => {
+        const input: CustomerRecipeSearchInput = {
+            productIds: ['product'],
+            availableIngredientIds: ['valuable-ingredient', 'preferred-ingredient'],
+            maxIngredients: 1,
+            profile: {
+                standards: 'Moderate',
+                preferredEffectIds: ['preferred'],
+                drugAffinities: [{ drugType: 'Marijuana', affinity: 0 }],
+                weeklySpend: { minimum: 100, maximum: 100 },
+                weeklyOrders: { minimum: 1, maximum: 1 },
+            },
+            state: { addiction: 0, relationship: 0, orderLimitMultiplier: 1 },
+            quality: 'Standard',
+            quantity: 1,
+            priceMultiplier: 1,
+            maximumProductionCost: 100,
+            limit: 1,
+        };
         const search = new CustomerRecipeSearch(engine, itemsById, catalog(), { maxStates: 1 });
 
         let failure: unknown;
         try {
-            search.search({
-                productIds: ['product'],
-                availableIngredientIds: ['valuable-ingredient', 'preferred-ingredient'],
-                maxIngredients: 1,
-                profile: {
-                    standards: 'Moderate',
-                    preferredEffectIds: ['preferred'],
-                    drugAffinities: [{ drugType: 'Marijuana', affinity: 0 }],
-                    weeklySpend: { minimum: 100, maximum: 100 },
-                    weeklyOrders: { minimum: 1, maximum: 1 },
-                },
-                state: { addiction: 0, relationship: 0, orderLimitMultiplier: 1 },
-                quality: 'Standard',
-                quantity: 1,
-                priceMultiplier: 1,
-                maximumProductionCost: 100,
-                limit: 1,
-            });
+            search.search(input);
         } catch (error) {
             failure = error;
         }
@@ -193,6 +195,28 @@ describe('customer recipe search', () => {
             prunedStates: 1,
             completedDepth: 0,
             transitionEvaluations: 4,
+            boundTransitionEvaluations: 2,
+        });
+
+        const workSearch = new CustomerRecipeSearch(engine, itemsById, catalog(), {
+            maxStates: 10,
+            maxTransitionEvaluations: 2,
+        });
+        let workFailure: unknown;
+        try {
+            workSearch.search(input);
+        } catch (error) {
+            workFailure = error;
+        }
+
+        expect(workFailure).toBeInstanceOf(RecipeSearchWorkLimitError);
+        expect((workFailure as RecipeSearchWorkLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'work-limit',
+            exploredStates: 1,
+            prunedStates: 0,
+            completedDepth: 0,
+            transitionEvaluations: 2,
             boundTransitionEvaluations: 2,
         });
     });

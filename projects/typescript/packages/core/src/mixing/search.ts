@@ -10,11 +10,19 @@ import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
     exactSearchEvidence,
     RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
     type RecipeSearchEvidence,
 } from '#core/mixing/search-evidence';
+import {
+    emptySearchWorkEvidence,
+    RecipeSearchWorkBudget,
+} from '#core/mixing/search-work';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
-export { RecipeSearchLimitError } from '#core/mixing/search-evidence';
+export {
+    RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
+} from '#core/mixing/search-evidence';
 export type { RecipeSearchEvidence } from '#core/mixing/search-evidence';
 export type { RecipeSearchObjective } from '#core/mixing/recipe-ranking';
 
@@ -34,6 +42,7 @@ export interface RecipeSearchInput {
 
 export interface RecipeSearchOptions {
     readonly maxStates?: number;
+    readonly maxTransitionEvaluations?: number;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
@@ -54,11 +63,6 @@ interface SearchState {
     readonly ingredientCost: number;
 }
 
-interface SearchWorkMetrics {
-    transitionEvaluations: number;
-    boundTransitionEvaluations: number;
-}
-
 type CostedProduct = Product & {
     readonly baseProductCost: number;
     readonly baseProductCostBasis: RecipeEvaluation['baseProductCostBasis'];
@@ -68,6 +72,7 @@ export class RecipeSearch {
     readonly #engine: MixingEngine;
     readonly #itemsById: ReadonlyMap<string, Item>;
     readonly #maxStates: number;
+    readonly #maxTransitionEvaluations: number | undefined;
     readonly #productionCosts: ProductionMaterialCostResolver | undefined;
 
     constructor(
@@ -78,8 +83,15 @@ export class RecipeSearch {
         this.#engine = engine;
         this.#itemsById = itemsById;
         this.#maxStates = options.maxStates ?? defaultMaxStates;
+        this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
         this.#productionCosts = options.productionCosts;
         requirePositiveInteger(this.#maxStates, 'maxStates');
+        if (this.#maxTransitionEvaluations !== undefined) {
+            requirePositiveInteger(
+                this.#maxTransitionEvaluations,
+                'maxTransitionEvaluations'
+            );
+        }
     }
 
     search(input: RecipeSearchInput): RecipeSearchResult {
@@ -105,10 +117,19 @@ export class RecipeSearch {
         };
         let exploredStates = 1;
         let prunedStates = 0;
-        const work: SearchWorkMetrics = {
-            transitionEvaluations: 0,
-            boundTransitionEvaluations: 0,
-        };
+        let currentDepth = 0;
+        const work = emptySearchWorkEvidence();
+        const workBudget = new RecipeSearchWorkBudget(
+            this.#maxTransitionEvaluations,
+            work,
+            (maximum) => new RecipeSearchWorkLimitError(
+                currentDepth,
+                maximum,
+                exploredStates,
+                prunedStates,
+                work
+            )
+        );
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
         const valueBound = new RecipeValueBound(
@@ -116,10 +137,11 @@ export class RecipeSearch {
             product,
             actions,
             objective,
-            work
+            workBudget
         );
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
+            currentDepth = depth;
             const next = new Map<string, SearchState>();
             const cutoff = new RecipeScoreCutoff(
                 outcomes,
@@ -170,7 +192,7 @@ export class RecipeSearch {
                     }
                 }
                 for (const action of actions) {
-                    work.transitionEvaluations++;
+                    workBudget.transition();
                     const candidate: SearchState = {
                         effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
                         ingredientIds: [...state.ingredientIds, action.id],
@@ -345,7 +367,7 @@ class RecipeValueBound {
     readonly #product: CostedProduct;
     readonly #actions: readonly IngredientAction[];
     readonly #objective: RecipeSearchObjective;
-    readonly #work: SearchWorkMetrics;
+    readonly #workBudget: RecipeSearchWorkBudget;
     readonly #minimumActionCost: number;
     readonly #bestEffectCache = new Map<string, string>();
     readonly #bestNewEffectCache = new Map<number, string | null>();
@@ -355,13 +377,13 @@ class RecipeValueBound {
         product: CostedProduct,
         actions: readonly IngredientAction[],
         objective: RecipeSearchObjective,
-        work: SearchWorkMetrics
+        workBudget: RecipeSearchWorkBudget
     ) {
         this.#engine = engine;
         this.#product = product;
         this.#actions = actions;
         this.#objective = objective;
-        this.#work = work;
+        this.#workBudget = workBudget;
         this.#minimumActionCost = Math.min(0, ...actions.map((action) => action.cost));
     }
 
@@ -425,8 +447,7 @@ class RecipeValueBound {
             >();
             for (const current of layer.values()) {
                 for (const action of this.#actions) {
-                    this.#work.transitionEvaluations++;
-                    this.#work.boundTransitionEvaluations++;
+                    this.#workBudget.boundTransition();
                     const result = this.#engine.mixEffectIds(
                         this.#product.drugType,
                         current.effectIds,
@@ -473,8 +494,7 @@ class RecipeValueBound {
         let best = effectId;
         if (remainingIngredients > 0) {
             for (const action of this.#actions) {
-                this.#work.transitionEvaluations++;
-                this.#work.boundTransitionEvaluations++;
+                this.#workBudget.boundTransition();
                 const transitioned = this.#engine.mixEffectIds(this.#product.drugType, [effectId], action.effectId)[0];
                 if (transitioned === undefined) continue;
                 const candidate = this.#bestEffect(transitioned, remainingIngredients - 1);

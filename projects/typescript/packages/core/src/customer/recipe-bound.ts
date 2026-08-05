@@ -1,5 +1,6 @@
 import { customerMarketRelativePrice } from '#core/customer/recommendation';
 import type { MixingEngine } from '#core/mixing/engine';
+import { RecipeSearchWorkBudget } from '#core/mixing/search-work';
 
 const maxValueBoundDepth = 32;
 
@@ -14,11 +15,6 @@ export interface CustomerProfitBoundProduct {
     readonly baseProductCost: number;
 }
 
-interface CustomerProfitBoundMetrics {
-    transitionEvaluations: number;
-    boundTransitionEvaluations: number;
-}
-
 export class CustomerProfitBound {
     readonly #engine: MixingEngine;
     readonly #product: CustomerProfitBoundProduct;
@@ -27,7 +23,7 @@ export class CustomerProfitBound {
     readonly #priceMultiplier: number;
     readonly #acceptanceUpper: number;
     readonly #minimumActionCost: number;
-    readonly #metrics: CustomerProfitBoundMetrics;
+    readonly #workBudget: RecipeSearchWorkBudget;
     readonly #bestEffectCache = new Map<string, string>();
     readonly #bestNewEffectCache = new Map<number, string | null>();
 
@@ -38,7 +34,7 @@ export class CustomerProfitBound {
         quantity: number,
         priceMultiplier: number,
         acceptanceUpper: number,
-        metrics: CustomerProfitBoundMetrics
+        workBudget: RecipeSearchWorkBudget
     ) {
         this.#engine = engine;
         this.#product = product;
@@ -46,7 +42,7 @@ export class CustomerProfitBound {
         this.#quantity = quantity;
         this.#priceMultiplier = priceMultiplier;
         this.#acceptanceUpper = Math.max(0, acceptanceUpper);
-        this.#metrics = metrics;
+        this.#workBudget = workBudget;
         this.#minimumActionCost = Math.min(0, ...actions.map((action) => action.cost));
     }
 
@@ -96,8 +92,7 @@ export class CustomerProfitBound {
         let best = effectId;
         if (remainingIngredients > 0) {
             for (const action of this.#actions) {
-                this.#metrics.transitionEvaluations++;
-                this.#metrics.boundTransitionEvaluations++;
+                this.#workBudget.boundTransition();
                 const transitioned = this.#engine.mixEffectIds(
                     this.#product.drugType,
                     [effectId],

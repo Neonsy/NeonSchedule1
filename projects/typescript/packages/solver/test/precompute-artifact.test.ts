@@ -226,6 +226,10 @@ describe('recipe corpus artifact', () => {
             'maxIngredients',
         ]);
         const fallback = new LiveFallbackRunner(source, production);
+        const liveBudget = {
+            maxStatesPerProduct: 10,
+            maxTransitionEvaluationsPerProduct: 100,
+        };
         const liveRecipeRoute = await router.recipe({
             productIds: ['product-a'],
             availableIngredientIds: [],
@@ -235,7 +239,7 @@ describe('recipe corpus artifact', () => {
         if (liveRecipeRoute.kind !== 'coverage-miss') {
             throw new Error('Expected live recipe coverage miss');
         }
-        const liveRecipe = fallback.recipe(liveRecipeRoute, { maxStatesPerProduct: 10 });
+        const liveRecipe = fallback.recipe(liveRecipeRoute, liveBudget);
         expect(liveRecipe.kind).toBe('completed');
         if (liveRecipe.kind !== 'completed') throw new Error('Expected completed live recipe');
         expect(liveRecipe.result.recipes).toHaveLength(1);
@@ -251,7 +255,7 @@ describe('recipe corpus artifact', () => {
         if (costBoundRoute.kind !== 'coverage-miss') {
             throw new Error('Expected cost-bound recipe coverage miss');
         }
-        const costBound = fallback.recipe(costBoundRoute, { maxStatesPerProduct: 10 });
+        const costBound = fallback.recipe(costBoundRoute, liveBudget);
         expect(costBound.kind).toBe('completed');
         if (costBound.kind !== 'completed') throw new Error('Expected completed cost-bound recipe');
         expect(costBound.result.recipes).toHaveLength(1);
@@ -266,10 +270,25 @@ describe('recipe corpus artifact', () => {
         if (limitedRoute.kind !== 'coverage-miss') {
             throw new Error('Expected limited recipe coverage miss');
         }
-        const limited = fallback.recipe(limitedRoute, { maxStatesPerProduct: 1 });
+        const limited = fallback.recipe(limitedRoute, {
+            ...liveBudget,
+            maxStatesPerProduct: 1,
+        });
         expect(limited.kind).toBe('state-limit');
         if (limited.kind !== 'state-limit') throw new Error('Expected live state limit');
         expect(limited.evidence.completedDepth).toBe(0);
+
+        const workLimited = fallback.recipe(limitedRoute, {
+            ...liveBudget,
+            maxTransitionEvaluationsPerProduct: 1,
+        });
+        expect(workLimited.kind).toBe('work-limit');
+        if (workLimited.kind !== 'work-limit') throw new Error('Expected live work limit');
+        expect(workLimited.evidence).toMatchObject({
+            stopReason: 'work-limit',
+            transitionEvaluations: 1,
+            maxTransitionEvaluationsPerProduct: 1,
+        });
 
         const liveCustomerRoute = await router.customer({
             productIds: ['product-a'],
@@ -288,7 +307,7 @@ describe('recipe corpus artifact', () => {
         }
         expect(fallback.customer(
             liveCustomerRoute,
-            { maxStatesPerProduct: 10 }
+            liveBudget
         ).kind).toBe('completed');
         await expect(router.recipe({
             availableIngredientIds: [],

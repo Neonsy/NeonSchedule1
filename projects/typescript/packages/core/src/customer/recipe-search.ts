@@ -22,8 +22,10 @@ import {
 import {
     exactSearchEvidence,
     RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
     type RecipeSearchEvidence,
 } from '#core/mixing/search-evidence';
+import { RecipeSearchWorkBudget } from '#core/mixing/search-work';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 const defaultMaxStates = 100_000;
@@ -45,6 +47,7 @@ export interface CustomerRecipeSearchInput {
 
 export interface CustomerRecipeSearchOptions {
     readonly maxStates?: number;
+    readonly maxTransitionEvaluations?: number;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
@@ -84,6 +87,7 @@ export class CustomerRecipeSearch {
     readonly #recommendations: CustomerRecommendationRanker;
     readonly #offers: CustomerOfferEvaluator;
     readonly #maxStates: number;
+    readonly #maxTransitionEvaluations: number | undefined;
 
     constructor(
         engine: MixingEngine,
@@ -97,7 +101,14 @@ export class CustomerRecipeSearch {
         this.#recommendations = new CustomerRecommendationRanker(catalog);
         this.#offers = new CustomerOfferEvaluator(catalog);
         this.#maxStates = options.maxStates ?? defaultMaxStates;
+        this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
         requirePositiveSafeInteger(this.#maxStates, 'maxStates');
+        if (this.#maxTransitionEvaluations !== undefined) {
+            requirePositiveSafeInteger(
+                this.#maxTransitionEvaluations,
+                'maxTransitionEvaluations'
+            );
+        }
     }
 
     search(input: CustomerRecipeSearchInput): CustomerRecipeSearchResult {
@@ -179,6 +190,19 @@ export class CustomerRecipeSearch {
             input.state,
             { quality: input.quality, quantity: input.quantity, askingPrice: 0 }
         );
+        let currentDepth = 0;
+        let productExploredStates = 1;
+        const workBudget = new RecipeSearchWorkBudget(
+            this.#maxTransitionEvaluations,
+            metrics,
+            (maximum) => new RecipeSearchWorkLimitError(
+                currentDepth,
+                maximum,
+                metrics.exploredStates,
+                metrics.prunedStates,
+                metrics
+            )
+        );
         const bound = new CustomerProfitBound(
             this.#engine,
             product,
@@ -186,14 +210,13 @@ export class CustomerRecipeSearch {
             input.quantity,
             input.priceMultiplier,
             acceptanceUpper,
-            metrics
+            workBudget
         );
         const base: SearchState = {
             effectIds: baseRecipe.effectIds,
             ingredientIds: [],
             ingredientCost: 0,
         };
-        let productExploredStates = 1;
         metrics.exploredStates++;
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map(layer);
@@ -202,6 +225,7 @@ export class CustomerRecipeSearch {
         }
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
+            currentDepth = depth;
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
@@ -214,7 +238,7 @@ export class CustomerRecipeSearch {
                         constraints,
                         bound,
                         remainingIngredients,
-                        metrics
+                        workBudget
                     ),
                 }))
                 .sort(
@@ -238,7 +262,7 @@ export class CustomerRecipeSearch {
                 }
 
                 for (const action of actions) {
-                    metrics.transitionEvaluations++;
+                    workBudget.transition();
                     const candidateState: SearchState = {
                         effectIds: this.#engine.mixEffectIds(
                             product.drugType,
@@ -267,7 +291,7 @@ export class CustomerRecipeSearch {
                         constraints,
                         bound,
                         remainingIngredients - 1,
-                        metrics
+                        workBudget
                     );
                     const candidateCutoff = cutoff();
                     if (
@@ -325,7 +349,7 @@ export class CustomerRecipeSearch {
         constraints: FinalEffectConstraints,
         bound: CustomerProfitBound,
         remainingIngredients: number,
-        metrics: SearchMetrics
+        workBudget: RecipeSearchWorkBudget
     ): number {
         const productionCost =
             (product.baseProductCost + state.ingredientCost) * input.quantity;
@@ -339,7 +363,7 @@ export class CustomerRecipeSearch {
                     actions,
                     constraints,
                     remainingIngredients,
-                    metrics
+                    workBudget
                 ) ?? Number.NEGATIVE_INFINITY
             );
         }
@@ -357,7 +381,7 @@ export class CustomerRecipeSearch {
         actions: readonly IngredientAction[],
         constraints: FinalEffectConstraints,
         remainingIngredients: number,
-        metrics: SearchMetrics
+        workBudget: RecipeSearchWorkBudget
     ): number | null {
         let best = constraints.matches(initial.effectIds)
             ? this.#expectedProfit(input, product, initial)
@@ -368,8 +392,7 @@ export class CustomerRecipeSearch {
             const next = new Map<string, SearchState>();
             for (const state of layer.values()) {
                 for (const action of actions) {
-                    metrics.transitionEvaluations++;
-                    metrics.boundTransitionEvaluations++;
+                    workBudget.boundTransition();
                     const result: SearchState = {
                         effectIds: this.#engine.mixEffectIds(
                             product.drugType,

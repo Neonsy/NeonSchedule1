@@ -5,6 +5,7 @@ import {
     CustomerRecipeSearch,
     MixingEngine,
     RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
     ReverseRecipeSearch,
     type CustomerRecipeSearchResult,
     type RecipeSearchEvidence,
@@ -22,10 +23,11 @@ import type {
     ProductionRecipeRouteResult,
 } from '#solver/production-router';
 
-export const liveFallbackAlgorithmVersion = '3';
+export const liveFallbackAlgorithmVersion = '4';
 
 export interface LiveFallbackBudget {
     readonly maxStatesPerProduct: number;
+    readonly maxTransitionEvaluationsPerProduct: number;
 }
 
 export interface LiveFallbackEvidence extends RecipeSearchEvidence {
@@ -36,6 +38,7 @@ export interface LiveFallbackEvidence extends RecipeSearchEvidence {
     readonly mapProfile: readonly string[];
     readonly coverageKey: string;
     readonly maxStatesPerProduct: number;
+    readonly maxTransitionEvaluationsPerProduct: number;
 }
 
 type CoverageMissRoute<Request> = {
@@ -53,7 +56,7 @@ export type LiveFallbackResult<Request, Result> =
         readonly evidence: LiveFallbackEvidence;
     }
     | {
-        readonly kind: 'state-limit';
+        readonly kind: 'state-limit' | 'work-limit';
         readonly request: Request;
         readonly miss: ProductionCoverageMiss;
         readonly result: null;
@@ -121,6 +124,7 @@ export class LiveFallbackRunner {
             budget,
             () => new ReverseRecipeSearch(this.#engine, this.#itemsById, {
                 maxStates: budget.maxStatesPerProduct,
+                maxTransitionEvaluations: budget.maxTransitionEvaluationsPerProduct,
             }).search(route.request)
         );
     }
@@ -144,7 +148,11 @@ export class LiveFallbackRunner {
                 this.#engine,
                 this.#itemsById,
                 this.#dataset.customerCatalog,
-                { maxStates: budget.maxStatesPerProduct }
+                {
+                    maxStates: budget.maxStatesPerProduct,
+                    maxTransitionEvaluations:
+                        budget.maxTransitionEvaluationsPerProduct,
+                }
             ).search(route.request)
         );
     }
@@ -184,9 +192,14 @@ export class LiveFallbackRunner {
                 ),
             };
         } catch (error) {
-            if (!(error instanceof RecipeSearchLimitError)) throw error;
+            if (!(error instanceof RecipeSearchLimitError) &&
+                !(error instanceof RecipeSearchWorkLimitError)) {
+                throw error;
+            }
             return {
-                kind: 'state-limit',
+                kind: error instanceof RecipeSearchWorkLimitError
+                    ? 'work-limit'
+                    : 'state-limit',
                 request: route.request,
                 miss: route.miss,
                 result: null,
@@ -227,6 +240,12 @@ export class LiveFallbackRunner {
             budget.maxStatesPerProduct < 1) {
             throw new Error('Live fallback maxStatesPerProduct must be a positive safe integer');
         }
+        if (!Number.isSafeInteger(budget.maxTransitionEvaluationsPerProduct) ||
+            budget.maxTransitionEvaluationsPerProduct < 1) {
+            throw new Error(
+                'Live fallback maxTransitionEvaluationsPerProduct must be a positive safe integer'
+            );
+        }
     }
 
     #validateMiss(miss: ProductionCoverageMiss): void {
@@ -260,6 +279,8 @@ function evidence(
         mapProfile,
         coverageKey,
         maxStatesPerProduct: budget.maxStatesPerProduct,
+        maxTransitionEvaluationsPerProduct:
+            budget.maxTransitionEvaluationsPerProduct,
     };
 }
 

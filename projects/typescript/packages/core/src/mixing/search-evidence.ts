@@ -1,6 +1,6 @@
 export interface RecipeSearchEvidence {
     readonly proofStatus: 'exact' | 'incomplete';
-    readonly stopReason: 'completed' | 'state-limit';
+    readonly stopReason: 'completed' | 'state-limit' | 'work-limit';
     /** Unique canonical states admitted to the search frontier. */
     readonly exploredStates: number;
     /** Frontier or candidate states rejected before expansion or admission. */
@@ -53,6 +53,35 @@ export class RecipeSearchLimitError extends Error {
         this.evidence = {
             proofStatus: 'incomplete',
             stopReason: 'state-limit',
+            exploredStates,
+            prunedStates,
+            completedDepth: depth - 1,
+            ...work,
+        };
+    }
+}
+
+export class RecipeSearchWorkLimitError extends Error {
+    readonly depth: number;
+    readonly maxTransitionEvaluations: number;
+    readonly evidence: RecipeSearchEvidence;
+
+    constructor(
+        depth: number,
+        maxTransitionEvaluations: number,
+        exploredStates: number,
+        prunedStates: number,
+        work: RecipeSearchWorkEvidence
+    ) {
+        super(
+            `Recipe search exceeded the ${maxTransitionEvaluations}-transition work limit while building depth ${depth}`
+        );
+        this.name = 'RecipeSearchWorkLimitError';
+        this.depth = depth;
+        this.maxTransitionEvaluations = maxTransitionEvaluations;
+        this.evidence = {
+            proofStatus: 'incomplete',
+            stopReason: 'work-limit',
             exploredStates,
             prunedStates,
             completedDepth: depth - 1,

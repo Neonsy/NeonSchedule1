@@ -8,6 +8,7 @@ import {
     ReverseRecipeSearch,
     RecipeSearch,
     RecipeSearchLimitError,
+    RecipeSearchWorkLimitError,
     type Effect,
     type Item,
     type MixingRules,
@@ -236,7 +237,7 @@ describe('mixing engine', () => {
         );
     });
 
-    it('fails explicitly before an exact search exceeds its state budget', () => {
+    it('fails explicitly before an exact search exceeds either budget', () => {
         const effects = [effect('a', 0, 0), effect('shift', 1, 1)];
         const rules: MixingRules = {
             schema: 'neonschedule1-mixing-rules-1',
@@ -279,6 +280,49 @@ describe('mixing engine', () => {
             completedDepth: 0,
             transitionEvaluations: 3,
             boundTransitionEvaluations: 2,
+        });
+
+        const workSearch = new RecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            { maxStates: 10, maxTransitionEvaluations: 2 }
+        );
+        let workFailure: unknown;
+        try {
+            workSearch.search({
+                productId: 'product',
+                availableIngredientIds: ['ingredient'],
+                maxIngredients: 1,
+                limit: 1,
+            });
+        } catch (error) {
+            workFailure = error;
+        }
+
+        expect(workFailure).toBeInstanceOf(RecipeSearchWorkLimitError);
+        expect((workFailure as RecipeSearchWorkLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'work-limit',
+            exploredStates: 1,
+            prunedStates: 0,
+            completedDepth: 0,
+            transitionEvaluations: 2,
+            boundTransitionEvaluations: 2,
+        });
+
+        const exactWorkResult = new RecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            { maxStates: 10, maxTransitionEvaluations: 3 }
+        ).search({
+            productId: 'product',
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
+            limit: 1,
+        });
+        expect(exactWorkResult.evidence).toMatchObject({
+            proofStatus: 'exact',
+            transitionEvaluations: 3,
         });
     });
 
