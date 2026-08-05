@@ -29,6 +29,7 @@ export interface RecipeSearchInput {
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
     readonly objective?: RecipeSearchObjective;
+    readonly maximumTotalCost?: number;
 }
 
 export interface RecipeSearchOptions {
@@ -79,9 +80,13 @@ export class RecipeSearch {
     search(input: RecipeSearchInput): RecipeSearchResult {
         requireNonNegativeInteger(input.maxIngredients, 'maxIngredients');
         requirePositiveInteger(input.limit, 'limit');
+        if (input.maximumTotalCost !== undefined) {
+            requireNonNegativeFinite(input.maximumTotalCost, 'maximumTotalCost');
+        }
 
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
+        const maximumTotalCost = input.maximumTotalCost ?? Number.POSITIVE_INFINITY;
         const objective = requireObjective(input.objective ?? 'productValue');
         const constraints = new FinalEffectConstraints(
             this.#engine,
@@ -101,7 +106,13 @@ export class RecipeSearch {
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             const next = new Map<string, SearchState>();
-            const cutoff = new RecipeScoreCutoff(outcomes, input.limit, constraints, objective);
+            const cutoff = new RecipeScoreCutoff(
+                outcomes,
+                input.limit,
+                constraints,
+                objective,
+                input.maximumTotalCost
+            );
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
@@ -129,7 +140,8 @@ export class RecipeSearch {
                         state.effectIds,
                         state.ingredientCost,
                         remainingIngredients,
-                        constraints
+                        constraints,
+                        maximumTotalCost
                     );
                     if (exact === null) {
                         prunedStates++;
@@ -148,6 +160,10 @@ export class RecipeSearch {
                         ingredientIds: [...state.ingredientIds, action.id],
                         ingredientCost: state.ingredientCost + action.cost,
                     };
+                    if (product.baseProductCost + candidate.ingredientCost > maximumTotalCost) {
+                        prunedStates++;
+                        continue;
+                    }
                     const key = stateKey(candidate.effectIds);
                     const prior = outcomes.get(key);
                     if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) {
@@ -193,7 +209,11 @@ export class RecipeSearch {
         }
 
         const recipes = [...outcomes.values()]
-            .filter((recipe) => constraints.matches(recipe.effectIds))
+            .filter((recipe) =>
+                constraints.matches(recipe.effectIds) &&
+                (input.maximumTotalCost === undefined ||
+                    recipe.totalCost <= input.maximumTotalCost)
+            )
             .sort((left, right) => compareRecipeEvaluations(left, right, objective))
             .slice(0, input.limit);
         return {
@@ -219,6 +239,7 @@ export class RecipeSearch {
             baseProductCost = item.basePurchasePrice;
             baseProductCostBasis = 'base-purchase-price';
         }
+        requireNonNegativeFinite(baseProductCost, `Product ${JSON.stringify(id)} cost`);
         return {
             ...item.product,
             baseProductCost,
@@ -238,6 +259,10 @@ export class RecipeSearch {
             if (item.basePurchasePrice === null) {
                 throw new Error(`Mixing ingredient ${JSON.stringify(id)} has no purchase price`);
             }
+            requireNonNegativeFinite(
+                item.basePurchasePrice,
+                `Mixing ingredient ${JSON.stringify(id)} purchase price`
+            );
             return { id, effectId, cost: item.basePurchasePrice };
         });
     }
@@ -252,11 +277,15 @@ class RecipeScoreCutoff {
         recipes: Iterable<readonly [string, RecipeEvaluation]>,
         limit: number,
         constraints: FinalEffectConstraints,
-        objective: RecipeSearchObjective
+        objective: RecipeSearchObjective,
+        maximumTotalCost: number | undefined
     ) {
         this.#limit = limit;
         for (const [key, recipe] of recipes) {
-            if (constraints.matches(recipe.effectIds)) {
+            if (
+                constraints.matches(recipe.effectIds) &&
+                (maximumTotalCost === undefined || recipe.totalCost <= maximumTotalCost)
+            ) {
                 this.add(
                     key,
                     recipeSearchScore(
@@ -343,10 +372,14 @@ class RecipeValueBound {
         effectIds: readonly string[],
         ingredientCost: number,
         remainingIngredients: number,
-        constraints: FinalEffectConstraints
+        constraints: FinalEffectConstraints,
+        maximumTotalCost: number
     ): { readonly key: string; readonly value: number } | null {
         let best: { readonly key: string; readonly value: number } | null = null;
-        if (constraints.matches(effectIds)) {
+        if (
+            this.#product.baseProductCost + ingredientCost <= maximumTotalCost &&
+            constraints.matches(effectIds)
+        ) {
             best = {
                 key: stateKey(effectIds),
                 value: recipeSearchScore(
@@ -374,6 +407,10 @@ class RecipeValueBound {
                     );
                     const key = stateKey(result);
                     const additionalIngredientCost = current.additionalIngredientCost + action.cost;
+                    const totalIngredientCost = ingredientCost + additionalIngredientCost;
+                    if (this.#product.baseProductCost + totalIngredientCost > maximumTotalCost) {
+                        continue;
+                    }
                     const existing = next.get(key);
                     if (
                         existing === undefined ||
@@ -504,4 +541,8 @@ function requireNonNegativeInteger(value: number, name: string): void {
 
 function requirePositiveInteger(value: number, name: string): void {
     if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} must be a positive safe integer`);
+}
+
+function requireNonNegativeFinite(value: number, name: string): void {
+    if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative finite number`);
 }

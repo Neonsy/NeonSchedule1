@@ -241,20 +241,21 @@ describe('recipe corpus artifact', () => {
         expect(liveRecipe.result.recipes).toHaveLength(1);
         expect(liveRecipe.evidence.source).toBe('live');
 
-        const unsupportedRoute = await router.recipe({
+        const costBoundRoute = await router.recipe({
             productIds: ['product-a'],
             availableIngredientIds: [],
             maxIngredients: 0,
             maximumTotalCost: 10,
             limit: 1,
         });
-        if (unsupportedRoute.kind !== 'coverage-miss') {
-            throw new Error('Expected unsupported recipe coverage miss');
+        if (costBoundRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected cost-bound recipe coverage miss');
         }
-        expect(fallback.recipe(
-            unsupportedRoute,
-            { maxStatesPerProduct: 10 }
-        ).kind).toBe('unsupported');
+        const costBound = fallback.recipe(costBoundRoute, { maxStatesPerProduct: 10 });
+        expect(costBound.kind).toBe('completed');
+        if (costBound.kind !== 'completed') throw new Error('Expected completed cost-bound recipe');
+        expect(costBound.result.recipes).toHaveLength(1);
+        expect(costBound.result.recipes[0]!.totalCost).toBeLessThanOrEqual(10);
 
         const limitedRoute = await router.recipe({
             productIds: ['product-a'],

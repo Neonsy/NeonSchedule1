@@ -10,9 +10,7 @@ import type {
 import type { LoadedRecipeCorpusProduction } from '#solver/precompute-production';
 import type { RecipeCorpusQueryResult } from '#solver/precompute-query';
 
-export interface ProductionRecipeRequest extends ReverseRecipeSearchInput {
-    readonly maximumTotalCost?: number;
-}
+export type ProductionRecipeRequest = ReverseRecipeSearchInput;
 
 export interface NormalizedProductionRecipeRequest {
     readonly productIds: readonly string[];

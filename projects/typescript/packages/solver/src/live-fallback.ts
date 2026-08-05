@@ -22,7 +22,7 @@ import type {
     ProductionRecipeRouteResult,
 } from '#solver/production-router';
 
-export const liveFallbackAlgorithmVersion = '1';
+export const liveFallbackAlgorithmVersion = '2';
 
 export interface LiveFallbackBudget {
     readonly maxStatesPerProduct: number;
@@ -36,11 +36,6 @@ export interface LiveFallbackEvidence extends RecipeSearchEvidence {
     readonly mapProfile: readonly string[];
     readonly coverageKey: string;
     readonly maxStatesPerProduct: number;
-}
-
-export interface UnsupportedLiveConstraint {
-    readonly field: 'maximumTotalCost';
-    readonly reason: 'unsupported-live-constraint';
 }
 
 type CoverageMissRoute<Request> = {
@@ -65,14 +60,10 @@ export type LiveFallbackResult<Request, Result> =
         readonly evidence: LiveFallbackEvidence;
     };
 
-export type LiveRecipeFallbackResult =
-    | LiveFallbackResult<NormalizedProductionRecipeRequest, ReverseRecipeSearchResult>
-    | {
-        readonly kind: 'unsupported';
-        readonly request: NormalizedProductionRecipeRequest;
-        readonly miss: ProductionCoverageMiss;
-        readonly issue: UnsupportedLiveConstraint;
-    };
+export type LiveRecipeFallbackResult = LiveFallbackResult<
+    NormalizedProductionRecipeRequest,
+    ReverseRecipeSearchResult
+>;
 
 export type LiveCustomerFallbackResult = LiveFallbackResult<
     NormalizedProductionCustomerRequest,
@@ -124,25 +115,13 @@ export class LiveFallbackRunner {
         this.#validateBudget(budget);
         this.#validateMiss(route.miss);
         this.#validateRequest(route.request);
-        if (route.request.maximumTotalCost !== undefined) {
-            return {
-                kind: 'unsupported',
-                request: route.request,
-                miss: route.miss,
-                issue: {
-                    field: 'maximumTotalCost',
-                    reason: 'unsupported-live-constraint',
-                },
-            };
-        }
-        const { maximumTotalCost: _maximumTotalCost, ...input } = route.request;
         return this.#run(
             'recipe',
             route,
             budget,
             () => new ReverseRecipeSearch(this.#engine, this.#itemsById, {
                 maxStates: budget.maxStatesPerProduct,
-            }).search(input)
+            }).search(route.request)
         );
     }
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    compareRecipeEvaluations,
     MixingEngine,
     RecipeEvaluator,
+    RecipeOutcomeEnumerator,
     ReverseRecipeSearch,
     RecipeSearch,
     RecipeSearchLimitError,
@@ -204,6 +206,34 @@ describe('mixing engine', () => {
             totalCost: 5,
             netValue: 10,
         });
+
+        const exhaustive = new RecipeOutcomeEnumerator(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            { productionCosts: { unitCost: () => 4 } }
+        ).enumerate({
+            productId: 'product',
+            availableIngredientIds: input.availableIngredientIds,
+            maxIngredients: 2,
+        });
+        for (const objective of ['productValue', 'netValue'] as const) {
+            for (const maximumTotalCost of [3, 4, 5, 19]) {
+                const expected = exhaustive
+                    .filter((recipe) => recipe.totalCost <= maximumTotalCost)
+                    .sort((left, right) => compareRecipeEvaluations(left, right, objective))
+                    .slice(0, 2);
+                expect(search.search({
+                    ...input,
+                    maxIngredients: 2,
+                    limit: 2,
+                    objective,
+                    maximumTotalCost,
+                }).recipes).toEqual(expected);
+            }
+        }
+        expect(() => search.search({ ...input, maximumTotalCost: -1 })).toThrow(
+            'maximumTotalCost must be a non-negative finite number'
+        );
     });
 
     it('fails explicitly before an exact search exceeds its state budget', () => {
@@ -458,7 +488,7 @@ describe('mixing engine', () => {
             objective: 'netValue',
         } as const;
 
-        const result = search.search(input);
+        const result = search.search({ ...input, maximumTotalCost: 4 });
 
         expect(result.recipes[0]).toMatchObject({
             productId: 'slow',
@@ -479,6 +509,11 @@ describe('mixing engine', () => {
             ingredientIds: [],
             ingredientQuantities: [],
         });
+        expect(search.search({
+            ...input,
+            productIds: ['ready'],
+            maximumTotalCost: 4,
+        }).recipes).toEqual([]);
         expect(() => search.search({ ...input, productIds: ['ready', 'ready'] })).toThrow(
             'Duplicate available product "ready"'
         );

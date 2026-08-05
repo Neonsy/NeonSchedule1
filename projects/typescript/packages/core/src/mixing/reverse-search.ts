@@ -17,6 +17,7 @@ export interface ReverseRecipeSearchInput {
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
     readonly objective?: RecipeSearchObjective;
+    readonly maximumTotalCost?: number;
 }
 
 export interface IngredientQuantity {
@@ -67,6 +68,9 @@ export class ReverseRecipeSearch {
                 ...(input.forbiddenEffectIds === undefined
                     ? {}
                     : { forbiddenEffectIds: input.forbiddenEffectIds }),
+                ...(input.maximumTotalCost === undefined
+                    ? {}
+                    : { maximumTotalCost: input.maximumTotalCost }),
                 objective,
             });
             recipes.push(...result.recipes);
