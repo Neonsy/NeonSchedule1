@@ -196,6 +196,11 @@ function parseReport(document: JsonObject): RawReport {
             oracles: objectArray(mixing.oracles, 'report.mixing.oracles'),
         },
         world: {
+            currentOrderLimitMultiplierInLoadedSave: numberField(
+                world,
+                'currentOrderLimitMultiplierInLoadedSave',
+                'report.world'
+            ),
             properties: objectArray(world.properties, 'report.world.properties'),
             businesses: objectArray(world.businesses, 'report.world.businesses'),
         },

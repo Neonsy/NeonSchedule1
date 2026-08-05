@@ -473,7 +473,7 @@ export function validateCustomerEnjoymentOracles(
     );
 }
 
-function normalizeCurrentAffinities(
+export function normalizeCurrentAffinities(
     rawCustomer: JsonObject,
     customerId: string,
     integrity: Integrity

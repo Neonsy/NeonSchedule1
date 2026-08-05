@@ -519,6 +519,7 @@ internal sealed class QualityScalarSnapshot
 
 internal sealed class WorldSnapshot
 {
+    public float? CurrentOrderLimitMultiplierInLoadedSave { get; set; }
     public DealerMechanicsSnapshot DealerMechanics { get; init; } = new();
     public List<DealerSnapshot> Dealers { get; set; } = new();
     public List<SupplierSnapshot> Suppliers { get; set; } = new();

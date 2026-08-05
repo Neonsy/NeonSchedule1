@@ -41,6 +41,7 @@ export interface RawReport {
         readonly oracles: JsonObject[];
     };
     readonly world: {
+        readonly currentOrderLimitMultiplierInLoadedSave: number;
         readonly properties: JsonObject[];
         readonly businesses: JsonObject[];
     };

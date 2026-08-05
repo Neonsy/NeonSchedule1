@@ -238,6 +238,7 @@ internal static partial class GameDataCollector
                     .OrderBy(affinity => affinity.DrugType, StringComparer.Ordinal)
                     .ToList(),
                 BaseAddiction = data.BaseAddiction,
+                CurrentAddictionInLoadedSave = customer.CurrentAddiction,
                 DependenceMultiplier = data.DependenceMultiplier,
                 CallPoliceChance = data.CallPoliceChance,
                 CanBeDirectlyApproached = data.CanBeDirectlyApproached,
@@ -252,102 +253,7 @@ internal static partial class GameDataCollector
                 MaximumMutualRelationshipRequirement = data.MaxMutualRelationRequirement,
                 SampleRequestSuccessChanceInLoadedSave = customer.GetSampleRequestSuccessChance(),
             };
-            foreach (var product in products)
-            {
-                try
-                {
-                    var instance = product.GetDefaultInstance(1)
-                        .TryCast<Il2CppScheduleOne.Product.ProductItemInstance>();
-                    if (instance is null)
-                    {
-                        continue;
-                    }
-
-                    var offeredProducts = new Il2CppSystem.Collections.Generic.List<
-                        Il2CppScheduleOne.ItemFramework.ItemInstance>();
-                    offeredProducts.Add(instance);
-                    var price = instance.GetMonetaryValue();
-                    var evaluation = new CustomerProductEvaluationSnapshot
-                    {
-                        ProductId = product.ID,
-                        Quantity = 1,
-                        Price = price,
-                    };
-                    try
-                    {
-                        evaluation.OfferSuccessChance = customer.GetOfferSuccessChance(
-                            offeredProducts,
-                            price);
-                    }
-                    catch (Exception exception)
-                    {
-                        evaluation.Errors.Add(
-                            $"offer:{exception.GetType().Name}:{exception.Message}");
-                    }
-                    try
-                    {
-                        evaluation.SampleSuccessChance = customer.GetSampleSuccess(
-                            offeredProducts,
-                            price);
-                    }
-                    catch (Exception exception)
-                    {
-                        evaluation.Errors.Add(
-                            $"sample:{exception.GetType().Name}:{exception.Message}");
-                    }
-                    try
-                    {
-                        evaluation.ProductEnjoyment = customer.GetProductEnjoyment(product);
-                    }
-                    catch (Exception exception)
-                    {
-                        evaluation.Errors.Add(
-                            $"enjoyment:{exception.GetType().Name}:{exception.Message}");
-                    }
-                    try
-                    {
-                        evaluation.ValueProposition =
-                            Il2CppScheduleOne.Economy.Customer.GetValueProposition(
-                                product,
-                                price);
-                    }
-                    catch (Exception exception)
-                    {
-                        evaluation.Errors.Add(
-                            $"value-proposition:{exception.GetType().Name}:{exception.Message}");
-                    }
-                    foreach (var quality in Enum.GetValues<
-                                 Il2CppScheduleOne.ItemFramework.EQuality>())
-                    {
-                        try
-                        {
-                            evaluation.QualityEnjoyment.Add(
-                                new CustomerProductQualityEvaluationSnapshot
-                                {
-                                    Quality = quality.ToString(),
-                                    QualityValue = (int)quality,
-                                    Enjoyment = customer.GetProductEnjoyment(product, quality),
-                                });
-                        }
-                        catch (Exception exception)
-                        {
-                            evaluation.Errors.Add(
-                                $"quality-enjoyment:{quality}:{exception.GetType().Name}:{exception.Message}");
-                        }
-                    }
-                    foreach (var error in evaluation.Errors)
-                    {
-                        customerSnapshot.ProductEvaluationErrors.Add(
-                            $"{product.ID}:{error}");
-                    }
-                    customerSnapshot.ProductEvaluationBaseline.Add(evaluation);
-                }
-                catch (Exception exception)
-                {
-                    customerSnapshot.ProductEvaluationErrors.Add(
-                        $"{product.ID}:{exception.GetType().Name}:{exception.Message}");
-                }
-            }
+            CollectCustomerProductEvaluations(customer, customerSnapshot, products);
             result.Customers.Add(customerSnapshot);
         }
 
@@ -642,6 +548,9 @@ internal static partial class GameDataCollector
         var levelManager = Il2CppScheduleOne.Levelling.LevelManager.Instance;
         if (levelManager is not null)
         {
+            result.CurrentOrderLimitMultiplierInLoadedSave =
+                Il2CppScheduleOne.Levelling.LevelManager.GetOrderLimitMultiplier(
+                    levelManager.GetFullRank());
             foreach (var rank in Enum.GetValues<Il2CppScheduleOne.Levelling.ERank>())
             {
                 for (var tier = 1;

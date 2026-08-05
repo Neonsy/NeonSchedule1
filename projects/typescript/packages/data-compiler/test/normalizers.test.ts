@@ -489,7 +489,11 @@ function emptyReport(): RawReport {
             mixerMaps: [],
             oracles: [],
         },
-        world: { properties: [], businesses: [] },
+        world: {
+            currentOrderLimitMultiplierInLoadedSave: 1,
+            properties: [],
+            businesses: [],
+        },
         discovery: {
             assetDirectory: 'assets',
             assetFileCount: 0,

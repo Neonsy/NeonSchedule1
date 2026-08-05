@@ -10,6 +10,7 @@ import {
     normalizeCustomers,
     validateCustomerEnjoymentOracles,
 } from '#data-compiler/normalize/customers';
+import { validateCustomerOfferOracles } from '#data-compiler/normalize/customer-offers';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
@@ -19,7 +20,7 @@ import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.15';
+export const NORMALIZER_VERSION = '0.0.16';
 
 const deferredDomains = [
     'buildable-geometry',
@@ -49,6 +50,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         integrity
     );
     validateCustomerEnjoymentOracles(acquisition.report, customers, items, integrity);
+    validateCustomerOfferOracles(acquisition.report, customers, items, integrity);
     const production = normalizeProduction(acquisition.report, itemIds, integrity);
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);

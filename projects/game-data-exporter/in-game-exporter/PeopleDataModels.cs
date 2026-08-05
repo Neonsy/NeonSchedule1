@@ -43,6 +43,7 @@ internal sealed class CustomerSnapshot
     public List<DrugAffinitySnapshot> DrugAffinities { get; init; } = new();
     public List<DrugAffinitySnapshot> CurrentDrugAffinitiesInLoadedSave { get; init; } = new();
     public float BaseAddiction { get; init; }
+    public float CurrentAddictionInLoadedSave { get; init; }
     public float DependenceMultiplier { get; init; }
     public float CallPoliceChance { get; init; }
     public bool CanBeDirectlyApproached { get; init; }
@@ -65,6 +66,7 @@ internal sealed class CustomerProductEvaluationSnapshot
     public string ProductId { get; init; } = string.Empty;
     public int Quantity { get; init; }
     public float Price { get; init; }
+    public string OfferQuality { get; init; } = string.Empty;
     public float? OfferSuccessChance { get; set; }
     public float? SampleSuccessChance { get; set; }
     public float? ProductEnjoyment { get; set; }
