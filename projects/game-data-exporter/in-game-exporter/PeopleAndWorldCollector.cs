@@ -201,6 +201,28 @@ internal static partial class GameDataCollector
                     });
                 }
             }
+            var currentAffinities = new List<DrugAffinitySnapshot>();
+            var currentAffinityData = customer.currentAffinityData;
+            var currentProductAffinities = currentAffinityData?.ProductAffinities;
+            if (currentProductAffinities is not null)
+            {
+                for (var affinityIndex = 0;
+                     affinityIndex < currentProductAffinities.Count;
+                     affinityIndex++)
+                {
+                    var affinity = currentProductAffinities[affinityIndex];
+                    if (affinity is null)
+                    {
+                        continue;
+                    }
+
+                    currentAffinities.Add(new DrugAffinitySnapshot
+                    {
+                        DrugType = affinity.DrugType.ToString(),
+                        Affinity = affinity.Affinity,
+                    });
+                }
+            }
 
             var customerSnapshot = new CustomerSnapshot
             {
@@ -210,6 +232,9 @@ internal static partial class GameDataCollector
                     .OrderBy(id => id, StringComparer.Ordinal)
                     .ToList(),
                 DrugAffinities = affinities
+                    .OrderBy(affinity => affinity.DrugType, StringComparer.Ordinal)
+                    .ToList(),
+                CurrentDrugAffinitiesInLoadedSave = currentAffinities
                     .OrderBy(affinity => affinity.DrugType, StringComparer.Ordinal)
                     .ToList(),
                 BaseAddiction = data.BaseAddiction,

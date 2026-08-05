@@ -6,7 +6,10 @@ import { verifyAssets } from '#data-compiler/acquisition/assets';
 import { loadAcquisition } from '#data-compiler/acquisition/load';
 import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import { sha256Text, stringField } from '#data-compiler/json';
-import { normalizeCustomers } from '#data-compiler/normalize/customers';
+import {
+    normalizeCustomers,
+    validateCustomerEnjoymentOracles,
+} from '#data-compiler/normalize/customers';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
@@ -16,7 +19,7 @@ import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.14';
+export const NORMALIZER_VERSION = '0.0.15';
 
 const deferredDomains = [
     'buildable-geometry',
@@ -45,6 +48,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         productIds,
         integrity
     );
+    validateCustomerEnjoymentOracles(acquisition.report, customers, items, integrity);
     const production = normalizeProduction(acquisition.report, itemIds, integrity);
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);

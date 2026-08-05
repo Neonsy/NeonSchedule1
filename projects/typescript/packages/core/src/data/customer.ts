@@ -1,6 +1,8 @@
 import { type } from 'arktype';
 
-export const CustomerStandardsSchema = type("'VeryLow' | 'Low' | 'Moderate' | 'High'");
+export const CustomerStandardsSchema = type(
+    "'VeryLow' | 'Low' | 'Moderate' | 'High' | 'VeryHigh'"
+);
 export type CustomerStandards = typeof CustomerStandardsSchema.infer;
 
 export const CustomerDrugTypeSchema = type(
@@ -68,6 +70,7 @@ export type Customer = typeof CustomerSchema.infer;
 export const CustomerQualityTierSchema = type({
     name: CustomerQualitySchema,
     value: 'number',
+    scalar: 'number',
 });
 export type CustomerQualityTier = typeof CustomerQualityTierSchema.infer;
 
@@ -111,7 +114,7 @@ export const CustomerConstantsSchema = type({
 export type CustomerConstants = typeof CustomerConstantsSchema.infer;
 
 export const CustomerCatalogSchema = type({
-    schema: "'neonschedule1-customer-catalog-1'",
+    schema: "'neonschedule1-customer-catalog-2'",
     constants: CustomerConstantsSchema,
     qualityTiers: CustomerQualityTierSchema.array(),
     productEvaluationInputs: CustomerProductEvaluationInputSchema.array(),

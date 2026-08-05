@@ -18,14 +18,14 @@ describe('customer normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(normalized.catalog).toMatchObject({
-            schema: 'neonschedule1-customer-catalog-1',
+            schema: 'neonschedule1-customer-catalog-2',
             customerIds: ['customer'],
             qualityTiers: [
-                { name: 'Trash', value: 0 },
-                { name: 'Poor', value: 1 },
-                { name: 'Standard', value: 2 },
-                { name: 'Premium', value: 3 },
-                { name: 'Heavenly', value: 4 },
+                { name: 'Trash', value: 0, scalar: 0 },
+                { name: 'Poor', value: 1, scalar: 0.25 },
+                { name: 'Standard', value: 2, scalar: 0.5 },
+                { name: 'Premium', value: 3, scalar: 0.75 },
+                { name: 'Heavenly', value: 4, scalar: 1 },
             ],
             productEvaluationInputs: [
                 { productId: 'ogkush', quantity: 1, price: 38, valueProposition: 1 },
@@ -139,6 +139,15 @@ function customerReport(): RawReport {
                 ],
             },
         ],
+        qualityMechanics: {
+            qualityScalars: [
+                { quality: 'Trash', scalar: 0 },
+                { quality: 'Poor', scalar: 0.25 },
+                { quality: 'Standard', scalar: 0.5 },
+                { quality: 'Premium', scalar: 0.75 },
+                { quality: 'Heavenly', scalar: 1 },
+            ],
+        },
         customerConstants: customerConstants(),
     } as unknown as RawReport;
 }

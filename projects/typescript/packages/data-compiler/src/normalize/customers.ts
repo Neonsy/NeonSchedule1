@@ -2,6 +2,8 @@ import {
     CustomerCatalogSchema,
     CustomerConstantsSchema,
     CustomerDrugAffinitySchema,
+    CustomerDrugTypeSchema,
+    CustomerEnjoymentEvaluator,
     CustomerOrderDaySchema,
     CustomerProductEvaluationOracleSchema,
     CustomerQualityEnjoymentSchema,
@@ -10,9 +12,11 @@ import {
     CustomerStandardsSchema,
     type Customer,
     type CustomerCatalog,
+    type CustomerDrugAffinity,
     type CustomerProductEvaluationInput,
     type CustomerProductEvaluationOracle,
     type CustomerQualityTier,
+    type Item,
 } from '@neonschedule1/core';
 
 import type { RawReport } from '#data-compiler/acquisition/types';
@@ -82,6 +86,12 @@ export function normalizeCustomers(
 
     const productInputs = new Map<string, CustomerProductEvaluationInput>();
     const qualityTiers = new Map<string, CustomerQualityTier>();
+    const qualityScalars = indexUnique(
+        report.qualityMechanics.qualityScalars,
+        'quality',
+        'report.qualityMechanics.qualityScalars',
+        integrity
+    );
     const customers = [...rawCustomers.entries()]
         .map(([id, raw]) =>
             normalizeCustomer(
@@ -92,13 +102,14 @@ export function normalizeCustomers(
                 productIds,
                 productInputs,
                 qualityTiers,
+                qualityScalars,
                 integrity
             )
         )
         .sort((left, right) => left.id.localeCompare(right.id));
 
     const catalog = CustomerCatalogSchema.assert({
-        schema: 'neonschedule1-customer-catalog-1',
+        schema: 'neonschedule1-customer-catalog-2',
         constants: normalizeConstants(report.customerConstants),
         qualityTiers: [...qualityTiers.values()].sort((left, right) => left.value - right.value),
         productEvaluationInputs: [...productInputs.values()].sort((left, right) =>
@@ -133,6 +144,7 @@ function normalizeCustomer(
     productIds: ReadonlySet<string>,
     productInputs: Map<string, CustomerProductEvaluationInput>,
     qualityTiers: Map<string, CustomerQualityTier>,
+    qualityScalars: ReadonlyMap<string, JsonObject>,
     integrity: Integrity
 ): Customer {
     const path = `report.customers[${JSON.stringify(id)}]`;
@@ -163,6 +175,7 @@ function normalizeCustomer(
         productIds,
         productInputs,
         qualityTiers,
+        qualityScalars,
         integrity
     );
     const minimumWeeklySpend = numberField(raw, 'minimumWeeklySpend', path);
@@ -242,6 +255,7 @@ function normalizeEvaluations(
     productIds: ReadonlySet<string>,
     productInputs: Map<string, CustomerProductEvaluationInput>,
     qualityTiers: Map<string, CustomerQualityTier>,
+    qualityScalars: ReadonlyMap<string, JsonObject>,
     integrity: Integrity
 ): CustomerProductEvaluationOracle[] {
     const exportedErrors = stringArrayField(customer, 'productEvaluationErrors', customerPath);
@@ -271,6 +285,7 @@ function normalizeEvaluations(
                 `${customerPath}.productEvaluationBaseline[${JSON.stringify(productId)}]`,
                 productInputs,
                 qualityTiers,
+                qualityScalars,
                 integrity
             )
         )
@@ -283,6 +298,7 @@ function normalizeEvaluation(
     path: string,
     productInputs: Map<string, CustomerProductEvaluationInput>,
     qualityTiers: Map<string, CustomerQualityTier>,
+    qualityScalars: ReadonlyMap<string, JsonObject>,
     integrity: Integrity
 ): CustomerProductEvaluationOracle {
     const errors = asArray(raw.errors, `${path}.errors`);
@@ -328,15 +344,30 @@ function normalizeEvaluation(
     const qualities = [...rawQualities.entries()]
         .map(([quality, rawQuality]) => {
             const qualityPath = `${path}.qualityEnjoyment[${JSON.stringify(quality)}]`;
+            const rawScalar = qualityScalars.get(quality);
+            if (rawScalar === undefined) {
+                integrity.addError(`${qualityPath}.quality references a tier without a scalar`);
+            }
             const tier = CustomerQualityTierSchema.assert({
                 name: quality,
                 value: numberField(rawQuality, 'qualityValue', qualityPath),
+                scalar:
+                    rawScalar === undefined
+                        ? 0
+                        : numberField(
+                              rawScalar,
+                              'scalar',
+                              `report.qualityMechanics.qualityScalars[${JSON.stringify(quality)}]`
+                          ),
             });
             const existingTier = qualityTiers.get(quality);
             if (existingTier === undefined) {
                 qualityTiers.set(quality, tier);
-            } else if (existingTier.value !== tier.value) {
-                integrity.addError(`${qualityPath}.qualityValue disagrees with the shared tier value`);
+            } else if (
+                existingTier.value !== tier.value ||
+                existingTier.scalar !== tier.scalar
+            ) {
+                integrity.addError(`${qualityPath} disagrees with the shared quality tier`);
             }
             const enjoyment = numberField(rawQuality, 'enjoyment', qualityPath);
             checkRange(enjoyment, 0, 1, `${qualityPath}.enjoyment`, integrity);
@@ -354,6 +385,113 @@ function normalizeEvaluation(
         productEnjoyment,
         qualityEnjoyment: qualities,
     });
+}
+
+export function validateCustomerEnjoymentOracles(
+    report: RawReport,
+    normalized: NormalizedCustomers,
+    items: readonly Item[],
+    integrity: Integrity
+): void {
+    const evaluator = new CustomerEnjoymentEvaluator(normalized.catalog);
+    const rawCustomers = indexUnique(
+        report.customers,
+        'personId',
+        'report.customers for enjoyment validation',
+        integrity
+    );
+    const products = new Map(
+        items.flatMap((item) => {
+            if (item.product === null) return [];
+            return [
+                [
+                    item.id,
+                    {
+                        drugTypes: [CustomerDrugTypeSchema.assert(item.product.drugType)],
+                        effectIds: item.product.effectIds,
+                    },
+                ] as const,
+            ];
+        })
+    );
+    let baseCases = 0;
+    let qualityCases = 0;
+    let firstBaseMismatch: string | undefined;
+    let firstQualityMismatch: string | undefined;
+
+    for (const customer of normalized.customers) {
+        const rawCustomer = rawCustomers.get(customer.id);
+        const currentAffinities =
+            rawCustomer?.currentDrugAffinitiesInLoadedSave === undefined
+                ? customer.drugAffinities
+                : normalizeCurrentAffinities(rawCustomer, customer.id, integrity);
+        const evaluationProfile = { ...customer, drugAffinities: currentAffinities };
+        for (const oracle of customer.evaluationOracle) {
+            const product = products.get(oracle.productId);
+            if (product === undefined) {
+                integrity.addError(
+                    `Customer enjoyment oracle references missing product ${JSON.stringify(oracle.productId)}`
+                );
+                continue;
+            }
+
+            const actualBase = evaluator.evaluate(evaluationProfile, product);
+            baseCases += 1;
+            if (
+                actualBase !== Math.fround(oracle.productEnjoyment) &&
+                firstBaseMismatch === undefined
+            ) {
+                firstBaseMismatch = `${customer.id}/${oracle.productId}: expected ${oracle.productEnjoyment}, calculated ${actualBase}`;
+            }
+
+            for (const expected of oracle.qualityEnjoyment) {
+                const actual = evaluator.evaluateAtQuality(
+                    evaluationProfile,
+                    product,
+                    expected.quality
+                );
+                qualityCases += 1;
+                if (
+                    actual !== Math.fround(expected.enjoyment) &&
+                    firstQualityMismatch === undefined
+                ) {
+                    firstQualityMismatch = `${customer.id}/${oracle.productId}/${expected.quality}: expected ${expected.enjoyment}, calculated ${actual}`;
+                }
+            }
+        }
+    }
+
+    integrity.check(
+        `customer enjoyment evaluator matches ${baseCases} base-product oracle cases`,
+        firstBaseMismatch === undefined,
+        `Customer base-product enjoyment differs from the export at ${firstBaseMismatch}`
+    );
+    integrity.check(
+        `customer enjoyment evaluator matches ${qualityCases} quality oracle cases`,
+        firstQualityMismatch === undefined,
+        `Customer quality enjoyment differs from the export at ${firstQualityMismatch}`
+    );
+}
+
+function normalizeCurrentAffinities(
+    rawCustomer: JsonObject,
+    customerId: string,
+    integrity: Integrity
+): CustomerDrugAffinity[] {
+    const path = `report.customers[${JSON.stringify(customerId)}].currentDrugAffinitiesInLoadedSave`;
+    const affinities = indexUnique(
+        objectArray(rawCustomer.currentDrugAffinitiesInLoadedSave, path),
+        'drugType',
+        path,
+        integrity
+    );
+    return [...affinities.entries()]
+        .map(([drugType, raw]) => {
+            const affinity = numberField(raw, 'affinity', `${path}[${JSON.stringify(drugType)}]`);
+            checkRange(affinity, -1, 1, `${path}[${JSON.stringify(drugType)}].affinity`, integrity);
+            return CustomerDrugAffinitySchema.assert({ drugType, affinity });
+        })
+        .sort((left, right) => left.drugType.localeCompare(right.drugType));
 }
 
 function normalizeConstants(raw: JsonObject) {
