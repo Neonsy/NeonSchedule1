@@ -6,7 +6,11 @@ import {
     type RecipeEvaluation,
     type RecipeEvaluatorOptions,
 } from '#core/mixing/recipe';
-import { RecipeSearchLimitError } from '#core/mixing/search-evidence';
+import {
+    exactSearchEvidence,
+    RecipeSearchLimitError,
+    type RecipeSearchEvidence,
+} from '#core/mixing/search-evidence';
 
 const defaultMaxStates = 100_000;
 
@@ -20,6 +24,11 @@ export interface RecipeEnumerationInput {
 
 export interface RecipeOutcomeEnumeratorOptions extends RecipeEvaluatorOptions {
     readonly maxStates?: number;
+}
+
+export interface RecipeEnumerationResult {
+    readonly recipes: readonly RecipeEvaluation[];
+    readonly evidence: RecipeSearchEvidence;
 }
 
 interface IngredientAction {
@@ -53,6 +62,10 @@ export class RecipeOutcomeEnumerator {
     }
 
     enumerate(input: RecipeEnumerationInput): RecipeEvaluation[] {
+        return [...this.enumerateWithEvidence(input).recipes];
+    }
+
+    enumerateWithEvidence(input: RecipeEnumerationInput): RecipeEnumerationResult {
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
@@ -118,7 +131,7 @@ export class RecipeOutcomeEnumerator {
             layer = next;
         }
 
-        return [...outcomes.values()]
+        const recipes = [...outcomes.values()]
             .filter((state) => constraints.matches(state.effectIds))
             .sort(comparePaths)
             .map((state) =>
@@ -127,6 +140,14 @@ export class RecipeOutcomeEnumerator {
                     ingredientIds: state.ingredientIds,
                 })
             );
+        return {
+            recipes,
+            evidence: exactSearchEvidence(
+                exploredStates,
+                prunedStates,
+                input.maxIngredients
+            ),
+        };
     }
 
     #product(id: string): NonNullable<Item['product']> {

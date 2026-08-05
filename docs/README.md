@@ -14,6 +14,7 @@ The repository currently supports:
 - Search recipes exactly under explicit constraints
 - Calculate production materials, time, cost, equipment, and quality
 - Evaluate customer preferences, offers, and recommendations
+- Generate and query verified precomputed recipe data
 
 ## Planned player features
 
