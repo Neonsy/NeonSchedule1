@@ -19,6 +19,7 @@ import {
 } from '#solver/precompute-artifact';
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
+import { LiveFallbackRunner } from '#solver/live-fallback';
 import { loadRecipeCorpusProduction } from '#solver/precompute-production';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
 import { ProductionRequestRouter } from '#solver/production-router';
@@ -224,6 +225,70 @@ describe('recipe corpus artifact', () => {
             'availableIngredientIds',
             'maxIngredients',
         ]);
+        const fallback = new LiveFallbackRunner(source, production);
+        const liveRecipeRoute = await router.recipe({
+            productIds: ['product-a'],
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            limit: 1,
+        });
+        if (liveRecipeRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected live recipe coverage miss');
+        }
+        const liveRecipe = fallback.recipe(liveRecipeRoute, { maxStatesPerProduct: 10 });
+        expect(liveRecipe.kind).toBe('completed');
+        if (liveRecipe.kind !== 'completed') throw new Error('Expected completed live recipe');
+        expect(liveRecipe.result.recipes).toHaveLength(1);
+        expect(liveRecipe.evidence.source).toBe('live');
+
+        const unsupportedRoute = await router.recipe({
+            productIds: ['product-a'],
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            maximumTotalCost: 10,
+            limit: 1,
+        });
+        if (unsupportedRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected unsupported recipe coverage miss');
+        }
+        expect(fallback.recipe(
+            unsupportedRoute,
+            { maxStatesPerProduct: 10 }
+        ).kind).toBe('unsupported');
+
+        const limitedRoute = await router.recipe({
+            productIds: ['product-a'],
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 2,
+            limit: 1,
+        });
+        if (limitedRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected limited recipe coverage miss');
+        }
+        const limited = fallback.recipe(limitedRoute, { maxStatesPerProduct: 1 });
+        expect(limited.kind).toBe('state-limit');
+        if (limited.kind !== 'state-limit') throw new Error('Expected live state limit');
+        expect(limited.evidence.completedDepth).toBe(0);
+
+        const liveCustomerRoute = await router.customer({
+            productIds: ['product-a'],
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            profile: customerProfile,
+            state: { addiction: 0.2, relationship: 2, orderLimitMultiplier: 1 },
+            quality: 'Standard',
+            quantity: 1,
+            priceMultiplier: 1,
+            maximumProductionCost: 20,
+            limit: 1,
+        });
+        if (liveCustomerRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected live customer coverage miss');
+        }
+        expect(fallback.customer(
+            liveCustomerRoute,
+            { maxStatesPerProduct: 10 }
+        ).kind).toBe('completed');
         await expect(router.recipe({
             availableIngredientIds: [],
             maxIngredients: 0,

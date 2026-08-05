@@ -222,15 +222,22 @@ function normalizeCustomerRequest(
     const effects = effectConstraints(input.requiredEffectIds, input.forbiddenEffectIds);
     requireNonNegativeSafeInteger(input.maxIngredients, 'Customer maxIngredients');
     return {
-        ...input,
         productIds: canonicalIds(input.productIds, 'Customer productIds', false),
         availableIngredientIds: canonicalIds(
             input.availableIngredientIds,
             'Customer availableIngredientIds',
             true
         ),
+        maxIngredients: input.maxIngredients,
         requiredEffectIds: effects.required,
         forbiddenEffectIds: effects.forbidden,
+        profile: input.profile,
+        state: input.state,
+        quality: input.quality,
+        quantity: input.quantity,
+        priceMultiplier: input.priceMultiplier,
+        maximumProductionCost: input.maximumProductionCost,
+        limit: input.limit,
     };
 }
 
