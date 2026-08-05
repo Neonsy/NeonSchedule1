@@ -5,6 +5,7 @@ import path from 'node:path';
 import type {
     CustomerCatalog,
     CustomerOfferProfile,
+    Customer,
     Effect,
     Item,
     MixingRules,
@@ -19,10 +20,15 @@ import {
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
+import {
+    readRecipeCorpusProductionSelection,
+    refreshRecipeCorpusProduction,
+} from '#solver/precompute-refresh';
 import { writeRecipeCorpusArtifact } from '#solver/precompute-run';
 import type { SolverDataset } from '#solver/dataset';
 import {
     partitionPath,
+    planExhaustiveCorpus,
     planSelectiveCorpus,
     type RecipeCorpusConfiguration,
     type RecipeCorpusDatasetIdentity,
@@ -109,6 +115,49 @@ describe('recipe corpus artifact', () => {
         expect(resumedIndex.manifest.artifactSha256).toBe(
             cleanIndex.manifest.artifactSha256
         );
+    });
+
+    it('changes production selection only after exact refresh verification', async () => {
+        const outputRoot = await temporaryDirectory('neonschedule1-refresh-');
+        const reportRoot = path.join(outputRoot, 'reports');
+        const source = solverDataset();
+        const options = { maxIngredients: 1, maxStates: 100 };
+        const refreshed = await refreshRecipeCorpusProduction(
+            source,
+            planExhaustiveCorpus(source, options),
+            { outputRoot, reportRoot, verificationLimit: 2 }
+        );
+        const repeated = await refreshRecipeCorpusProduction(
+            source,
+            planExhaustiveCorpus(source, options),
+            { outputRoot, reportRoot, verificationLimit: 2 }
+        );
+        const before = await readRecipeCorpusProductionSelection(repeated.selectionPath);
+        const changedDataset: SolverDataset = {
+            ...source,
+            items: source.items.map((item, index) =>
+                index === 0 && item.product !== null
+                    ? {
+                        ...item,
+                        product: { ...item.product, basePrice: item.product.basePrice + 1 },
+                    } as Item
+                    : item
+            ),
+        };
+
+        await expect(
+            refreshRecipeCorpusProduction(
+                changedDataset,
+                planExhaustiveCorpus(changedDataset, options),
+                { outputRoot, reportRoot, verificationLimit: 2 }
+            )
+        ).rejects.toThrow('differs at result');
+
+        const after = await readRecipeCorpusProductionSelection(refreshed.selectionPath);
+        expect(after).toEqual(before);
+        expect(before.configuration.mode).toBe('exhaustive');
+        expect(before.verification.recipeCaseCount).toBeGreaterThan(0);
+        expect(before.verification.customerCaseCount).toBeGreaterThan(0);
     });
 
     it('queries indexed effects and costs without scanning corpus files', async () => {
@@ -260,8 +309,9 @@ const customerProfile: CustomerOfferProfile = {
     weeklyOrders: { minimum: 1, maximum: 2 },
 };
 
-function customerCatalog(): Pick<CustomerCatalog, 'constants' | 'qualityTiers'> {
+function customerCatalog(): CustomerCatalog {
     return {
+        schema: 'neonschedule1-customer-catalog-2',
         constants: {
             affinityMaxEffect: 0.3,
             propertyMaxEffect: 0.4,
@@ -276,8 +326,17 @@ function customerCatalog(): Pick<CustomerCatalog, 'constants' | 'qualityTiers'> 
             { name: 'Premium', value: 3, scalar: 0.75 },
             { name: 'Heavenly', value: 4, scalar: 1 },
         ],
-    };
+        productEvaluationInputs: [],
+        customerIds: ['customer'],
+    } as CustomerCatalog;
 }
+
+const customer = {
+    ...customerProfile,
+    schema: 'neonschedule1-customer-1',
+    id: 'customer',
+    baseAddiction: 0.2,
+} as Customer;
 
 function solverDataset(): SolverDataset {
     const product = (id: string): Item => ({
@@ -331,7 +390,7 @@ function solverDataset(): SolverDataset {
         items: [product('product-a'), product('product-b'), ingredient],
         effects: [effect('base-effect', 0), effect('mixed-effect', 1)],
         mixingRules,
-        customers: [],
-        customerCatalog: {} as CustomerCatalog,
+        customers: [customer],
+        customerCatalog: customerCatalog(),
     };
 }

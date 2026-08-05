@@ -11,6 +11,7 @@
     "solver:verify": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver verify",
     "solver:native": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver native",
     "solver:precompute": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver precompute",
+    "solver:precompute:refresh": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver precompute:refresh",
     "solver:precompute:verify": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver precompute:verify"
   },
   "devEngines": {
