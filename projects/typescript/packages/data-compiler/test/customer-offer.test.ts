@@ -70,6 +70,28 @@ describe('customer offer acceptance', () => {
             )
         ).toBe(0.7496165037155151);
     });
+
+    it('preserves the game aggregation order for stacked products', () => {
+        expect(
+            evaluator.evaluate(
+                {
+                    standards: 'Low',
+                    preferredEffectIds: ['Euphoric', 'caloriedense', 'munchies'],
+                    drugAffinities: [
+                        { drugType: 'Cocaine', affinity: 0.15 },
+                        { drugType: 'Marijuana', affinity: 0.78 },
+                        { drugType: 'Methamphetamine', affinity: -0.66 },
+                        { drugType: 'Shrooms', affinity: 0.3931125 },
+                    ],
+                    weeklySpend: { minimum: 400, maximum: 800 },
+                    weeklyOrders: { minimum: 3, maximum: 6 },
+                },
+                { drugTypes: ['Marijuana'], effectIds: ['sedating'], marketValue: 44 },
+                { addiction: 0.2, relationship: 3, orderLimitMultiplier: 1 },
+                { quality: 'Standard', quantity: 3, askingPrice: 132 }
+            )
+        ).toBe(0.7706018090248108);
+    });
 });
 
 function catalog(): Pick<CustomerCatalog, 'constants' | 'qualityTiers'> {

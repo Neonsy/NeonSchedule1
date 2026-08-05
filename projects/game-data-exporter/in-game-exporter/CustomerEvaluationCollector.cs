@@ -36,9 +36,18 @@ internal static partial class GameDataCollector
                     OfferQuality = instance.Quality.ToString(),
                 };
                 CaptureEvaluation(customer, product, offeredProducts, evaluation);
+                CaptureOfferCases(customer, product, packaging, evaluation);
                 foreach (var error in evaluation.Errors)
                 {
                     customerSnapshot.ProductEvaluationErrors.Add($"{product.ID}:{error}");
+                }
+                foreach (var offerCase in evaluation.OfferCases)
+                {
+                    foreach (var error in offerCase.Errors)
+                    {
+                        customerSnapshot.ProductEvaluationErrors.Add(
+                            $"{product.ID}:offer-case:{offerCase.Id}:{error}");
+                    }
                 }
                 customerSnapshot.ProductEvaluationBaseline.Add(evaluation);
             }
@@ -62,24 +71,24 @@ internal static partial class GameDataCollector
             () => evaluation.OfferSuccessChance = customer.GetOfferSuccessChance(
                 offeredProducts,
                 evaluation.Price),
-            evaluation);
+            evaluation.Errors);
         Capture(
             "sample",
             () => evaluation.SampleSuccessChance = customer.GetSampleSuccess(
                 offeredProducts,
                 evaluation.Price),
-            evaluation);
+            evaluation.Errors);
         Capture(
             "enjoyment",
             () => evaluation.ProductEnjoyment = customer.GetProductEnjoyment(product),
-            evaluation);
+            evaluation.Errors);
         Capture(
             "value-proposition",
             () => evaluation.ValueProposition =
                 Il2CppScheduleOne.Economy.Customer.GetValueProposition(
                     product,
                     evaluation.Price / evaluation.Quantity),
-            evaluation);
+            evaluation.Errors);
 
         foreach (var quality in Enum.GetValues<Il2CppScheduleOne.ItemFramework.EQuality>())
         {
@@ -92,14 +101,78 @@ internal static partial class GameDataCollector
                         QualityValue = (int)quality,
                         Enjoyment = customer.GetProductEnjoyment(product, quality),
                     }),
-                evaluation);
+                evaluation.Errors);
+        }
+    }
+
+    private static void CaptureOfferCases(
+        Il2CppScheduleOne.Economy.Customer customer,
+        Il2CppScheduleOne.Product.ProductDefinition product,
+        Il2CppScheduleOne.Product.Packaging.PackagingDefinition packaging,
+        CustomerProductEvaluationSnapshot evaluation)
+    {
+        var unitPrice = evaluation.Price / evaluation.Quantity;
+        CaptureOfferCase(customer, product, packaging, evaluation, "discount-25-percent", 1,
+            Il2CppScheduleOne.ItemFramework.EQuality.Standard, unitPrice * 0.75f);
+        CaptureOfferCase(customer, product, packaging, evaluation, "markup-50-percent", 1,
+            Il2CppScheduleOne.ItemFramework.EQuality.Standard, unitPrice * 1.5f);
+        CaptureOfferCase(customer, product, packaging, evaluation, "market-three-units", 3,
+            Il2CppScheduleOne.ItemFramework.EQuality.Standard, unitPrice * 3f);
+        CaptureOfferCase(customer, product, packaging, evaluation, "premium-market", 1,
+            Il2CppScheduleOne.ItemFramework.EQuality.Premium, unitPrice);
+        CaptureOfferCase(customer, product, packaging, evaluation, "high-price-4x", 1,
+            Il2CppScheduleOne.ItemFramework.EQuality.Standard, unitPrice * 4f);
+    }
+
+    private static void CaptureOfferCase(
+        Il2CppScheduleOne.Economy.Customer customer,
+        Il2CppScheduleOne.Product.ProductDefinition product,
+        Il2CppScheduleOne.Product.Packaging.PackagingDefinition packaging,
+        CustomerProductEvaluationSnapshot evaluation,
+        string id,
+        int stackQuantity,
+        Il2CppScheduleOne.ItemFramework.EQuality quality,
+        float price)
+    {
+        var offerCase = new CustomerOfferCaseSnapshot
+        {
+            Id = id,
+            Price = price,
+            Quality = quality.ToString(),
+        };
+        evaluation.OfferCases.Add(offerCase);
+        try
+        {
+            var instance = product.GetDefaultInstance(stackQuantity)
+                .TryCast<Il2CppScheduleOne.Product.ProductItemInstance>();
+            if (instance is null)
+            {
+                throw new InvalidOperationException("No product item instance.");
+            }
+
+            instance.SetPackaging(packaging);
+            instance.SetQuality(quality);
+            offerCase.Quantity = instance.Quantity * instance.Amount;
+            var offeredProducts = new Il2CppSystem.Collections.Generic.List<
+                Il2CppScheduleOne.ItemFramework.ItemInstance>();
+            offeredProducts.Add(instance);
+            Capture(
+                "offer",
+                () => offerCase.SuccessChance = customer.GetOfferSuccessChance(
+                    offeredProducts,
+                    price),
+                offerCase.Errors);
+        }
+        catch (Exception exception)
+        {
+            offerCase.Errors.Add($"setup:{exception.GetType().Name}:{exception.Message}");
         }
     }
 
     private static void Capture(
         string operation,
         Action capture,
-        CustomerProductEvaluationSnapshot evaluation)
+        List<string> errors)
     {
         try
         {
@@ -107,7 +180,7 @@ internal static partial class GameDataCollector
         }
         catch (Exception exception)
         {
-            evaluation.Errors.Add(
+            errors.Add(
                 $"{operation}:{exception.GetType().Name}:{exception.Message}");
         }
     }

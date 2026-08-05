@@ -65,11 +65,17 @@ export class CustomerOfferEvaluator {
         const budgetRatio = float(float(terms.askingPrice) / dailySpend);
 
         const enjoyment = this.#enjoyment.evaluateAtQuality(profile, product, terms.quality);
-        const enjoymentScore = inverseLerpNegativeOneToOne(enjoyment);
+        const enjoymentScore = weightedAverage(
+            inverseLerpNegativeOneToOne(enjoyment),
+            terms.quantity
+        );
         const preference = float(enjoymentScore + float(float(state.addiction) * float(0.25)));
 
         const unitPrice = float(float(terms.askingPrice) / terms.quantity);
-        const proposition = valueProposition(float(product.marketValue), unitPrice);
+        const proposition = weightedAverage(
+            valueProposition(float(product.marketValue), unitPrice),
+            terms.quantity
+        );
         const value = float(Math.pow(proposition, 1.5));
 
         let affordability = float(1);
@@ -151,6 +157,10 @@ function valueProposition(marketValue: number, unitPrice: number): number {
 
 function inverseLerpNegativeOneToOne(value: number): number {
     return clamp(float(float(value + 1) / float(2)), 0, 1);
+}
+
+function weightedAverage(value: number, quantity: number): number {
+    return float(float(value * float(quantity)) / float(quantity));
 }
 
 function lerp(minimum: number, maximum: number, amount: number): number {

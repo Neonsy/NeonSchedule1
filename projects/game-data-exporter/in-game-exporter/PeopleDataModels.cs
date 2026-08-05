@@ -71,7 +71,18 @@ internal sealed class CustomerProductEvaluationSnapshot
     public float? SampleSuccessChance { get; set; }
     public float? ProductEnjoyment { get; set; }
     public float? ValueProposition { get; set; }
+    public List<CustomerOfferCaseSnapshot> OfferCases { get; init; } = new();
     public List<CustomerProductQualityEvaluationSnapshot> QualityEnjoyment { get; init; } = new();
+    public List<string> Errors { get; init; } = new();
+}
+
+internal sealed class CustomerOfferCaseSnapshot
+{
+    public string Id { get; init; } = string.Empty;
+    public int Quantity { get; set; }
+    public float Price { get; init; }
+    public string Quality { get; init; } = string.Empty;
+    public float? SuccessChance { get; set; }
     public List<string> Errors { get; init; } = new();
 }
 
