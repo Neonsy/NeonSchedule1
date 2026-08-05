@@ -29,9 +29,17 @@ async function main(): Promise<void> {
     const dataset = await loadSolverDataset(datasetDirectory);
     const report = runSearchBenchmark(dataset, options.benchmark, (completed, total, result) => {
         process.stdout.write(
-            `[${completed}/${total}] ${result.id}: ${result.duration.medianMs.toFixed(1)} ms\n`
+            `[${completed}/${total}] ${result.id}: ${result.duration.medianMs.toFixed(1)} ms (${result.samples[0]!.status})\n`
         );
     });
+    for (const candidate of report.transitionBudgetSweep?.candidates ?? []) {
+        process.stdout.write(
+            `Transition p${candidate.percentile * 100}: ` +
+            `${candidate.maxTransitionEvaluations} evaluations, ` +
+            `${candidate.completedCases}/${candidate.completedCases + candidate.workLimitedCases + candidate.stateLimitedCases} exact, ` +
+            `${candidate.medianDurationMs.toFixed(1)} ms median\n`
+        );
+    }
     const output =
         options.output === undefined
             ? defaultOutputPath(report)
@@ -49,6 +57,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     let warmups = defaults.warmups;
     let limit = defaults.limit;
     let maxStates = defaults.maxStates;
+    let transitionBudgetPercentiles = defaults.transitionBudgetPercentiles;
     let recipeCostCeilingFractions = defaults.recipeCostCeilingFractions;
     let customerCount = defaults.customerCount;
     let customerIds: readonly string[] | undefined;
@@ -88,6 +97,12 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
                 break;
             case '--max-states':
                 maxStates = integer(value(), 'max-states');
+                break;
+            case '--transition-budget-percentiles':
+                transitionBudgetPercentiles = commaSeparatedNumbers(
+                    value(),
+                    'transition-budget-percentiles'
+                );
                 break;
             case '--recipe-cost-fractions':
                 recipeCostCeilingFractions = commaSeparatedNumbers(
@@ -135,6 +150,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             warmups,
             limit,
             maxStates,
+            transitionBudgetPercentiles,
             recipeCostCeilingFractions,
             customerCount,
             ...(customerIds === undefined ? {} : { customerIds }),
@@ -241,6 +257,8 @@ Options:
   --warmups NUMBER                Unmeasured warmups per case (default: 1)
   --limit NUMBER                  Results requested per search (default: 10)
   --max-states NUMBER             State limit per recipe/product search (default: 100000)
+  --transition-budget-percentiles LIST
+                                  Opt-in per-product work-ceiling sweep, such as 0.25,0.5,0.75
   --recipe-cost-fractions LIST    Fractions of maximum ingredient-path cost (default: 0.25,0.5)
   --customer-count NUMBER         Spend-quantile customers to select (default: 3)
   --customers LIST                Explicit comma-separated customer IDs

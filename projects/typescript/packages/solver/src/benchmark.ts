@@ -1,20 +1,22 @@
 import os from 'node:os';
-import { performance } from 'node:perf_hooks';
 
 import {
-    CustomerRecipeSearch,
     MixingEngine,
-    RecipeSearch,
-    RecipeSearchLimitError,
     type Customer,
-    type CustomerOfferState,
     type CustomerQuality,
     type RecipeSearchEvidence,
 } from '@neonschedule1/core';
 
+import { benchmarkOperation } from '#solver/benchmark-operation';
+import {
+    requireTransitionBudgetPercentiles,
+    summarizeTransitionBudget,
+    transitionBudgetCandidates,
+    transitionProbeDefinitions,
+} from '#solver/benchmark-transition';
 import type { SolverDataset } from '#solver/dataset';
 
-export const recipeSearchAlgorithmVersion = '3';
+export const recipeSearchAlgorithmVersion = '4';
 
 export type BenchmarkCustomerState =
     | 'baseline'
@@ -27,6 +29,7 @@ export interface SearchBenchmarkOptions {
     readonly warmups: number;
     readonly limit: number;
     readonly maxStates: number;
+    readonly transitionBudgetPercentiles: readonly number[];
     readonly recipeCostCeilingFractions: readonly number[];
     readonly customerCount: number;
     readonly customerIds?: readonly string[];
@@ -38,7 +41,7 @@ export interface SearchBenchmarkOptions {
 }
 
 export interface SearchBenchmarkReport {
-    readonly schema: 'neonschedule1-search-benchmark-2';
+    readonly schema: 'neonschedule1-search-benchmark-3';
     readonly createdAt: string;
     readonly algorithmVersion: string;
     readonly dataset: {
@@ -59,10 +62,12 @@ export interface SearchBenchmarkReport {
         };
     };
     readonly cases: readonly SearchBenchmarkCase[];
+    readonly transitionBudgetSweep: TransitionBudgetSweep | null;
 }
 
 export interface SearchBenchmarkCase {
     readonly id: string;
+    readonly phase: 'baseline' | 'transition-probe' | 'transition-budget';
     readonly kind: 'recipe' | 'customer';
     readonly productId?: string;
     readonly customerId?: string;
@@ -71,6 +76,9 @@ export interface SearchBenchmarkCase {
     readonly maximumTotalCost?: number;
     readonly depth: number;
     readonly customerState?: BenchmarkCustomerState;
+    readonly productScope?: 'all' | 'single';
+    readonly maxTransitionEvaluations?: number;
+    readonly transitionBudgetPercentile?: number;
     readonly samples: readonly SearchBenchmarkSample[];
     readonly duration: {
         readonly minimumMs: number;
@@ -81,9 +89,26 @@ export interface SearchBenchmarkCase {
 
 export interface SearchBenchmarkSample {
     readonly durationMs: number;
-    readonly status: 'completed' | 'state-limit';
+    readonly status: 'completed' | 'state-limit' | 'work-limit';
     readonly resultCount: number;
     readonly evidence: RecipeSearchEvidence;
+}
+
+export interface TransitionBudgetSweep {
+    readonly basis: 'per-product-transition-count-percentile';
+    readonly probes: readonly SearchBenchmarkCase[];
+    readonly candidates: readonly TransitionBudgetCandidate[];
+    readonly cases: readonly SearchBenchmarkCase[];
+}
+
+export interface TransitionBudgetCandidate {
+    readonly percentile: number;
+    readonly maxTransitionEvaluations: number;
+    readonly completedCases: number;
+    readonly workLimitedCases: number;
+    readonly stateLimitedCases: number;
+    readonly completionRate: number;
+    readonly medianDurationMs: number;
 }
 
 interface MachineDescription {
@@ -104,6 +129,7 @@ export function defaultSearchBenchmarkOptions(): SearchBenchmarkOptions {
         warmups: 1,
         limit: 10,
         maxStates: 100_000,
+        transitionBudgetPercentiles: [],
         recipeCostCeilingFractions: [0.25, 0.5],
         customerCount: 3,
         customerStates: ['baseline', 'maximum-addiction', 'maximum-relationship'],
@@ -159,20 +185,14 @@ export function runSearchBenchmark(
         )
     );
     const maximumIngredientUnitCost = Math.max(...ingredientCosts);
-    const recipeSearch = new RecipeSearch(engine, itemsById, { maxStates: options.maxStates });
-    const customerSearch = new CustomerRecipeSearch(
-        engine,
-        itemsById,
-        dataset.customerCatalog,
-        { maxStates: options.maxStates }
-    );
     const definitions: BenchmarkDefinition[] = [];
     for (const depth of options.depths) {
         for (const productId of productIds) {
             for (const objective of ['productValue', 'netValue'] as const) {
-                definitions.push({ kind: 'recipe', depth, productId, objective });
+                definitions.push({ phase: 'baseline', kind: 'recipe', depth, productId, objective });
                 for (const costCeilingFraction of options.recipeCostCeilingFractions) {
                     definitions.push({
+                        phase: 'baseline',
                         kind: 'recipe',
                         depth,
                         productId,
@@ -187,60 +207,70 @@ export function runSearchBenchmark(
         }
         for (const customer of customers) {
             for (const customerState of options.customerStates) {
-                definitions.push({ kind: 'customer', depth, customer, customerState });
+                definitions.push({
+                    phase: 'baseline',
+                    kind: 'customer',
+                    depth,
+                    customer,
+                    customerState,
+                });
             }
         }
     }
 
-    const cases: SearchBenchmarkCase[] = [];
-    for (const definition of definitions) {
-        const execute = (): SearchBenchmarkSample =>
-            definition.kind === 'recipe'
-                ? measure(() => {
-                      const result = recipeSearch.search({
-                          productId: definition.productId,
-                          availableIngredientIds: ingredientIds,
-                          maxIngredients: definition.depth,
-                          limit: options.limit,
-                          objective: definition.objective,
-                          ...(definition.maximumTotalCost === undefined
-                              ? {}
-                              : { maximumTotalCost: definition.maximumTotalCost }),
-                      });
-                      return { resultCount: result.recipes.length, evidence: result.evidence };
-                  })
-                : measure(() => {
-                      const result = customerSearch.search({
-                          productIds,
-                          availableIngredientIds: ingredientIds,
-                          maxIngredients: definition.depth,
-                          profile: definition.customer,
-                          state: benchmarkCustomerState(
-                              definition.customerState,
-                              definition.customer,
-                              dataset.customerCatalog.constants.maximumRelationship
-                          ),
-                          quality: options.quality,
-                          quantity: options.quantity,
-                          priceMultiplier: options.priceMultiplier,
-                          maximumProductionCost: options.maximumProductionCost,
-                          limit: options.limit,
-                      });
-                      return {
-                          resultCount: result.recommendations.length,
-                          evidence: result.evidence,
-                      };
-                  });
-        for (let index = 0; index < options.warmups; index++) execute();
-        const samples = Array.from({ length: options.iterations }, execute);
+    const probeDefinitions = options.transitionBudgetPercentiles.length === 0
+        ? []
+        : transitionProbeDefinitions(options, productIds, customers);
+    const totalCaseCount = definitions.length +
+        probeDefinitions.length * (1 + options.transitionBudgetPercentiles.length);
+    let completedCaseCount = 0;
+    const runDefinition = (
+        definition: BenchmarkDefinition,
+        warmups = options.warmups,
+        iterations = options.iterations
+    ): SearchBenchmarkCase => {
+        const execute = benchmarkOperation(
+            engine,
+            itemsById,
+            dataset.customerCatalog,
+            definition,
+            productIds,
+            ingredientIds,
+            options
+        );
+        for (let index = 0; index < warmups; index++) execute();
+        const samples = Array.from({ length: iterations }, execute);
         requireDeterministicSamples(definitionId(definition), samples);
         const result = benchmarkCase(definition, samples);
-        cases.push(result);
-        onCaseCompleted(cases.length, definitions.length, result);
+        onCaseCompleted(++completedCaseCount, totalCaseCount, result);
+        return result;
+    };
+
+    const cases: SearchBenchmarkCase[] = [];
+    for (const definition of definitions) cases.push(runDefinition(definition));
+
+    const probes = probeDefinitions.map((definition) => runDefinition(definition, 0, 1));
+    const candidateLimits = transitionBudgetCandidates(
+        options.transitionBudgetPercentiles,
+        probes
+    );
+    const transitionCases: SearchBenchmarkCase[] = [];
+    const candidates: TransitionBudgetCandidate[] = [];
+    for (const candidate of candidateLimits) {
+        const candidateCases = probeDefinitions.map((definition) =>
+            runDefinition({
+                ...definition,
+                phase: 'transition-budget',
+                maxTransitionEvaluations: candidate.maxTransitionEvaluations,
+                transitionBudgetPercentile: candidate.percentile,
+            })
+        );
+        transitionCases.push(...candidateCases);
+        candidates.push(summarizeTransitionBudget(candidate, candidateCases));
     }
 
     return {
-        schema: 'neonschedule1-search-benchmark-2',
+        schema: 'neonschedule1-search-benchmark-3',
         createdAt: new Date().toISOString(),
         algorithmVersion: recipeSearchAlgorithmVersion,
         dataset: {
@@ -262,13 +292,27 @@ export function runSearchBenchmark(
             },
         },
         cases,
+        transitionBudgetSweep: options.transitionBudgetPercentiles.length === 0
+            ? null
+            : {
+                  basis: 'per-product-transition-count-percentile',
+                  probes,
+                  candidates,
+                  cases: transitionCases,
+              },
     };
 }
 
-type BenchmarkDefinition =
+export interface BenchmarkDefinitionBase {
+    readonly phase: 'baseline' | 'transition-probe' | 'transition-budget';
+    readonly depth: number;
+    readonly maxTransitionEvaluations?: number;
+    readonly transitionBudgetPercentile?: number;
+}
+
+export type BenchmarkDefinition = BenchmarkDefinitionBase & (
     | {
           readonly kind: 'recipe';
-          readonly depth: number;
           readonly productId: string;
           readonly objective: 'productValue' | 'netValue';
           readonly costCeilingFraction?: number;
@@ -276,33 +320,11 @@ type BenchmarkDefinition =
       }
     | {
           readonly kind: 'customer';
-          readonly depth: number;
           readonly customer: Customer;
           readonly customerState: BenchmarkCustomerState;
-      };
-
-function measure(
-    operation: () => { readonly resultCount: number; readonly evidence: RecipeSearchEvidence }
-): SearchBenchmarkSample {
-    const startedAt = performance.now();
-    try {
-        const result = operation();
-        return {
-            durationMs: milliseconds(performance.now() - startedAt),
-            status: 'completed',
-            resultCount: result.resultCount,
-            evidence: result.evidence,
-        };
-    } catch (error) {
-        if (!(error instanceof RecipeSearchLimitError)) throw error;
-        return {
-            durationMs: milliseconds(performance.now() - startedAt),
-            status: 'state-limit',
-            resultCount: 0,
-            evidence: error.evidence,
-        };
-    }
-}
+          readonly productId?: string;
+      }
+);
 
 function benchmarkCase(
     definition: BenchmarkDefinition,
@@ -311,8 +333,15 @@ function benchmarkCase(
     const durations = samples.map((sample) => sample.durationMs).sort((left, right) => left - right);
     const base = {
         id: definitionId(definition),
+        phase: definition.phase,
         kind: definition.kind,
         depth: definition.depth,
+        ...(definition.maxTransitionEvaluations === undefined
+            ? {}
+            : { maxTransitionEvaluations: definition.maxTransitionEvaluations }),
+        ...(definition.transitionBudgetPercentile === undefined
+            ? {}
+            : { transitionBudgetPercentile: definition.transitionBudgetPercentile }),
         samples,
         duration: {
             minimumMs: durations[0]!,
@@ -336,6 +365,9 @@ function benchmarkCase(
               ...base,
               customerId: definition.customer.id,
               customerState: definition.customerState,
+              ...(definition.productId === undefined
+                  ? { productScope: 'all' as const }
+                  : { productId: definition.productId, productScope: 'single' as const }),
           };
 }
 
@@ -380,16 +412,23 @@ function sampleFingerprint(sample: SearchBenchmarkSample): string {
 }
 
 function definitionId(definition: BenchmarkDefinition): string {
+    const phase = definition.phase === 'baseline'
+        ? ''
+        : `${definition.phase}:`;
+    const budget = definition.maxTransitionEvaluations === undefined
+        ? ''
+        : `:p-${definition.transitionBudgetPercentile}:limit-${definition.maxTransitionEvaluations}`;
     if (definition.kind === 'recipe') {
         const ceiling = definition.costCeilingFraction === undefined
             ? ''
             : `:cost-${definition.costCeilingFraction}`;
-        return `recipe:${definition.productId}:${definition.objective}${ceiling}:depth-${definition.depth}`;
+        return `${phase}recipe:${definition.productId}:${definition.objective}${ceiling}:depth-${definition.depth}${budget}`;
     }
     const state = definition.customerState === 'baseline'
         ? ''
         : `:${definition.customerState}`;
-    return `customer:${definition.customer.id}${state}:depth-${definition.depth}`;
+    const product = definition.productId === undefined ? '' : `:product-${definition.productId}`;
+    return `${phase}customer:${definition.customer.id}${state}${product}:depth-${definition.depth}${budget}`;
 }
 
 function validateOptions(options: SearchBenchmarkOptions): void {
@@ -399,6 +438,7 @@ function validateOptions(options: SearchBenchmarkOptions): void {
     requireInteger(options.warmups, 'warmups', 0);
     requireInteger(options.limit, 'limit', 1);
     requireInteger(options.maxStates, 'maxStates', 1);
+    requireTransitionBudgetPercentiles(options.transitionBudgetPercentiles);
     requireFractions(options.recipeCostCeilingFractions);
     requireInteger(options.customerCount, 'customerCount', 1);
     if (options.customerStates.length === 0) {
@@ -422,25 +462,6 @@ function validateOptions(options: SearchBenchmarkOptions): void {
         new Set(options.customerIds).size !== options.customerIds.length
     ) {
         throw new Error('Benchmark customers must not contain duplicates');
-    }
-}
-
-function benchmarkCustomerState(
-    name: BenchmarkCustomerState,
-    customer: Customer,
-    maximumRelationship: number
-): CustomerOfferState {
-    switch (name) {
-        case 'baseline':
-            return { addiction: customer.baseAddiction, relationship: 0, orderLimitMultiplier: 1 };
-        case 'maximum-addiction':
-            return { addiction: 1, relationship: 0, orderLimitMultiplier: 1 };
-        case 'maximum-relationship':
-            return {
-                addiction: customer.baseAddiction,
-                relationship: maximumRelationship,
-                orderLimitMultiplier: 1,
-            };
     }
 }
 

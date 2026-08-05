@@ -17,6 +17,10 @@ import {
     describeCorpusFile,
     verifyRecipeCorpusArtifact,
 } from '#solver/precompute-artifact';
+import {
+    defaultSearchBenchmarkOptions,
+    runSearchBenchmark,
+} from '#solver/benchmark';
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
 import { LiveFallbackRunner } from '#solver/live-fallback';
@@ -367,6 +371,42 @@ describe('recipe corpus artifact', () => {
 
         expect(result.recommendations.map(({ recipe }) => recipe.ingredientIds)).toEqual([[]]);
         expect(result.evidence.evaluatedCandidateCount).toBe(1);
+    });
+
+    it('derives and replays per-product transition budgets', () => {
+        const report = runSearchBenchmark(solverDataset(), {
+            ...defaultSearchBenchmarkOptions(),
+            depths: [1],
+            iterations: 1,
+            warmups: 0,
+            limit: 1,
+            recipeCostCeilingFractions: [0.5],
+            customerIds: ['customer'],
+            customerStates: ['baseline'],
+            transitionBudgetPercentiles: [0.5],
+        });
+
+        expect(report.schema).toBe('neonschedule1-search-benchmark-3');
+        expect(report.transitionBudgetSweep).not.toBeNull();
+        const sweep = report.transitionBudgetSweep!;
+        expect(sweep.probes).toHaveLength(4);
+        expect(sweep.candidates).toEqual([
+            {
+                percentile: 0.5,
+                maxTransitionEvaluations: 2,
+                completedCases: 2,
+                workLimitedCases: 2,
+                stateLimitedCases: 0,
+                completionRate: 0.5,
+                medianDurationMs: expect.any(Number),
+            },
+        ]);
+        expect(sweep.cases.map((entry) => entry.samples[0]!.status).sort()).toEqual([
+            'completed',
+            'completed',
+            'work-limit',
+            'work-limit',
+        ]);
     });
 });
 
