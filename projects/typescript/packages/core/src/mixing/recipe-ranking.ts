@@ -2,9 +2,26 @@ import type { RecipeEvaluation } from '#core/mixing/recipe';
 
 export type RecipeSearchObjective = 'productValue' | 'netValue';
 
+export interface RecipeRankingKey {
+    readonly productId: string;
+    readonly ingredientIds: readonly string[];
+    readonly effectIds: readonly string[];
+    readonly productValue: number;
+    readonly baseProductCost: number;
+    readonly ingredientCost: number;
+}
+
 export function compareRecipeEvaluations(
     left: RecipeEvaluation,
     right: RecipeEvaluation,
+    objective: RecipeSearchObjective
+): number {
+    return compareRecipeRankingKeys(left, right, objective);
+}
+
+export function compareRecipeRankingKeys(
+    left: RecipeRankingKey,
+    right: RecipeRankingKey,
     objective: RecipeSearchObjective
 ): number {
     return (

@@ -37,8 +37,14 @@ async function main(): Promise<void> {
         options.limit,
         (completed, total, result) => {
             process.stdout.write(
-                `[${completed}/${total}] ${result.id}: ${result.resultCount} results, ` +
+                `[recipe ${completed}/${total}] ${result.id}: ${result.resultCount} results, ` +
                 `${result.examinedRankingEntries} ranking entries examined\n`
+            );
+        },
+        (completed, total, result) => {
+            process.stdout.write(
+                `[customer ${completed}/${total}] ${result.id}: ${result.resultCount} results, ` +
+                `${result.evaluatedCandidateCount} candidates evaluated\n`
             );
         }
     );
@@ -54,10 +60,11 @@ async function main(): Promise<void> {
     await mkdir(path.dirname(output), { recursive: true });
     await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
     const maximumExamined = Math.max(
-        ...report.cases.map((result) => result.examinedRankingEntries)
+        ...report.recipeCases.map((result) => result.examinedRankingEntries)
     );
     process.stdout.write(
-        `Verified ${report.cases.length} indexed queries; maximum ranking scan ` +
+        `Verified ${report.recipeCases.length} recipe and ` +
+        `${report.customerCases.length} customer queries; maximum ranking scan ` +
         `${maximumExamined} of ${lookup.corpusManifest.counts.recipes} recipes\n`
     );
     process.stdout.write(`Verification report: ${output}\n`);

@@ -61,13 +61,7 @@ export function buildRecipeCorpusManifest(
     files: readonly RecipeCorpusFile[]
 ): RecipeCorpusManifest {
     const sortedFiles = [...files].sort((left, right) => left.path.localeCompare(right.path));
-    const coverageKey = sha256(
-        jsonBytes({
-            algorithmVersion: recipeCorpusAlgorithmVersion,
-            dataset,
-            configuration,
-        })
-    );
+    const coverageKey = recipeCorpusCoverageKey(dataset, configuration);
     const body = manifestBody(
         coverageKey,
         dataset,
@@ -80,6 +74,17 @@ export function buildRecipeCorpusManifest(
         artifactSha256: sha256(jsonBytes(body)),
         ...body,
     };
+}
+
+export function recipeCorpusCoverageKey(
+    dataset: RecipeCorpusDatasetIdentity,
+    configuration: RecipeCorpusConfiguration
+): string {
+    return sha256(jsonBytes({
+        algorithmVersion: recipeCorpusAlgorithmVersion,
+        dataset,
+        configuration,
+    }));
 }
 
 export async function verifyRecipeCorpusArtifact(
@@ -110,12 +115,9 @@ export async function verifyRecipeCorpusArtifact(
     if (manifest.artifactSha256 !== expectedArtifactHash) {
         throw new Error('Recipe corpus manifest failed artifact identity verification');
     }
-    const expectedCoverageKey = sha256(
-        jsonBytes({
-            algorithmVersion: manifest.algorithmVersion,
-            dataset: manifest.dataset,
-            configuration: manifest.configuration,
-        })
+    const expectedCoverageKey = recipeCorpusCoverageKey(
+        manifest.dataset,
+        manifest.configuration
     );
     if (manifest.coverageKey !== expectedCoverageKey) {
         throw new Error('Recipe corpus manifest failed coverage-key verification');
@@ -263,8 +265,8 @@ function parseManifest(value: unknown): RecipeCorpusManifest {
     }
     const dataset = object(record.dataset, 'Recipe corpus dataset');
     const configuration = object(record.configuration, 'Recipe corpus configuration');
-    if (configuration.mode !== 'selective') {
-        throw new Error('Recipe corpus configuration must be selective');
+    if (configuration.mode !== 'selective' && configuration.mode !== 'exhaustive') {
+        throw new Error('Recipe corpus configuration has an unsupported mode');
     }
     const parsedConfiguration: RecipeCorpusConfiguration = {
         mode: configuration.mode,
@@ -292,6 +294,11 @@ function parseManifest(value: unknown): RecipeCorpusManifest {
         if (parsedConfiguration.forbiddenEffectIds.includes(effectId)) {
             throw new Error(`Recipe corpus effect ${JSON.stringify(effectId)} is contradictory`);
         }
+    }
+    if (parsedConfiguration.mode === 'exhaustive' &&
+        (parsedConfiguration.requiredEffectIds.length > 0 ||
+            parsedConfiguration.forbiddenEffectIds.length > 0)) {
+        throw new Error('Exhaustive recipe corpus configuration cannot filter effects');
     }
     const parsedDataset: RecipeCorpusDatasetIdentity = {
         gameVersion: string(dataset.gameVersion, 'dataset.gameVersion'),

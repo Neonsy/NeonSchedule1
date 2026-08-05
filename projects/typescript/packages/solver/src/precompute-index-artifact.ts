@@ -1,5 +1,6 @@
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -36,43 +37,111 @@ export async function writeRecipeCorpusIndexArtifact(
     const resolvedRoot = path.resolve(indexRoot);
     await mkdir(resolvedRoot, { recursive: true });
     const { index } = await buildRecipeCorpusIndex(corpusDirectory);
-    const lookupContent = Buffer.from(`${JSON.stringify(index)}\n`, 'utf8');
-    const manifest = buildManifest(index, lookupContent);
-    const manifestContent = Buffer.from(`${JSON.stringify(manifest)}\n`, 'utf8');
-    const staging = path.join(resolvedRoot, `.${manifest.artifactSha256}.${process.pid}.tmp`);
+    const staging = path.join(resolvedRoot, `.${process.pid}.${randomUUID()}.tmp`);
     if (await stat(staging).catch(() => null)) {
         throw new Error(`Recipe index staging directory already exists: ${staging}`);
     }
-    const finalDirectory = path.join(
-        resolvedRoot,
-        index.corpus.artifactSha256,
-        manifest.artifactSha256
-    );
     await mkdir(staging, { recursive: true });
     try {
-        await writeFile(path.join(staging, 'lookup.json'), lookupContent, { flag: 'wx' });
+        const lookupFile = await writeIndex(path.join(staging, 'lookup.json'), index);
+        const manifest = buildManifest(index, lookupFile);
+        verifyIndex(index, manifest);
+        const manifestContent = `${JSON.stringify(manifest)}\n`;
         await writeFile(path.join(staging, 'manifest.json'), manifestContent, { flag: 'wx' });
-        await verifyRecipeCorpusIndexArtifact(staging);
+        await verifyRecipeCorpusIndexFiles(staging, manifest);
+        const finalDirectory = path.join(
+            resolvedRoot,
+            index.corpus.artifactSha256,
+            manifest.artifactSha256
+        );
         await mkdir(path.dirname(finalDirectory), { recursive: true });
         if (await stat(finalDirectory).catch(() => null)) {
-            const existing = await verifyRecipeCorpusIndexArtifact(finalDirectory);
-            if (existing.manifest.artifactSha256 !== manifest.artifactSha256) {
-                throw new Error(`Existing recipe index has a different identity: ${finalDirectory}`);
-            }
+            await verifyRecipeCorpusIndexFiles(finalDirectory, manifest);
             await rm(staging, { recursive: true });
         } else {
             await rename(staging, finalDirectory);
         }
-        await verifyRecipeCorpusIndexArtifact(finalDirectory);
+        await verifyRecipeCorpusIndexFiles(finalDirectory, manifest);
         return {
             directory: finalDirectory,
             manifest,
-            byteLength: lookupContent.byteLength + manifestContent.byteLength,
+            byteLength: lookupFile.byteLength + Buffer.byteLength(manifestContent),
         };
     } catch (error) {
         await rm(staging, { recursive: true, force: true });
         throw error;
     }
+}
+
+async function writeIndex(
+    outputPath: string,
+    index: RecipeCorpusIndex
+): Promise<RecipeCorpusIndexManifest['file']> {
+    const output = await open(outputPath, 'wx');
+    const digest = createHash('sha256');
+    let byteLength = 0;
+    const write = async (content: string): Promise<void> => {
+        await output.writeFile(content, 'utf8');
+        digest.update(content);
+        byteLength += Buffer.byteLength(content);
+    };
+    try {
+        await write('{"schema":');
+        await write(JSON.stringify(index.schema));
+        await write(',"algorithmVersion":');
+        await write(JSON.stringify(index.algorithmVersion));
+        await write(',"corpus":');
+        await write(JSON.stringify(index.corpus));
+        await write(',"records":');
+        await writeArray(index.records, write);
+        await write(',"postings":{"products":');
+        await writePostings(index.postings.products, write);
+        await write(',"effects":');
+        await writePostings(index.postings.effects, write);
+        await write('},"rankings":{"productValue":');
+        await writeArray(index.rankings.productValue, write);
+        await write(',"netValue":');
+        await writeArray(index.rankings.netValue, write);
+        await write('},"totalCostOrder":');
+        await writeArray(index.totalCostOrder, write);
+        await write('}\n');
+    } finally {
+        await output.close();
+    }
+    return {
+        path: 'lookup.json',
+        sha256: digest.digest('hex'),
+        byteLength,
+    };
+}
+
+async function writePostings(
+    postings: Readonly<Record<string, readonly number[]>>,
+    write: (content: string) => Promise<void>
+): Promise<void> {
+    await write('{');
+    let first = true;
+    for (const [key, values] of Object.entries(postings)) {
+        if (!first) await write(',');
+        first = false;
+        await write(`${JSON.stringify(key)}:`);
+        await writeArray(values, write);
+    }
+    await write('}');
+}
+
+async function writeArray(
+    values: readonly unknown[],
+    write: (content: string) => Promise<void>
+): Promise<void> {
+    await write('[');
+    const chunkSize = 4_096;
+    for (let start = 0; start < values.length; start += chunkSize) {
+        if (start > 0) await write(',');
+        const chunk = JSON.stringify(values.slice(start, start + chunkSize));
+        await write(chunk.slice(1, -1));
+    }
+    await write(']');
 }
 
 export async function verifyRecipeCorpusIndexArtifact(
@@ -85,17 +154,7 @@ export async function verifyRecipeCorpusIndexArtifact(
     if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
         throw new Error(`Recipe index directory does not exist: ${resolvedDirectory}`);
     }
-    const manifest = parseManifest(
-        JSON.parse(await readFile(path.join(resolvedDirectory, 'manifest.json'), 'utf8'))
-    );
-    const expectedArtifactHash = sha256(jsonBytes(manifestBody(
-        manifest.corpus,
-        manifest.counts,
-        manifest.file
-    )));
-    if (manifest.artifactSha256 !== expectedArtifactHash) {
-        throw new Error('Recipe index manifest failed artifact identity verification');
-    }
+    const manifest = await readManifest(resolvedDirectory);
     const lookupContent = await readFile(path.join(resolvedDirectory, manifest.file.path));
     if (lookupContent.byteLength !== manifest.file.byteLength ||
         sha256(lookupContent) !== manifest.file.sha256) {
@@ -108,17 +167,12 @@ export async function verifyRecipeCorpusIndexArtifact(
 
 function buildManifest(
     index: RecipeCorpusIndex,
-    lookupContent: Uint8Array
+    file: RecipeCorpusIndexManifest['file']
 ): RecipeCorpusIndexManifest {
     const counts = {
         recipes: index.records.length,
         products: Object.keys(index.postings.products).length,
         effects: Object.keys(index.postings.effects).length,
-    };
-    const file = {
-        path: 'lookup.json' as const,
-        sha256: sha256(lookupContent),
-        byteLength: lookupContent.byteLength,
     };
     const body = manifestBody(index.corpus, counts, file);
     return {
@@ -126,6 +180,47 @@ function buildManifest(
         artifactSha256: sha256(jsonBytes(body)),
         ...body,
     };
+}
+
+async function verifyRecipeCorpusIndexFiles(
+    directory: string,
+    expected: RecipeCorpusIndexManifest
+): Promise<void> {
+    const resolvedDirectory = path.resolve(directory);
+    if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
+        throw new Error(`Recipe index directory does not exist: ${resolvedDirectory}`);
+    }
+    const manifest = await readManifest(resolvedDirectory);
+    if (manifest.artifactSha256 !== expected.artifactSha256) {
+        throw new Error(`Existing recipe index has a different identity: ${resolvedDirectory}`);
+    }
+    const lookupPath = path.join(resolvedDirectory, manifest.file.path);
+    const lookupStat = await stat(lookupPath).catch(() => null);
+    if (lookupStat?.size !== manifest.file.byteLength ||
+        await sha256File(lookupPath) !== manifest.file.sha256) {
+        throw new Error('Recipe index lookup file failed integrity verification');
+    }
+}
+
+async function readManifest(directory: string): Promise<RecipeCorpusIndexManifest> {
+    const manifest = parseManifest(
+        JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'))
+    );
+    const expectedArtifactHash = sha256(jsonBytes(manifestBody(
+        manifest.corpus,
+        manifest.counts,
+        manifest.file
+    )));
+    if (manifest.artifactSha256 !== expectedArtifactHash) {
+        throw new Error('Recipe index manifest failed artifact identity verification');
+    }
+    return manifest;
+}
+
+async function sha256File(filePath: string): Promise<string> {
+    const digest = createHash('sha256');
+    for await (const chunk of createReadStream(filePath)) digest.update(chunk);
+    return digest.digest('hex');
 }
 
 function manifestBody(
@@ -249,7 +344,7 @@ function jsonBytes(value: unknown): Buffer {
     return Buffer.from(JSON.stringify(value), 'utf8');
 }
 
-function sha256(content: Uint8Array): string {
+function sha256(content: string | Uint8Array): string {
     return createHash('sha256').update(content).digest('hex');
 }
 

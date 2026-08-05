@@ -1,6 +1,6 @@
 import {
-    compareRecipeEvaluations,
-    type RecipeEvaluation,
+    compareRecipeRankingKeys,
+    type RecipeRankingKey,
     type RecipeSearchObjective,
 } from '@neonschedule1/core';
 
@@ -37,7 +37,7 @@ export interface RecipeCorpusIndexRecord {
 
 interface IndexedRecipe {
     readonly ordinal: number;
-    readonly entry: RecipeCorpusEntry;
+    readonly key: RecipeRankingKey;
 }
 
 export async function buildRecipeCorpusIndex(
@@ -47,12 +47,28 @@ export async function buildRecipeCorpusIndex(
     const records: RecipeCorpusIndexRecord[] = [];
     const products = new Map<string, number[]>();
     const effects = new Map<string, number[]>();
+    const strings = new Map<string, string>();
+    const sequences = new Map<string, readonly string[]>();
+    const intern = (value: string): string => {
+        const existing = strings.get(value);
+        if (existing !== undefined) return existing;
+        strings.set(value, value);
+        return value;
+    };
+    const internSequence = (values: readonly string[]): readonly string[] => {
+        const key = JSON.stringify(values);
+        const existing = sequences.get(key);
+        if (existing !== undefined) return existing;
+        const sequence = values.map(intern);
+        sequences.set(key, sequence);
+        return sequence;
+    };
     const manifest = await verifyRecipeCorpusArtifact(
         corpusDirectory,
         (partition, file) => {
             partition.recipes.forEach((entry, recipeIndex) => {
                 const ordinal = records.length;
-                indexedRecipes.push({ ordinal, entry });
+                indexedRecipes.push({ ordinal, key: rankingKey(entry, intern, internSequence) });
                 records.push({
                     partitionPath: file.path,
                     recipeIndex,
@@ -63,6 +79,8 @@ export async function buildRecipeCorpusIndex(
             });
         }
     );
+    sequences.clear();
+    strings.clear();
     if (records.length !== manifest.counts.recipes) {
         throw new Error(
             `Indexed ${records.length} recipes, corpus declares ${manifest.counts.recipes}`
@@ -91,7 +109,7 @@ export async function buildRecipeCorpusIndex(
             totalCostOrder: [...indexedRecipes]
                 .sort(
                     (left, right) =>
-                        left.entry.costs.total - right.entry.costs.total ||
+                        records[left.ordinal]!.totalCost - records[right.ordinal]!.totalCost ||
                         left.ordinal - right.ordinal
                 )
                 .map((value) => value.ordinal),
@@ -106,27 +124,24 @@ function ranking(
     return [...recipes]
         .sort(
             (left, right) =>
-                compareRecipeEvaluations(
-                    evaluation(left.entry),
-                    evaluation(right.entry),
-                    objective
-                ) || left.ordinal - right.ordinal
+                compareRecipeRankingKeys(left.key, right.key, objective) ||
+                left.ordinal - right.ordinal
         )
         .map((value) => value.ordinal);
 }
 
-function evaluation(entry: RecipeCorpusEntry): RecipeEvaluation {
+function rankingKey(
+    entry: RecipeCorpusEntry,
+    intern: (value: string) => string,
+    internSequence: (values: readonly string[]) => readonly string[]
+): RecipeRankingKey {
     return {
-        productId: entry.productId,
-        ingredientIds: entry.ingredientIds,
-        effectIds: entry.effectIds,
+        productId: intern(entry.productId),
+        ingredientIds: internSequence(entry.ingredientIds),
+        effectIds: internSequence(entry.effectIds),
         productValue: entry.productValue,
         baseProductCost: entry.costs.baseProduct,
-        baseProductCostBasis: entry.costs.baseProductBasis,
         ingredientCost: entry.costs.ingredients,
-        totalCost: entry.costs.total,
-        netValue: entry.netValue,
-        ingredientCount: entry.depth,
     };
 }
 

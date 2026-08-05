@@ -2,22 +2,33 @@ import { performance } from 'node:perf_hooks';
 
 import {
     compareRecipeEvaluations,
+    CustomerRecipeSearch,
     MixingEngine,
     RecipeOutcomeEnumerator,
     ReverseRecipeSearch,
+    type Customer,
+    type CustomerQuality,
+    type CustomerRecommendation,
     type RecipeEvaluation,
     type RecipeSearchObjective,
 } from '@neonschedule1/core';
 
 import type { SolverDataset } from '#solver/dataset';
 import {
+    CustomerCorpusRecommendationLookup,
+    type CustomerCorpusRecommendationQuery,
+} from '#solver/precompute-customer';
+import {
     RecipeCorpusLookup,
     type RecipeCorpusQuery,
 } from '#solver/precompute-query';
-import type { RecipeCorpusEntry } from '#solver/precompute';
+import type {
+    RecipeCorpusConfiguration,
+    RecipeCorpusEntry,
+} from '#solver/precompute';
 
 export interface RecipeIndexVerificationReport {
-    readonly schema: 'neonschedule1-recipe-index-verification-1';
+    readonly schema: 'neonschedule1-recipe-index-verification-2';
     readonly createdAt: string;
     readonly dataset: {
         readonly gameVersion: string;
@@ -28,9 +39,11 @@ export interface RecipeIndexVerificationReport {
     readonly indexArtifactSha256: string;
     readonly configuration: {
         readonly limit: number;
-        readonly caseCount: number;
+        readonly recipeCaseCount: number;
+        readonly customerCaseCount: number;
     };
-    readonly cases: readonly RecipeIndexVerificationCase[];
+    readonly recipeCases: readonly RecipeIndexVerificationCase[];
+    readonly customerCases: readonly CustomerIndexVerificationCase[];
 }
 
 export interface RecipeIndexVerificationCase {
@@ -43,6 +56,20 @@ export interface RecipeIndexVerificationCase {
     readonly durationMs: number;
 }
 
+export interface CustomerIndexVerificationCase {
+    readonly id: string;
+    readonly oracle: 'customer-recipe-search';
+    readonly customerId: string;
+    readonly quality: CustomerQuality;
+    readonly quantity: number;
+    readonly priceMultiplier: number;
+    readonly maximumProductionCost: number;
+    readonly relationship: number;
+    readonly resultCount: number;
+    readonly evaluatedCandidateCount: number;
+    readonly durationMs: number;
+}
+
 interface VerificationDefinition {
     readonly id: string;
     readonly oracle: RecipeIndexVerificationCase['oracle'];
@@ -50,6 +77,16 @@ interface VerificationDefinition {
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
     readonly maximumTotalCost?: number;
+}
+
+interface CustomerVerificationDefinition {
+    readonly id: string;
+    readonly customer: Customer;
+    readonly quality: CustomerQuality;
+    readonly quantity: number;
+    readonly priceMultiplier: number;
+    readonly maximumProductionCost: number;
+    readonly relationship: number;
 }
 
 export async function runRecipeIndexVerification(
@@ -60,6 +97,11 @@ export async function runRecipeIndexVerification(
         completed: number,
         total: number,
         result: RecipeIndexVerificationCase
+    ) => void = () => undefined,
+    onCustomerCaseCompleted: (
+        completed: number,
+        total: number,
+        result: CustomerIndexVerificationCase
     ) => void = () => undefined
 ): Promise<RecipeIndexVerificationReport> {
     if (!Number.isSafeInteger(limit) || limit < 1) {
@@ -93,7 +135,7 @@ export async function runRecipeIndexVerification(
         maxStates: corpus.configuration.maxStates,
     });
     const definitions = verificationDefinitions(corpus.configuration.productIds, exhaustive);
-    const cases: RecipeIndexVerificationCase[] = [];
+    const recipeCases: RecipeIndexVerificationCase[] = [];
 
     for (const definition of definitions) {
         for (const objective of ['productValue', 'netValue'] as const) {
@@ -132,13 +174,60 @@ export async function runRecipeIndexVerification(
                 examinedRankingEntries: actual.evidence.examinedRankingEntries,
                 durationMs,
             };
-            cases.push(result);
-            onCaseCompleted(cases.length, definitions.length * 2, result);
+            recipeCases.push(result);
+            onCaseCompleted(recipeCases.length, definitions.length * 2, result);
         }
     }
 
+    const customerLookup = new CustomerCorpusRecommendationLookup(
+        lookup,
+        dataset.customerCatalog
+    );
+    const customerSearch = new CustomerRecipeSearch(
+        engine,
+        itemsById,
+        dataset.customerCatalog,
+        { maxStates: corpus.configuration.maxStates }
+    );
+    const customerDefinitions = customerVerificationDefinitions(dataset, exhaustive);
+    const customerCases: CustomerIndexVerificationCase[] = [];
+    for (const definition of customerDefinitions) {
+        const input = customerQuery(definition, corpus.configuration, limit);
+        const startedAt = performance.now();
+        const actual = await customerLookup.recommend(input);
+        const durationMs = performance.now() - startedAt;
+        const expected = customerSearch.search({
+            ...input,
+            productIds: corpus.configuration.productIds,
+            availableIngredientIds: corpus.configuration.ingredientIds,
+            maxIngredients: corpus.configuration.maxIngredients,
+            requiredEffectIds: corpus.configuration.requiredEffectIds,
+            forbiddenEffectIds: corpus.configuration.forbiddenEffectIds,
+        });
+        assertSameRecommendations(
+            definition.id,
+            expected.recommendations,
+            actual.recommendations
+        );
+        const result: CustomerIndexVerificationCase = {
+            id: definition.id,
+            oracle: 'customer-recipe-search',
+            customerId: definition.customer.id,
+            quality: definition.quality,
+            quantity: definition.quantity,
+            priceMultiplier: definition.priceMultiplier,
+            maximumProductionCost: definition.maximumProductionCost,
+            relationship: definition.relationship,
+            resultCount: actual.recommendations.length,
+            evaluatedCandidateCount: actual.evidence.evaluatedCandidateCount,
+            durationMs,
+        };
+        customerCases.push(result);
+        onCustomerCaseCompleted(customerCases.length, customerDefinitions.length, result);
+    }
+
     return {
-        schema: 'neonschedule1-recipe-index-verification-1',
+        schema: 'neonschedule1-recipe-index-verification-2',
         createdAt: new Date().toISOString(),
         dataset: {
             gameVersion: dataset.manifest.gameVersion,
@@ -147,8 +236,13 @@ export async function runRecipeIndexVerification(
         },
         corpusArtifactSha256: corpus.artifactSha256,
         indexArtifactSha256: lookup.indexManifest.artifactSha256,
-        configuration: { limit, caseCount: cases.length },
-        cases,
+        configuration: {
+            limit,
+            recipeCaseCount: recipeCases.length,
+            customerCaseCount: customerCases.length,
+        },
+        recipeCases,
+        customerCases,
     };
 }
 
@@ -185,6 +279,81 @@ function verificationDefinitions(
         ...forbidden,
         ...budgets,
     ];
+}
+
+function customerVerificationDefinitions(
+    dataset: SolverDataset,
+    exhaustive: readonly RecipeEvaluation[]
+): CustomerVerificationDefinition[] {
+    if (dataset.customers.length === 0) {
+        throw new Error('Customer corpus verification requires at least one customer');
+    }
+    if (dataset.customerCatalog.qualityTiers.length === 0) {
+        throw new Error('Customer corpus verification requires at least one quality tier');
+    }
+    if (exhaustive.length === 0) {
+        throw new Error('Customer corpus verification requires at least one recipe');
+    }
+    const customers = selectEvenly(
+        [...dataset.customers].sort(
+            (left, right) =>
+                averageSpend(left) - averageSpend(right) || left.id.localeCompare(right.id)
+        ),
+        Math.min(3, dataset.customers.length)
+    );
+    const qualities = selectEvenly(
+        [...dataset.customerCatalog.qualityTiers].sort(
+            (left, right) => left.value - right.value || left.name.localeCompare(right.name)
+        ),
+        customers.length
+    );
+    const costs = selectEvenly(
+        [...new Set(exhaustive.map((recipe) => recipe.totalCost))]
+            .sort((left, right) => left - right),
+        customers.length
+    );
+    const maximumQuantity = dataset.customerCatalog.constants.maximumOrderQuantityPerProduct;
+    const maximumRelationship = dataset.customerCatalog.constants.maximumRelationship;
+    return customers.map((customer, index) => {
+        const ratio = customers.length === 1 ? 0 : index / (customers.length - 1);
+        const quantity = 1 + Math.round((maximumQuantity - 1) * ratio);
+        return {
+            id: `customer:${customer.id}:scenario-${index + 1}`,
+            customer,
+            quality: qualities[index]!.name,
+            quantity,
+            priceMultiplier: 0.8 + ratio * 0.4,
+            maximumProductionCost: costs[index]! * quantity,
+            relationship: maximumRelationship * ratio,
+        };
+    });
+}
+
+function customerQuery(
+    definition: CustomerVerificationDefinition,
+    configuration: RecipeCorpusConfiguration,
+    limit: number
+): CustomerCorpusRecommendationQuery {
+    return {
+        productIds: configuration.productIds,
+        requiredEffectIds: configuration.requiredEffectIds,
+        forbiddenEffectIds: configuration.forbiddenEffectIds,
+        profile: definition.customer,
+        state: {
+            addiction: definition.customer.baseAddiction,
+            relationship: definition.relationship,
+            orderLimitMultiplier: 1,
+        },
+        quality: definition.quality,
+        quantity: definition.quantity,
+        priceMultiplier: definition.priceMultiplier,
+        maximumProductionCost: definition.maximumProductionCost,
+        limit,
+    };
+}
+
+function averageSpend(customer: Customer): number {
+    return (customer.weeklySpend.minimum + customer.weeklySpend.maximum) / 2;
 }
 
 function queryFor(
@@ -255,6 +424,21 @@ function comparableEntry(recipe: RecipeCorpusEntry): unknown {
     };
 }
 
+function comparableRecommendation(recommendation: CustomerRecommendation): unknown {
+    return {
+        recipe: comparableEvaluation(recommendation.recipe),
+        drugTypes: recommendation.drugTypes,
+        quality: recommendation.quality,
+        quantity: recommendation.quantity,
+        askingPrice: recommendation.askingPrice,
+        productionCost: recommendation.productionCost,
+        grossProfit: recommendation.grossProfit,
+        acceptanceChance: recommendation.acceptanceChance,
+        expectedRevenue: recommendation.expectedRevenue,
+        expectedProfit: recommendation.expectedProfit,
+    };
+}
+
 function mergeEffects(left: readonly string[], right: readonly string[]): string[] {
     return [...new Set([...left, ...right])].sort();
 }
@@ -271,6 +455,26 @@ function assertSameRecipes(id: string, expected: readonly unknown[], actual: rea
         );
     }
     throw new Error(`Recipe index verification ${id} differs`);
+}
+
+function assertSameRecommendations(
+    id: string,
+    expected: readonly CustomerRecommendation[],
+    actual: readonly CustomerRecommendation[]
+): void {
+    const expectedValues = expected.map(comparableRecommendation);
+    const actualValues = actual.map(comparableRecommendation);
+    if (JSON.stringify(expectedValues) === JSON.stringify(actualValues)) return;
+    const difference = Math.max(expectedValues.length, actualValues.length);
+    for (let index = 0; index < difference; index++) {
+        if (JSON.stringify(expectedValues[index]) === JSON.stringify(actualValues[index])) continue;
+        throw new Error(
+            `Customer corpus verification ${id} differs at result ${index + 1}\n` +
+            `Expected: ${JSON.stringify(expectedValues[index] ?? null)}\n` +
+            `Actual: ${JSON.stringify(actualValues[index] ?? null)}`
+        );
+    }
+    throw new Error(`Customer corpus verification ${id} differs`);
 }
 
 function selectEvenly<T>(values: readonly T[], count: number): T[] {

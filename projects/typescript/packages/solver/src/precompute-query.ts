@@ -16,13 +16,28 @@ import type {
 } from '#solver/precompute-index';
 import type { RecipeCorpusEntry, RecipeCorpusPartition } from '#solver/precompute';
 
-export interface RecipeCorpusQuery {
+export interface RecipeCorpusFilter {
     readonly productIds?: readonly string[];
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
     readonly maximumTotalCost?: number;
+}
+
+export interface RecipeCorpusQuery extends RecipeCorpusFilter {
     readonly objective?: RecipeSearchObjective;
     readonly limit: number;
+}
+
+export interface RecipeCorpusSelectionResult {
+    readonly recipes: readonly RecipeCorpusEntry[];
+    readonly evidence: {
+        readonly source: 'precomputed';
+        readonly proofStatus: 'exact';
+        readonly corpusArtifactSha256: string;
+        readonly indexArtifactSha256: string;
+        readonly coverageKey: string;
+        readonly candidateCount: number;
+    };
 }
 
 export interface RecipeCorpusQueryResult {
@@ -101,41 +116,7 @@ export class RecipeCorpusLookup {
     async query(input: RecipeCorpusQuery): Promise<RecipeCorpusQueryResult> {
         validateQuery(input);
         const objective = input.objective ?? 'productValue';
-        const products = unique(input.productIds ?? [], 'product');
-        const requiredEffects = unique(input.requiredEffectIds ?? [], 'required effect');
-        const forbiddenEffects = unique(input.forbiddenEffectIds ?? [], 'forbidden effect');
-        for (const effectId of requiredEffects) {
-            if (forbiddenEffects.includes(effectId)) {
-                throw new Error(`Effect ${JSON.stringify(effectId)} cannot be required and forbidden`);
-            }
-        }
-
-        let allowed: Set<number> | null = null;
-        if (products.length > 0) {
-            allowed = new Set(
-                products.flatMap((productId) =>
-                    this.#index.postings.products[productId] ?? []
-                )
-            );
-        }
-        const requiredPostings = requiredEffects
-            .map((effectId) => this.#index.postings.effects[effectId] ?? [])
-            .sort((left, right) => left.length - right.length);
-        for (const posting of requiredPostings) {
-            allowed = intersect(allowed, posting);
-        }
-        const forbidden = new Set(
-            forbiddenEffects.flatMap((effectId) =>
-                this.#index.postings.effects[effectId] ?? []
-            )
-        );
-        const candidateCount = countCandidates(
-            allowed,
-            forbidden,
-            input.maximumTotalCost,
-            this.#index.records,
-            this.#index.totalCostOrder
-        );
+        const { allowed, forbidden, candidateCount } = filterState(input, this.#index);
 
         let examinedRankingEntries: number;
         let selectedOrdinals: readonly number[];
@@ -187,6 +168,35 @@ export class RecipeCorpusLookup {
                 coverageKey: this.#corpusManifest.coverageKey,
                 candidateCount,
                 examinedRankingEntries,
+            },
+        };
+    }
+
+    async select(input: RecipeCorpusFilter): Promise<RecipeCorpusSelectionResult> {
+        const { allowed, forbidden, candidateCount } = filterState(input, this.#index);
+        const ordinals = candidateOrdinals(
+            allowed,
+            forbidden,
+            input.maximumTotalCost,
+            this.#index.records,
+            this.#index.totalCostOrder
+        );
+        const recipes: RecipeCorpusEntry[] = [];
+        for (const ordinal of ordinals) {
+            recipes.push(await this.#recipe(this.#index.records[ordinal]!));
+        }
+        if (recipes.length !== candidateCount) {
+            throw new Error('Recipe corpus selection differs from its index count');
+        }
+        return {
+            recipes,
+            evidence: {
+                source: 'precomputed',
+                proofStatus: 'exact',
+                corpusArtifactSha256: this.#corpusManifest.artifactSha256,
+                indexArtifactSha256: this.#indexManifest.artifactSha256,
+                coverageKey: this.#corpusManifest.coverageKey,
+                candidateCount,
             },
         };
     }
@@ -296,6 +306,75 @@ function countCandidates(
     return count;
 }
 
+function candidateOrdinals(
+    allowed: ReadonlySet<number> | null,
+    forbidden: ReadonlySet<number>,
+    maximumTotalCost: number | undefined,
+    records: readonly RecipeCorpusIndexRecord[],
+    totalCostOrder: readonly number[]
+): number[] {
+    if (allowed !== null) {
+        return [...allowed].filter(
+            (ordinal) =>
+                !forbidden.has(ordinal) &&
+                (maximumTotalCost === undefined ||
+                    records[ordinal]!.totalCost <= maximumTotalCost)
+        );
+    }
+    if (maximumTotalCost === undefined) {
+        return records.flatMap((_, ordinal) => forbidden.has(ordinal) ? [] : [ordinal]);
+    }
+    const ordinals: number[] = [];
+    for (const ordinal of totalCostOrder) {
+        if (records[ordinal]!.totalCost > maximumTotalCost) break;
+        if (!forbidden.has(ordinal)) ordinals.push(ordinal);
+    }
+    return ordinals;
+}
+
+interface FilterState {
+    readonly allowed: Set<number> | null;
+    readonly forbidden: ReadonlySet<number>;
+    readonly candidateCount: number;
+}
+
+function filterState(input: RecipeCorpusFilter, index: RecipeCorpusIndex): FilterState {
+    validateFilter(input);
+    const products = unique(input.productIds ?? [], 'product');
+    const requiredEffects = unique(input.requiredEffectIds ?? [], 'required effect');
+    const forbiddenEffects = unique(input.forbiddenEffectIds ?? [], 'forbidden effect');
+    for (const effectId of requiredEffects) {
+        if (forbiddenEffects.includes(effectId)) {
+            throw new Error(`Effect ${JSON.stringify(effectId)} cannot be required and forbidden`);
+        }
+    }
+
+    let allowed: Set<number> | null = null;
+    if (products.length > 0) {
+        allowed = new Set(
+            products.flatMap((productId) => index.postings.products[productId] ?? [])
+        );
+    }
+    const requiredPostings = requiredEffects
+        .map((effectId) => index.postings.effects[effectId] ?? [])
+        .sort((left, right) => left.length - right.length);
+    for (const posting of requiredPostings) allowed = intersect(allowed, posting);
+    const forbidden = new Set(
+        forbiddenEffects.flatMap((effectId) => index.postings.effects[effectId] ?? [])
+    );
+    return {
+        allowed,
+        forbidden,
+        candidateCount: countCandidates(
+            allowed,
+            forbidden,
+            input.maximumTotalCost,
+            index.records,
+            index.totalCostOrder
+        ),
+    };
+}
+
 function rankPositions(ranking: readonly number[]): Uint32Array {
     const positions = new Uint32Array(ranking.length);
     ranking.forEach((ordinal, position) => {
@@ -343,6 +422,7 @@ function unique(values: readonly string[], label: string): string[] {
 }
 
 function validateQuery(input: RecipeCorpusQuery): void {
+    validateFilter(input);
     if (!Number.isSafeInteger(input.limit) || input.limit < 1) {
         throw new Error('Recipe corpus query limit must be a positive safe integer');
     }
@@ -350,6 +430,9 @@ function validateQuery(input: RecipeCorpusQuery): void {
         input.objective !== 'productValue' && input.objective !== 'netValue') {
         throw new Error(`Unknown recipe corpus objective ${JSON.stringify(input.objective)}`);
     }
+}
+
+function validateFilter(input: RecipeCorpusFilter): void {
     if (input.maximumTotalCost !== undefined &&
         (!Number.isFinite(input.maximumTotalCost) || input.maximumTotalCost < 0)) {
         throw new Error('Recipe corpus maximumTotalCost must be a non-negative number');

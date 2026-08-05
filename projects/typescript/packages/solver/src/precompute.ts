@@ -10,6 +10,8 @@ import type { SolverDataset } from '#solver/dataset';
 
 export const recipeCorpusAlgorithmVersion = '1';
 
+export type RecipeCorpusMode = 'exhaustive' | 'selective';
+
 export interface SelectiveCorpusOptions {
     readonly productIds?: readonly string[];
     readonly ingredientIds?: readonly string[];
@@ -19,8 +21,17 @@ export interface SelectiveCorpusOptions {
     readonly forbiddenEffectIds: readonly string[];
 }
 
+export interface ExhaustiveCorpusOptions {
+    readonly maxIngredients: number;
+    readonly maxStates: number;
+}
+
+export type RecipeCorpusOptions =
+    | ({ readonly mode: 'exhaustive' } & ExhaustiveCorpusOptions)
+    | ({ readonly mode: 'selective' } & SelectiveCorpusOptions);
+
 export interface RecipeCorpusConfiguration {
-    readonly mode: 'selective';
+    readonly mode: RecipeCorpusMode;
     readonly productIds: readonly string[];
     readonly ingredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -40,7 +51,7 @@ export interface RecipeCorpusPartition {
     readonly algorithmVersion: string;
     readonly dataset: RecipeCorpusDatasetIdentity;
     readonly coverage: {
-        readonly mode: 'selective';
+        readonly mode: RecipeCorpusMode;
         readonly semantics: 'cheapest-representative-per-ordered-effect-state';
         readonly productId: string;
         readonly drugType: string;
@@ -85,15 +96,36 @@ export function defaultSelectiveCorpusOptions(): SelectiveCorpusOptions {
     };
 }
 
+export function defaultExhaustiveCorpusOptions(): ExhaustiveCorpusOptions {
+    return {
+        maxIngredients: 3,
+        maxStates: 100_000,
+    };
+}
+
 export function planSelectiveCorpus(
     dataset: SolverDataset,
     options: SelectiveCorpusOptions
+): RecipeCorpusPlan {
+    return planRecipeCorpus(dataset, { mode: 'selective', ...options });
+}
+
+export function planExhaustiveCorpus(
+    dataset: SolverDataset,
+    options: ExhaustiveCorpusOptions
+): RecipeCorpusPlan {
+    return planRecipeCorpus(dataset, { mode: 'exhaustive', ...options });
+}
+
+export function planRecipeCorpus(
+    dataset: SolverDataset,
+    options: RecipeCorpusOptions
 ): RecipeCorpusPlan {
     requireInteger(options.maxIngredients, 'maxIngredients', 0);
     requireInteger(options.maxStates, 'maxStates', 1);
     const itemsById = new Map(dataset.items.map((item) => [item.id, item]));
     const productIds = selection(
-        options.productIds,
+        options.mode === 'selective' ? options.productIds : undefined,
         dataset.items
             .filter((item) => item.product !== null && !item.isRuntimeOnly)
             .map((item) => item.id),
@@ -102,7 +134,7 @@ export function planSelectiveCorpus(
         'product'
     );
     const ingredientIds = selection(
-        options.ingredientIds,
+        options.mode === 'selective' ? options.ingredientIds : undefined,
         dataset.items
             .filter(
                 (item) =>
@@ -120,12 +152,12 @@ export function planSelectiveCorpus(
     );
     const effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
     const requiredEffectIds = effectSelection(
-        options.requiredEffectIds,
+        options.mode === 'selective' ? options.requiredEffectIds : [],
         effectsById,
         'required'
     );
     const forbiddenEffectIds = effectSelection(
-        options.forbiddenEffectIds,
+        options.mode === 'selective' ? options.forbiddenEffectIds : [],
         effectsById,
         'forbidden'
     );
@@ -138,7 +170,7 @@ export function planSelectiveCorpus(
     return {
         dataset,
         configuration: {
-            mode: 'selective',
+            mode: options.mode,
             productIds,
             ingredientIds,
             maxIngredients: options.maxIngredients,
@@ -157,7 +189,19 @@ export function planSelectiveCorpus(
 export function* generateRecipeCorpusPartitions(
     plan: RecipeCorpusPlan
 ): Generator<RecipeCorpusPartition> {
+    for (const productId of plan.configuration.productIds) {
+        yield* generateRecipeCorpusProductPartitions(plan, productId);
+    }
+}
+
+export function* generateRecipeCorpusProductPartitions(
+    plan: RecipeCorpusPlan,
+    productId: string
+): Generator<RecipeCorpusPartition> {
     const { dataset, configuration } = plan;
+    if (!configuration.productIds.includes(productId)) {
+        throw new Error(`Product ${JSON.stringify(productId)} is outside corpus coverage`);
+    }
     const itemsById = new Map(dataset.items.map((item) => [item.id, item]));
     const effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
     const engine = new MixingEngine(dataset.mixingRules, effectsById);
@@ -166,45 +210,43 @@ export function* generateRecipeCorpusPartitions(
     });
     const datasetIdentity = identity(dataset);
 
-    for (const productId of configuration.productIds) {
-        const product = itemsById.get(productId)?.product;
-        if (product === null || product === undefined) {
-            throw new Error(`Corpus product ${JSON.stringify(productId)} is unavailable`);
-        }
-        const result = enumerator.enumerateWithEvidence({
-            productId,
-            availableIngredientIds: configuration.ingredientIds,
-            maxIngredients: configuration.maxIngredients,
-            requiredEffectIds: configuration.requiredEffectIds,
-            forbiddenEffectIds: configuration.forbiddenEffectIds,
-        });
-        const byDepth = Array.from(
-            { length: configuration.maxIngredients + 1 },
-            () => [] as RecipeCorpusEntry[]
-        );
-        for (const recipe of result.recipes) {
-            byDepth[recipe.ingredientCount]!.push(entry(recipe, product.drugType));
-        }
-        for (let resultDepth = 0; resultDepth <= configuration.maxIngredients; resultDepth++) {
-            yield {
-                schema: 'neonschedule1-recipe-corpus-partition-1',
-                algorithmVersion: recipeCorpusAlgorithmVersion,
-                dataset: datasetIdentity,
-                coverage: {
-                    mode: 'selective',
-                    semantics: 'cheapest-representative-per-ordered-effect-state',
-                    productId,
-                    drugType: product.drugType,
-                    resultDepth,
-                    maxIngredients: configuration.maxIngredients,
-                    ingredientIds: configuration.ingredientIds,
-                    requiredEffectIds: configuration.requiredEffectIds,
-                    forbiddenEffectIds: configuration.forbiddenEffectIds,
-                },
-                proof: result.evidence,
-                recipes: byDepth[resultDepth]!,
-            };
-        }
+    const product = itemsById.get(productId)?.product;
+    if (product === null || product === undefined) {
+        throw new Error(`Corpus product ${JSON.stringify(productId)} is unavailable`);
+    }
+    const result = enumerator.enumerateWithEvidence({
+        productId,
+        availableIngredientIds: configuration.ingredientIds,
+        maxIngredients: configuration.maxIngredients,
+        requiredEffectIds: configuration.requiredEffectIds,
+        forbiddenEffectIds: configuration.forbiddenEffectIds,
+    });
+    const byDepth = Array.from(
+        { length: configuration.maxIngredients + 1 },
+        () => [] as RecipeCorpusEntry[]
+    );
+    for (const recipe of result.recipes) {
+        byDepth[recipe.ingredientCount]!.push(entry(recipe, product.drugType));
+    }
+    for (let resultDepth = 0; resultDepth <= configuration.maxIngredients; resultDepth++) {
+        yield {
+            schema: 'neonschedule1-recipe-corpus-partition-1',
+            algorithmVersion: recipeCorpusAlgorithmVersion,
+            dataset: datasetIdentity,
+            coverage: {
+                mode: configuration.mode,
+                semantics: 'cheapest-representative-per-ordered-effect-state',
+                productId,
+                drugType: product.drugType,
+                resultDepth,
+                maxIngredients: configuration.maxIngredients,
+                ingredientIds: configuration.ingredientIds,
+                requiredEffectIds: configuration.requiredEffectIds,
+                forbiddenEffectIds: configuration.forbiddenEffectIds,
+            },
+            proof: result.evidence,
+            recipes: byDepth[resultDepth]!,
+        };
     }
 }
 
@@ -217,8 +259,12 @@ export function identity(dataset: SolverDataset): RecipeCorpusDatasetIdentity {
 }
 
 export function partitionPath(partition: RecipeCorpusPartition): string {
-    const productKey = stableId(partition.coverage.productId);
+    const productKey = recipeCorpusProductKey(partition.coverage.productId);
     return `recipes/product-${productKey}/depth-${partition.coverage.resultDepth}.json`;
+}
+
+export function recipeCorpusProductKey(productId: string): string {
+    return Buffer.from(productId, 'utf8').toString('base64url');
 }
 
 function entry(recipe: RecipeEvaluation, drugType: string): RecipeCorpusEntry {
@@ -290,10 +336,6 @@ function estimateOrderedSequences(
         atDepth *= ingredients;
     }
     return BigInt(productCount) * perProduct;
-}
-
-function stableId(value: string): string {
-    return Buffer.from(value, 'utf8').toString('base64url');
 }
 
 function requireInteger(value: number, name: string, minimum: number): void {

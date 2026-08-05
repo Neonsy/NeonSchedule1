@@ -2,6 +2,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type {
+    CustomerCatalog,
+    CustomerOfferProfile,
+    Effect,
+    Item,
+    MixingRules,
+} from '@neonschedule1/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -10,11 +17,16 @@ import {
     verifyRecipeCorpusArtifact,
 } from '#solver/precompute-artifact';
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
+import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
+import { writeRecipeCorpusArtifact } from '#solver/precompute-run';
+import type { SolverDataset } from '#solver/dataset';
 import {
     partitionPath,
+    planSelectiveCorpus,
     type RecipeCorpusConfiguration,
     type RecipeCorpusDatasetIdentity,
+    type RecipeCorpusMode,
     type RecipeCorpusPartition,
 } from '#solver/precompute';
 
@@ -52,6 +64,53 @@ describe('recipe corpus artifact', () => {
         );
     });
 
+    it('records exhaustive coverage as a distinct artifact identity', async () => {
+        const selective = await writeArtifact('selective');
+        const exhaustive = await writeArtifact('exhaustive');
+
+        const verified = await verifyRecipeCorpusArtifact(exhaustive.directory);
+
+        expect(verified.configuration.mode).toBe('exhaustive');
+        expect(verified.artifactSha256).not.toBe(selective.artifactSha256);
+    });
+
+    it('resumes completed products without changing artifact identity', async () => {
+        const interruptedRoot = await temporaryDirectory('neonschedule1-resume-');
+        const cleanRoot = await temporaryDirectory('neonschedule1-clean-');
+        const plan = planSelectiveCorpus(solverDataset(), {
+            productIds: ['product-a', 'product-b'],
+            ingredientIds: ['ingredient'],
+            maxIngredients: 1,
+            maxStates: 100,
+            requiredEffectIds: [],
+            forbiddenEffectIds: [],
+        });
+
+        await expect(
+            writeRecipeCorpusArtifact(interruptedRoot, plan, ({ completedProducts }) => {
+                if (completedProducts === 1) throw new Error('controlled interruption');
+            })
+        ).rejects.toThrow('controlled interruption');
+
+        const resumed = await writeRecipeCorpusArtifact(interruptedRoot, plan);
+        const clean = await writeRecipeCorpusArtifact(cleanRoot, plan);
+        const resumedIndex = await writeRecipeCorpusIndexArtifact(
+            path.join(interruptedRoot, 'indexes'),
+            resumed.directory
+        );
+        const cleanIndex = await writeRecipeCorpusIndexArtifact(
+            path.join(cleanRoot, 'indexes'),
+            clean.directory
+        );
+
+        expect(resumed.resumedProducts).toBe(1);
+        expect(resumed.generatedProducts).toBe(1);
+        expect(resumed.manifest.artifactSha256).toBe(clean.manifest.artifactSha256);
+        expect(resumedIndex.manifest.artifactSha256).toBe(
+            cleanIndex.manifest.artifactSha256
+        );
+    });
+
     it('queries indexed effects and costs without scanning corpus files', async () => {
         const artifact = await writeArtifact();
         const indexRoot = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-index-'));
@@ -67,16 +126,38 @@ describe('recipe corpus artifact', () => {
         expect(mixed.evidence.examinedRankingEntries).toBe(1);
         expect(affordable.evidence.examinedRankingEntries).toBe(1);
     });
+
+    it('ranks affordable customer recommendations from corpus candidates', async () => {
+        const artifact = await writeArtifact();
+        const indexRoot = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-index-'));
+        temporaryDirectories.push(indexRoot);
+        const indexed = await writeRecipeCorpusIndexArtifact(indexRoot, artifact.directory);
+        const recipes = await RecipeCorpusLookup.load(artifact.directory, indexed.directory);
+        const customers = new CustomerCorpusRecommendationLookup(recipes, customerCatalog());
+
+        const result = await customers.recommend({
+            profile: customerProfile,
+            state: { addiction: 0.2, relationship: 2, orderLimitMultiplier: 1 },
+            quality: 'Standard',
+            quantity: 1,
+            priceMultiplier: 1,
+            maximumProductionCost: 5,
+            limit: 5,
+        });
+
+        expect(result.recommendations.map(({ recipe }) => recipe.ingredientIds)).toEqual([[]]);
+        expect(result.evidence.evaluatedCandidateCount).toBe(1);
+    });
 });
 
-async function writeArtifact(): Promise<{
+async function writeArtifact(mode: RecipeCorpusMode = 'selective'): Promise<{
     readonly directory: string;
     readonly artifactSha256: string;
     readonly partitionPaths: readonly string[];
 }> {
     const directory = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-'));
     temporaryDirectories.push(directory);
-    const partitions = [partition(0), partition(1)];
+    const partitions = [partition(0, mode), partition(1, mode)];
     const files = [];
     const partitionPaths: string[] = [];
     for (const value of partitions) {
@@ -88,7 +169,12 @@ async function writeArtifact(): Promise<{
         partitionPaths.push(output);
         files.push(describeCorpusFile(relativePath, content, value));
     }
-    const manifest = buildRecipeCorpusManifest(dataset, configuration, '2', files);
+    const manifest = buildRecipeCorpusManifest(
+        dataset,
+        { ...configuration, mode },
+        '2',
+        files
+    );
     await writeFile(
         path.join(directory, 'manifest.json'),
         `${JSON.stringify(manifest)}\n`,
@@ -97,7 +183,13 @@ async function writeArtifact(): Promise<{
     return { directory, artifactSha256: manifest.artifactSha256, partitionPaths };
 }
 
-function partition(depth: number): RecipeCorpusPartition {
+async function temporaryDirectory(prefix: string): Promise<string> {
+    const directory = await mkdtemp(path.join(tmpdir(), prefix));
+    temporaryDirectories.push(directory);
+    return directory;
+}
+
+function partition(depth: number, mode: RecipeCorpusMode): RecipeCorpusPartition {
     const ingredientIds = depth === 0 ? [] : ['ingredient'];
     const effectIds = depth === 0 ? ['base-effect'] : ['mixed-effect'];
     const ingredientCost = depth * 2;
@@ -107,7 +199,7 @@ function partition(depth: number): RecipeCorpusPartition {
         algorithmVersion: '1',
         dataset,
         coverage: {
-            mode: 'selective',
+            mode,
             semantics: 'cheapest-representative-per-ordered-effect-state',
             productId: 'product',
             drugType: 'TestDrug',
@@ -159,3 +251,87 @@ const configuration: RecipeCorpusConfiguration = {
     requiredEffectIds: [],
     forbiddenEffectIds: [],
 };
+
+const customerProfile: CustomerOfferProfile = {
+    standards: 'Moderate',
+    preferredEffectIds: ['base-effect'],
+    drugAffinities: [{ drugType: 'TestDrug', affinity: 1 }],
+    weeklySpend: { minimum: 100, maximum: 200 },
+    weeklyOrders: { minimum: 1, maximum: 2 },
+};
+
+function customerCatalog(): Pick<CustomerCatalog, 'constants' | 'qualityTiers'> {
+    return {
+        constants: {
+            affinityMaxEffect: 0.3,
+            propertyMaxEffect: 0.4,
+            qualityMaxEffect: 0.3,
+            maximumRelationship: 5,
+            maximumOrderQuantityPerProduct: 10,
+        } as CustomerCatalog['constants'],
+        qualityTiers: [
+            { name: 'Trash', value: 0, scalar: 0 },
+            { name: 'Poor', value: 1, scalar: 0.25 },
+            { name: 'Standard', value: 2, scalar: 0.5 },
+            { name: 'Premium', value: 3, scalar: 0.75 },
+            { name: 'Heavenly', value: 4, scalar: 1 },
+        ],
+    };
+}
+
+function solverDataset(): SolverDataset {
+    const product = (id: string): Item => ({
+        id,
+        isRuntimeOnly: false,
+        basePurchasePrice: 4,
+        product: {
+            drugType: 'TestDrug',
+            basePrice: 10,
+            marketValue: 10,
+            baseAddictiveness: 0,
+            effectIds: ['base-effect'],
+            validPackagingIds: [],
+        },
+        mixingIngredient: null,
+    }) as Item;
+    const ingredient = {
+        id: 'ingredient',
+        isRuntimeOnly: false,
+        basePurchasePrice: 2,
+        product: null,
+        mixingIngredient: { effectIds: ['mixed-effect'] },
+    } as Item;
+    const effect = (id: string, x: number): Effect => ({
+        id,
+        value: { change: 0, multiplier: 1, addBaseValueMultiple: 0.1 },
+        mixing: { direction: { x, y: 0 }, magnitude: 1 },
+    }) as Effect;
+    const mixingRules = {
+        schema: 'neonschedule1-mixing-rules-1',
+        maxProperties: 8,
+        maxDeltaDifference: 0,
+        defaultProductIds: [],
+        maps: [{
+            drugType: 'TestDrug',
+            drugTypeValue: 0,
+            radius: 0.1,
+            effects: [
+                { effectId: 'base-effect', position: { x: 0, y: 0 }, radius: 0.1 },
+                { effectId: 'mixed-effect', position: { x: 1, y: 0 }, radius: 0.1 },
+            ],
+        }],
+    } satisfies MixingRules;
+    return {
+        directory: 'test-dataset',
+        manifest: {
+            gameVersion: dataset.gameVersion,
+            datasetSha256: dataset.datasetSha256,
+            normalizerVersion: dataset.normalizerVersion,
+        } as SolverDataset['manifest'],
+        items: [product('product-a'), product('product-b'), ingredient],
+        effects: [effect('base-effect', 0), effect('mixed-effect', 1)],
+        mixingRules,
+        customers: [],
+        customerCatalog: {} as CustomerCatalog,
+    };
+}
