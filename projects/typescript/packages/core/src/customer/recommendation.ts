@@ -16,7 +16,7 @@ export interface CustomerRecommendationCandidate {
 }
 
 export interface CustomerRecommendationInput {
-    readonly candidates: readonly CustomerRecommendationCandidate[];
+    readonly candidates: Iterable<CustomerRecommendationCandidate>;
     readonly profile: CustomerOfferProfile;
     readonly state: CustomerOfferState;
     readonly quality: CustomerQuality;
@@ -35,6 +35,11 @@ export interface CustomerRecommendation extends CustomerRecommendationCandidate 
     readonly acceptanceChance: number;
     readonly expectedRevenue: number;
     readonly expectedProfit: number;
+}
+
+interface RankedRecommendation {
+    readonly recommendation: CustomerRecommendation;
+    readonly ordinal: number;
 }
 
 export class CustomerRecommendationRanker {
@@ -61,8 +66,10 @@ export class CustomerRecommendationRanker {
         );
         requirePositiveSafeInteger(input.limit, 'Customer recommendation limit');
 
-        const recommendations: CustomerRecommendation[] = [];
+        const recommendations: RankedRecommendation[] = [];
+        let ordinal = 0;
         for (const candidate of input.candidates) {
+            const candidateOrdinal = ordinal++;
             const { recipe } = candidate;
             requirePositiveFinite(recipe.productValue, 'Recipe product value');
             requireNonNegativeFinite(recipe.totalCost, 'Recipe total cost');
@@ -93,7 +100,7 @@ export class CustomerRecommendationRanker {
                 }
             );
             const grossProfit = askingPrice - productionCost;
-            recommendations.push({
+            retainBest(recommendations, {
                 ...candidate,
                 quality: input.quality,
                 quantity: input.quantity,
@@ -103,11 +110,64 @@ export class CustomerRecommendationRanker {
                 acceptanceChance,
                 expectedRevenue: acceptanceChance * askingPrice,
                 expectedProfit: acceptanceChance * grossProfit,
-            });
+            }, candidateOrdinal, input.limit);
         }
 
-        return recommendations.sort(compareRecommendations).slice(0, input.limit);
+        return recommendations
+            .sort(compareRankedRecommendations)
+            .map(({ recommendation }) => recommendation);
     }
+}
+
+function retainBest(
+    heap: RankedRecommendation[],
+    recommendation: CustomerRecommendation,
+    ordinal: number,
+    limit: number
+): void {
+    const ranked = { recommendation, ordinal };
+    if (heap.length < limit) {
+        heap.push(ranked);
+        siftUp(heap, heap.length - 1);
+        return;
+    }
+    if (compareRankedRecommendations(ranked, heap[0]!) >= 0) return;
+    heap[0] = ranked;
+    siftDown(heap, 0);
+}
+
+function siftUp(heap: RankedRecommendation[], start: number): void {
+    let index = start;
+    while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (compareRankedRecommendations(heap[index]!, heap[parent]!) <= 0) return;
+        [heap[index], heap[parent]] = [heap[parent]!, heap[index]!];
+        index = parent;
+    }
+}
+
+function siftDown(heap: RankedRecommendation[], start: number): void {
+    let index = start;
+    while (true) {
+        const left = index * 2 + 1;
+        if (left >= heap.length) return;
+        const right = left + 1;
+        const worse = right < heap.length &&
+            compareRankedRecommendations(heap[right]!, heap[left]!) > 0
+            ? right
+            : left;
+        if (compareRankedRecommendations(heap[worse]!, heap[index]!) <= 0) return;
+        [heap[index], heap[worse]] = [heap[worse]!, heap[index]!];
+        index = worse;
+    }
+}
+
+function compareRankedRecommendations(
+    left: RankedRecommendation,
+    right: RankedRecommendation
+): number {
+    return compareRecommendations(left.recommendation, right.recommendation) ||
+        left.ordinal - right.ordinal;
 }
 
 export function customerMarketRelativePrice(

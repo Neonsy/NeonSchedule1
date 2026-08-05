@@ -117,7 +117,7 @@ export async function runRecipeIndexVerification(
     const enumerator = new RecipeOutcomeEnumerator(engine, itemsById, {
         maxStates: corpus.configuration.maxStates,
     });
-    const exhaustive = corpus.configuration.productIds.flatMap((productId) =>
+    let exhaustive = corpus.configuration.productIds.flatMap((productId) =>
         enumerator.enumerate({
             productId,
             availableIngredientIds: corpus.configuration.ingredientIds,
@@ -190,6 +190,7 @@ export async function runRecipeIndexVerification(
         { maxStates: corpus.configuration.maxStates }
     );
     const customerDefinitions = customerVerificationDefinitions(dataset, exhaustive);
+    exhaustive = [];
     const customerCases: CustomerIndexVerificationCase[] = [];
     for (const definition of customerDefinitions) {
         const input = customerQuery(definition, corpus.configuration, limit);

@@ -62,7 +62,7 @@ export class CustomerCorpusRecommendationLookup {
             ),
         });
         const recommendations = this.#ranker.rank({
-            candidates: selection.recipes.map(candidate),
+            candidates: candidates(selection.recipes),
             profile: input.profile,
             state: input.state,
             quality: input.quality,
@@ -85,25 +85,27 @@ export class CustomerCorpusRecommendationLookup {
     }
 }
 
-function candidate(entry: RecipeCorpusEntry): {
+function* candidates(entries: readonly RecipeCorpusEntry[]): Generator<{
     readonly recipe: RecipeEvaluation;
     readonly drugTypes: readonly string[];
-} {
-    return {
-        recipe: {
-            productId: entry.productId,
-            ingredientIds: entry.ingredientIds,
-            effectIds: entry.effectIds,
-            productValue: entry.productValue,
-            baseProductCost: entry.costs.baseProduct,
-            baseProductCostBasis: entry.costs.baseProductBasis,
-            ingredientCost: entry.costs.ingredients,
-            totalCost: entry.costs.total,
-            netValue: entry.netValue,
-            ingredientCount: entry.depth,
-        },
-        drugTypes: [entry.drugType],
-    };
+}> {
+    for (const entry of entries) {
+        yield {
+            recipe: {
+                productId: entry.productId,
+                ingredientIds: entry.ingredientIds,
+                effectIds: entry.effectIds,
+                productValue: entry.productValue,
+                baseProductCost: entry.costs.baseProduct,
+                baseProductCostBasis: entry.costs.baseProductBasis,
+                ingredientCost: entry.costs.ingredients,
+                totalCost: entry.costs.total,
+                netValue: entry.netValue,
+                ingredientCount: entry.depth,
+            },
+            drugTypes: [entry.drugType],
+        };
+    }
 }
 
 function conservativeUnitCostCeiling(maximumProductionCost: number, quantity: number): number {
