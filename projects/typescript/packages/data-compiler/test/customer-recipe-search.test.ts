@@ -1,10 +1,12 @@
 import {
+    CustomerRecommendationRanker,
     CustomerRecipeSearch,
     MixingEngine,
     RecipeOutcomeEnumerator,
     RecipeSearch,
     RecipeSearchLimitError,
     type CustomerCatalog,
+    type CustomerRecipeSearchInput,
     type Effect,
     type Item,
     type MixingRules,
@@ -94,8 +96,61 @@ describe('customer recipe search', () => {
         expect(customer[0]?.recipe.productValue).toBe(10);
     });
 
+    it('matches exhaustive customer ranking before relying on pruning', () => {
+        const input = customerSearchInput(3);
+        const exhaustiveCandidates = new RecipeOutcomeEnumerator(engine, itemsById)
+            .enumerate({
+                productId: 'product',
+                availableIngredientIds: input.availableIngredientIds,
+                maxIngredients: input.maxIngredients,
+            })
+            .map((recipe) => ({ recipe, drugTypes: ['Marijuana'] }));
+        const exhaustive = new CustomerRecommendationRanker(catalog()).rank({
+            ...input,
+            candidates: exhaustiveCandidates,
+        });
+        const optimized = new CustomerRecipeSearch(engine, itemsById, catalog()).search({
+            ...input,
+            productIds: ['product'],
+        });
+
+        expect(optimized).toEqual(exhaustive);
+    });
+
+    it('accepts drug types supplied by a future normalized dataset', () => {
+        const futureDrugType = 'FutureBuildDrug';
+        const futureItems = [
+            {
+                ...items[0]!,
+                product: { ...items[0]!.product!, drugType: futureDrugType },
+            },
+            ...items.slice(1),
+        ];
+        const futureEngine = new MixingEngine(
+            {
+                ...rules,
+                maps: rules.maps.map((map) => ({ ...map, drugType: futureDrugType })),
+            },
+            new Map(effects.map((entry) => [entry.id, entry]))
+        );
+        const result = new CustomerRecipeSearch(
+            futureEngine,
+            new Map(futureItems.map((item) => [item.id, item])),
+            catalog()
+        ).search({
+            ...customerSearchInput(1),
+            productIds: ['product'],
+            profile: {
+                ...customerSearchInput(1).profile,
+                drugAffinities: [{ drugType: futureDrugType, affinity: 0 }],
+            },
+        });
+
+        expect(result[0]?.recipe.ingredientIds).toEqual(['preferred-ingredient']);
+    });
+
     it('fails instead of returning an incomplete ranking at the state limit', () => {
-        const search = new CustomerRecipeSearch(engine, itemsById, catalog(), { maxStates: 2 });
+        const search = new CustomerRecipeSearch(engine, itemsById, catalog(), { maxStates: 1 });
 
         expect(() =>
             search.search({
@@ -119,6 +174,28 @@ describe('customer recipe search', () => {
         ).toThrow(RecipeSearchLimitError);
     });
 });
+
+function customerSearchInput(
+    maxIngredients: number
+): Omit<CustomerRecipeSearchInput, 'productIds'> {
+    return {
+        availableIngredientIds: ['valuable-ingredient', 'preferred-ingredient'],
+        maxIngredients,
+        profile: {
+            standards: 'Moderate',
+            preferredEffectIds: ['preferred'],
+            drugAffinities: [{ drugType: 'Marijuana', affinity: 0 }],
+            weeklySpend: { minimum: 100, maximum: 100 },
+            weeklyOrders: { minimum: 1, maximum: 1 },
+        },
+        state: { addiction: 0, relationship: 0, orderLimitMultiplier: 1 },
+        quality: 'Standard',
+        quantity: 1,
+        priceMultiplier: 1,
+        maximumProductionCost: 100,
+        limit: 1,
+    };
+}
 
 function effect(
     id: string,

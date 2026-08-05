@@ -5,9 +5,7 @@ export const CustomerStandardsSchema = type(
 );
 export type CustomerStandards = typeof CustomerStandardsSchema.infer;
 
-export const CustomerDrugTypeSchema = type(
-    "'Cocaine' | 'Heroin' | 'MDMA' | 'Marijuana' | 'Methamphetamine' | 'Shrooms'"
-);
+export const CustomerDrugTypeSchema = type('string');
 export type CustomerDrugType = typeof CustomerDrugTypeSchema.infer;
 
 export const CustomerQualitySchema = type("'Trash' | 'Poor' | 'Standard' | 'Premium' | 'Heavenly'");

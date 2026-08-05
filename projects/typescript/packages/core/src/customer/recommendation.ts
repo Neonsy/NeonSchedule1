@@ -73,7 +73,7 @@ export class CustomerRecommendationRanker {
             }
             if (productionCost > input.maximumProductionCost) continue;
 
-            const askingPrice = marketRelativePrice(
+            const askingPrice = customerMarketRelativePrice(
                 recipe.productValue,
                 input.quantity,
                 input.priceMultiplier
@@ -110,7 +110,7 @@ export class CustomerRecommendationRanker {
     }
 }
 
-function marketRelativePrice(
+export function customerMarketRelativePrice(
     productValue: number,
     quantity: number,
     priceMultiplier: number
