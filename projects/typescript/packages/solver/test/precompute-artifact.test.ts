@@ -19,6 +19,7 @@ import {
 } from '#solver/precompute-artifact';
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
+import { loadRecipeCorpusProduction } from '#solver/precompute-production';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
 import {
     readRecipeCorpusProductionSelection,
@@ -158,6 +159,57 @@ describe('recipe corpus artifact', () => {
         expect(before.configuration.mode).toBe('exhaustive');
         expect(before.verification.recipeCaseCount).toBeGreaterThan(0);
         expect(before.verification.customerCaseCount).toBeGreaterThan(0);
+    });
+
+    it('loads the selected production lookups and rejects a changed verification report', async () => {
+        const outputRoot = await temporaryDirectory('neonschedule1-production-');
+        const reportRoot = path.join(outputRoot, 'reports');
+        const source = solverDataset();
+        const refreshed = await refreshRecipeCorpusProduction(
+            source,
+            planExhaustiveCorpus(source, { maxIngredients: 1, maxStates: 100 }),
+            { outputRoot, reportRoot, verificationLimit: 2 }
+        );
+
+        const production = await loadRecipeCorpusProduction(source, {
+            outputRoot,
+            reportRoot,
+        });
+        const result = await production.recipes.query({
+            requiredEffectIds: ['mixed-effect'],
+            limit: 2,
+        });
+        const recommendations = await production.customers.recommend({
+            profile: customerProfile,
+            state: { addiction: 0.2, relationship: 2, orderLimitMultiplier: 1 },
+            quality: 'Standard',
+            quantity: 1,
+            priceMultiplier: 1,
+            maximumProductionCost: 20,
+            limit: 2,
+        });
+
+        expect(result.recipes.map((recipe) => recipe.productId)).toEqual([
+            'product-a',
+            'product-b',
+        ]);
+        expect(recommendations.recommendations.length).toBeGreaterThan(0);
+        expect(production.selection.selectionSha256).toBe(
+            refreshed.selection.selectionSha256
+        );
+
+        const otherDataset = {
+            ...source,
+            manifest: { ...source.manifest, gameVersion: 'other-game' },
+        } as SolverDataset;
+        await expect(
+            loadRecipeCorpusProduction(otherDataset, { outputRoot, reportRoot })
+        ).rejects.toThrow('Production selection dataset differs');
+
+        await writeFile(refreshed.reportPath, '{}\n', 'utf8');
+        await expect(
+            loadRecipeCorpusProduction(source, { outputRoot, reportRoot })
+        ).rejects.toThrow('verification report failed integrity verification');
     });
 
     it('queries indexed effects and costs without scanning corpus files', async () => {
