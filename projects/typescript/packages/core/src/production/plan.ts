@@ -23,6 +23,7 @@ export interface ProductionBatchStep {
     readonly acceptedEquipmentItemIds: readonly string[];
     readonly equipmentItemId: string | null;
     readonly growLightItemId: string | null;
+    readonly additiveItemIds: readonly string[];
     readonly totalProcessMinutes: number;
     readonly producedQuantity: number;
     readonly leftoverQuantity: number;
@@ -151,6 +152,7 @@ function expandProduction(
             acceptedEquipmentItemIds: route.acceptedEquipmentItemIds,
             equipmentItemId: route.equipmentItemId,
             growLightItemId: route.growLightItemId,
+            additiveItemIds: route.additiveItemIds,
             totalProcessMinutes: route.durationMinutesPerBatch * batchCount,
             producedQuantity,
             leftoverQuantity: cleanZero(producedQuantity - requiredQuantity),
