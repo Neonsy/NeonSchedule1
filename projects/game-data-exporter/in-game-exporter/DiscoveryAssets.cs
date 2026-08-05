@@ -146,10 +146,11 @@ internal sealed class DiscoveryVisualAssetRegistry
     };
 }
 
-internal sealed class DiscoveryAssetExporter
+internal sealed class DiscoveryAssetExporter : IDisposable
 {
     private readonly string _assetDirectory;
     private readonly string _assetDirectoryName;
+    private readonly DiscoveryTextureReadback _textureReadback = new();
     private readonly Dictionary<int, DiscoveryAssetSnapshot> _spriteCache = new();
     private readonly Dictionary<int, DiscoveryAssetSnapshot> _textureCache = new();
     private readonly Dictionary<int, DiscoveryFileAssetSnapshot> _meshCache = new();
@@ -161,6 +162,8 @@ internal sealed class DiscoveryAssetExporter
     }
 
     internal int ExportedAssetCount { get; private set; }
+
+    public void Dispose() => _textureReadback.Dispose();
 
     internal int CountPhysicalFiles()
     {
@@ -255,50 +258,37 @@ internal sealed class DiscoveryAssetExporter
             var rect = sprite.rect;
             var width = Math.Max(1, (int)Math.Round(rect.width));
             var height = Math.Max(1, (int)Math.Round(rect.height));
-            var readable = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-            var previous = RenderTexture.active;
-            try
+            var source = sprite.texture;
+            var bytes = _textureReadback.EncodeToPng(
+                source,
+                width,
+                height,
+                new Vector2(rect.width / source.width, rect.height / source.height),
+                new Vector2(rect.x / source.width, rect.y / source.height));
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var safeCategory = SafeSegment(category);
+            var safeKey = SafeSegment(key);
+            var relativePath = Path.Combine(
+                _assetDirectoryName,
+                safeCategory,
+                $"{safeKey}-{hash[..12]}.png");
+            var absolutePath = Path.Combine(
+                _assetDirectory,
+                safeCategory,
+                $"{safeKey}-{hash[..12]}.png");
+            Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
+            File.WriteAllBytes(absolutePath, bytes);
+            ExportedAssetCount++;
+            var result = new DiscoveryAssetSnapshot
             {
-                var source = sprite.texture;
-                var scale = new Vector2(rect.width / source.width, rect.height / source.height);
-                var offset = new Vector2(rect.x / source.width, rect.y / source.height);
-                Graphics.Blit(source, target, scale, offset);
-                RenderTexture.active = target;
-                readable.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                readable.Apply();
-                var bytes = ImageConversion.EncodeToPNG(readable);
-                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-                var safeCategory = SafeSegment(category);
-                var safeKey = SafeSegment(key);
-                var relativePath = Path.Combine(
-                    _assetDirectoryName,
-                    safeCategory,
-                    $"{safeKey}-{hash[..12]}.png");
-                var absolutePath = Path.Combine(
-                    _assetDirectory,
-                    safeCategory,
-                    $"{safeKey}-{hash[..12]}.png");
-                Directory.CreateDirectory(Path.GetDirectoryName(absolutePath)!);
-                File.WriteAllBytes(absolutePath, bytes);
-                ExportedAssetCount++;
-                var result = new DiscoveryAssetSnapshot
-                {
-                    RelativePath = relativePath.Replace('\\', '/'),
-                    Sha256 = hash,
-                    Width = width,
-                    Height = height,
-                    SpriteName = sprite.name ?? string.Empty,
-                };
-                _spriteCache[instanceId] = result;
-                return result;
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(target);
-                UnityEngine.Object.Destroy(readable);
-            }
+                RelativePath = relativePath.Replace('\\', '/'),
+                Sha256 = hash,
+                Width = width,
+                Height = height,
+                SpriteName = sprite.name ?? string.Empty,
+            };
+            _spriteCache[instanceId] = result;
+            return result;
         }
         catch (Exception exception)
         {
@@ -332,32 +322,16 @@ internal sealed class DiscoveryAssetExporter
         {
             var width = Math.Max(1, texture.width);
             var height = Math.Max(1, texture.height);
-            var readable = new Texture2D(width, height, TextureFormat.RGBA32, false);
-            var target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32);
-            var previous = RenderTexture.active;
-            try
-            {
-                Graphics.Blit(texture, target);
-                RenderTexture.active = target;
-                readable.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-                readable.Apply();
-                var bytes = ImageConversion.EncodeToPNG(readable);
-                var result = WriteImageAsset(
-                    bytes,
-                    category,
-                    key,
-                    width,
-                    height,
-                    texture.name ?? string.Empty);
-                _textureCache[instanceId] = result;
-                return result;
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(target);
-                UnityEngine.Object.Destroy(readable);
-            }
+            var bytes = _textureReadback.EncodeToPng(texture, width, height);
+            var result = WriteImageAsset(
+                bytes,
+                category,
+                key,
+                width,
+                height,
+                texture.name ?? string.Empty);
+            _textureCache[instanceId] = result;
+            return result;
         }
         catch (Exception exception)
         {

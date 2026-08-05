@@ -18,7 +18,7 @@ internal static partial class DiscoveryCollector
         string assetDirectoryName,
         Action<string>? progress)
     {
-        var assets = new DiscoveryAssetExporter(assetDirectory, assetDirectoryName);
+        using var assets = new DiscoveryAssetExporter(assetDirectory, assetDirectoryName);
         var visualAssets = new DiscoveryVisualAssetRegistry(assets);
         var result = new DiscoverySnapshot
         {
