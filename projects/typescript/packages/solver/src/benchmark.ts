@@ -7,13 +7,19 @@ import {
     RecipeSearch,
     RecipeSearchLimitError,
     type Customer,
+    type CustomerOfferState,
     type CustomerQuality,
     type RecipeSearchEvidence,
 } from '@neonschedule1/core';
 
 import type { SolverDataset } from '#solver/dataset';
 
-export const recipeSearchAlgorithmVersion = '1';
+export const recipeSearchAlgorithmVersion = '2';
+
+export type BenchmarkCustomerState =
+    | 'baseline'
+    | 'maximum-addiction'
+    | 'maximum-relationship';
 
 export interface SearchBenchmarkOptions {
     readonly depths: readonly number[];
@@ -21,8 +27,10 @@ export interface SearchBenchmarkOptions {
     readonly warmups: number;
     readonly limit: number;
     readonly maxStates: number;
+    readonly recipeCostCeilingFractions: readonly number[];
     readonly customerCount: number;
     readonly customerIds?: readonly string[];
+    readonly customerStates: readonly BenchmarkCustomerState[];
     readonly quality: CustomerQuality;
     readonly quantity: number;
     readonly priceMultiplier: number;
@@ -30,7 +38,7 @@ export interface SearchBenchmarkOptions {
 }
 
 export interface SearchBenchmarkReport {
-    readonly schema: 'neonschedule1-search-benchmark-1';
+    readonly schema: 'neonschedule1-search-benchmark-2';
     readonly createdAt: string;
     readonly algorithmVersion: string;
     readonly dataset: {
@@ -45,6 +53,10 @@ export interface SearchBenchmarkReport {
         readonly ingredientIds: readonly string[];
         readonly customerIds: readonly string[];
         readonly customerSelection: 'explicit' | 'weekly-spend-quantiles';
+        readonly costCeilingBasis: {
+            readonly kind: 'base-plus-maximum-ingredient-path-fraction';
+            readonly maximumIngredientUnitCost: number;
+        };
     };
     readonly cases: readonly SearchBenchmarkCase[];
 }
@@ -55,7 +67,10 @@ export interface SearchBenchmarkCase {
     readonly productId?: string;
     readonly customerId?: string;
     readonly objective?: 'productValue' | 'netValue';
+    readonly costCeilingFraction?: number;
+    readonly maximumTotalCost?: number;
     readonly depth: number;
+    readonly customerState?: BenchmarkCustomerState;
     readonly samples: readonly SearchBenchmarkSample[];
     readonly duration: {
         readonly minimumMs: number;
@@ -89,7 +104,9 @@ export function defaultSearchBenchmarkOptions(): SearchBenchmarkOptions {
         warmups: 1,
         limit: 10,
         maxStates: 100_000,
+        recipeCostCeilingFractions: [0.25, 0.5],
         customerCount: 3,
+        customerStates: ['baseline', 'maximum-addiction', 'maximum-relationship'],
         quality: 'Standard',
         quantity: 1,
         priceMultiplier: 1,
@@ -124,6 +141,24 @@ export function runSearchBenchmark(
     if (ingredientIds.length === 0) throw new Error('Benchmark dataset contains no mixing ingredients');
 
     const customers = selectCustomers(dataset.customers, options);
+    const baseCostByProductId = new Map(
+        productIds.map((productId) => ([
+            productId,
+            benchmarkCost(
+                itemsById.get(productId)?.basePurchasePrice,
+                'product',
+                productId
+            ),
+        ] as const))
+    );
+    const ingredientCosts = ingredientIds.map((ingredientId) =>
+        benchmarkCost(
+            itemsById.get(ingredientId)?.basePurchasePrice,
+            'mixing ingredient',
+            ingredientId
+        )
+    );
+    const maximumIngredientUnitCost = Math.max(...ingredientCosts);
     const recipeSearch = new RecipeSearch(engine, itemsById, { maxStates: options.maxStates });
     const customerSearch = new CustomerRecipeSearch(
         engine,
@@ -136,10 +171,24 @@ export function runSearchBenchmark(
         for (const productId of productIds) {
             for (const objective of ['productValue', 'netValue'] as const) {
                 definitions.push({ kind: 'recipe', depth, productId, objective });
+                for (const costCeilingFraction of options.recipeCostCeilingFractions) {
+                    definitions.push({
+                        kind: 'recipe',
+                        depth,
+                        productId,
+                        objective,
+                        costCeilingFraction,
+                        maximumTotalCost:
+                            baseCostByProductId.get(productId)! +
+                            maximumIngredientUnitCost * depth * costCeilingFraction,
+                    });
+                }
             }
         }
         for (const customer of customers) {
-            definitions.push({ kind: 'customer', depth, customer });
+            for (const customerState of options.customerStates) {
+                definitions.push({ kind: 'customer', depth, customer, customerState });
+            }
         }
     }
 
@@ -154,6 +203,9 @@ export function runSearchBenchmark(
                           maxIngredients: definition.depth,
                           limit: options.limit,
                           objective: definition.objective,
+                          ...(definition.maximumTotalCost === undefined
+                              ? {}
+                              : { maximumTotalCost: definition.maximumTotalCost }),
                       });
                       return { resultCount: result.recipes.length, evidence: result.evidence };
                   })
@@ -163,11 +215,11 @@ export function runSearchBenchmark(
                           availableIngredientIds: ingredientIds,
                           maxIngredients: definition.depth,
                           profile: definition.customer,
-                          state: {
-                              addiction: definition.customer.baseAddiction,
-                              relationship: 0,
-                              orderLimitMultiplier: 1,
-                          },
+                          state: benchmarkCustomerState(
+                              definition.customerState,
+                              definition.customer,
+                              dataset.customerCatalog.constants.maximumRelationship
+                          ),
                           quality: options.quality,
                           quantity: options.quantity,
                           priceMultiplier: options.priceMultiplier,
@@ -188,7 +240,7 @@ export function runSearchBenchmark(
     }
 
     return {
-        schema: 'neonschedule1-search-benchmark-1',
+        schema: 'neonschedule1-search-benchmark-2',
         createdAt: new Date().toISOString(),
         algorithmVersion: recipeSearchAlgorithmVersion,
         dataset: {
@@ -204,6 +256,10 @@ export function runSearchBenchmark(
             customerIds: customers.map((customer) => customer.id),
             customerSelection:
                 options.customerIds === undefined ? 'weekly-spend-quantiles' : 'explicit',
+            costCeilingBasis: {
+                kind: 'base-plus-maximum-ingredient-path-fraction',
+                maximumIngredientUnitCost,
+            },
         },
         cases,
     };
@@ -215,8 +271,15 @@ type BenchmarkDefinition =
           readonly depth: number;
           readonly productId: string;
           readonly objective: 'productValue' | 'netValue';
+          readonly costCeilingFraction?: number;
+          readonly maximumTotalCost?: number;
       }
-    | { readonly kind: 'customer'; readonly depth: number; readonly customer: Customer };
+    | {
+          readonly kind: 'customer';
+          readonly depth: number;
+          readonly customer: Customer;
+          readonly customerState: BenchmarkCustomerState;
+      };
 
 function measure(
     operation: () => { readonly resultCount: number; readonly evidence: RecipeSearchEvidence }
@@ -258,8 +321,22 @@ function benchmarkCase(
         },
     } as const;
     return definition.kind === 'recipe'
-        ? { ...base, productId: definition.productId, objective: definition.objective }
-        : { ...base, customerId: definition.customer.id };
+        ? {
+              ...base,
+              productId: definition.productId,
+              objective: definition.objective,
+              ...(definition.costCeilingFraction === undefined
+                  ? {}
+                  : { costCeilingFraction: definition.costCeilingFraction }),
+              ...(definition.maximumTotalCost === undefined
+                  ? {}
+                  : { maximumTotalCost: definition.maximumTotalCost }),
+          }
+        : {
+              ...base,
+              customerId: definition.customer.id,
+              customerState: definition.customerState,
+          };
 }
 
 function selectCustomers(
@@ -303,9 +380,16 @@ function sampleFingerprint(sample: SearchBenchmarkSample): string {
 }
 
 function definitionId(definition: BenchmarkDefinition): string {
-    return definition.kind === 'recipe'
-        ? `recipe:${definition.productId}:${definition.objective}:depth-${definition.depth}`
-        : `customer:${definition.customer.id}:depth-${definition.depth}`;
+    if (definition.kind === 'recipe') {
+        const ceiling = definition.costCeilingFraction === undefined
+            ? ''
+            : `:cost-${definition.costCeilingFraction}`;
+        return `recipe:${definition.productId}:${definition.objective}${ceiling}:depth-${definition.depth}`;
+    }
+    const state = definition.customerState === 'baseline'
+        ? ''
+        : `:${definition.customerState}`;
+    return `customer:${definition.customer.id}${state}:depth-${definition.depth}`;
 }
 
 function validateOptions(options: SearchBenchmarkOptions): void {
@@ -315,7 +399,11 @@ function validateOptions(options: SearchBenchmarkOptions): void {
     requireInteger(options.warmups, 'warmups', 0);
     requireInteger(options.limit, 'limit', 1);
     requireInteger(options.maxStates, 'maxStates', 1);
+    requireFractions(options.recipeCostCeilingFractions);
     requireInteger(options.customerCount, 'customerCount', 1);
+    if (options.customerStates.length === 0) {
+        throw new Error('Benchmark customerStates must not be empty');
+    }
     requireInteger(options.quantity, 'quantity', 1);
     if (!Number.isFinite(options.priceMultiplier) || options.priceMultiplier < 0) {
         throw new Error('priceMultiplier must be a finite non-negative number');
@@ -326,12 +414,60 @@ function validateOptions(options: SearchBenchmarkOptions): void {
     if (new Set(options.depths).size !== options.depths.length) {
         throw new Error('Benchmark depths must not contain duplicates');
     }
+    if (new Set(options.customerStates).size !== options.customerStates.length) {
+        throw new Error('Benchmark customerStates must not contain duplicates');
+    }
     if (
         options.customerIds !== undefined &&
         new Set(options.customerIds).size !== options.customerIds.length
     ) {
         throw new Error('Benchmark customers must not contain duplicates');
     }
+}
+
+function benchmarkCustomerState(
+    name: BenchmarkCustomerState,
+    customer: Customer,
+    maximumRelationship: number
+): CustomerOfferState {
+    switch (name) {
+        case 'baseline':
+            return { addiction: customer.baseAddiction, relationship: 0, orderLimitMultiplier: 1 };
+        case 'maximum-addiction':
+            return { addiction: 1, relationship: 0, orderLimitMultiplier: 1 };
+        case 'maximum-relationship':
+            return {
+                addiction: customer.baseAddiction,
+                relationship: maximumRelationship,
+                orderLimitMultiplier: 1,
+            };
+    }
+}
+
+function requireFractions(fractions: readonly number[]): void {
+    if (fractions.length === 0) throw new Error('Benchmark recipe cost fractions must not be empty');
+    for (const fraction of fractions) {
+        if (!Number.isFinite(fraction) || fraction <= 0 || fraction >= 1) {
+            throw new Error('Benchmark recipe cost fractions must be finite numbers between zero and one');
+        }
+    }
+    if (new Set(fractions).size !== fractions.length) {
+        throw new Error('Benchmark recipe cost fractions must not contain duplicates');
+    }
+}
+
+function benchmarkCost(
+    value: number | null | undefined,
+    role: string,
+    itemId: string
+): number {
+    if (value === null || value === undefined) {
+        throw new Error(`Benchmark ${role} ${JSON.stringify(itemId)} has no purchase price`);
+    }
+    if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`Benchmark ${role} ${JSON.stringify(itemId)} has an invalid purchase price`);
+    }
+    return value;
 }
 
 function machineDescription(): MachineDescription {

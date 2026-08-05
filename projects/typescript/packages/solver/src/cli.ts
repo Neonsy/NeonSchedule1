@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
     defaultSearchBenchmarkOptions,
     runSearchBenchmark,
+    type BenchmarkCustomerState,
     type SearchBenchmarkOptions,
     type SearchBenchmarkReport,
 } from '#solver/benchmark';
@@ -48,8 +49,10 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     let warmups = defaults.warmups;
     let limit = defaults.limit;
     let maxStates = defaults.maxStates;
+    let recipeCostCeilingFractions = defaults.recipeCostCeilingFractions;
     let customerCount = defaults.customerCount;
     let customerIds: readonly string[] | undefined;
+    let customerStates = defaults.customerStates;
     let quality = defaults.quality;
     let quantity = defaults.quantity;
     let priceMultiplier = defaults.priceMultiplier;
@@ -86,11 +89,22 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             case '--max-states':
                 maxStates = integer(value(), 'max-states');
                 break;
+            case '--recipe-cost-fractions':
+                recipeCostCeilingFractions = commaSeparatedNumbers(
+                    value(),
+                    'recipe-cost-fractions'
+                );
+                break;
             case '--customer-count':
                 customerCount = integer(value(), 'customer-count');
                 break;
             case '--customers':
                 customerIds = commaSeparated(value(), 'customers');
+                break;
+            case '--customer-states':
+                customerStates = commaSeparated(value(), 'customer-states').map(
+                    customerStateValue
+                );
                 break;
             case '--quality':
                 quality = qualityValue(value());
@@ -121,8 +135,10 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             warmups,
             limit,
             maxStates,
+            recipeCostCeilingFractions,
             customerCount,
             ...(customerIds === undefined ? {} : { customerIds }),
+            customerStates,
             quality,
             quantity,
             priceMultiplier,
@@ -166,6 +182,10 @@ function commaSeparatedIntegers(value: string, name: string): number[] {
     return commaSeparated(value, name).map((entry) => integer(entry, name));
 }
 
+function commaSeparatedNumbers(value: string, name: string): number[] {
+    return commaSeparated(value, name).map((entry) => numberValue(entry, name));
+}
+
 function commaSeparated(value: string, name: string): string[] {
     const result = value
         .split(',')
@@ -200,6 +220,17 @@ function qualityValue(value: string): SearchBenchmarkOptions['quality'] {
     throw new Error(`Unknown customer quality ${JSON.stringify(value)}`);
 }
 
+function customerStateValue(value: string): BenchmarkCustomerState {
+    if (
+        value === 'baseline' ||
+        value === 'maximum-addiction' ||
+        value === 'maximum-relationship'
+    ) {
+        return value;
+    }
+    throw new Error(`Unknown benchmark customer state ${JSON.stringify(value)}`);
+}
+
 const helpText = `Usage: pnpm solver:benchmark -- [options]
 
 Options:
@@ -210,8 +241,10 @@ Options:
   --warmups NUMBER                Unmeasured warmups per case (default: 1)
   --limit NUMBER                  Results requested per search (default: 10)
   --max-states NUMBER             State limit per recipe/product search (default: 100000)
+  --recipe-cost-fractions LIST    Fractions of maximum ingredient-path cost (default: 0.25,0.5)
   --customer-count NUMBER         Spend-quantile customers to select (default: 3)
   --customers LIST                Explicit comma-separated customer IDs
+  --customer-states LIST          baseline, maximum-addiction, maximum-relationship
   --quality NAME                  Customer quality (default: Standard)
   --quantity NUMBER               Product quantity (default: 1)
   --price-multiplier NUMBER       Asking-price multiplier (default: 1)
