@@ -5,7 +5,8 @@ import { IntegrityReportSchema, type IntegrityCounts, type IntegrityReport } fro
 import { verifyAssets } from '#data-compiler/acquisition/assets';
 import { loadAcquisition } from '#data-compiler/acquisition/load';
 import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
-import { sha256Text } from '#data-compiler/json';
+import { sha256Text, stringField } from '#data-compiler/json';
+import { normalizeCustomers } from '#data-compiler/normalize/customers';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
@@ -15,11 +16,11 @@ import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.13';
+export const NORMALIZER_VERSION = '0.0.14';
 
 const deferredDomains = [
     'buildable-geometry',
-    'people',
+    'non-customer-people',
     'property-layouts',
     'relationships',
     'world-and-navigation',
@@ -33,6 +34,17 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const items = normalizeItems(acquisition.report, assets, integrity);
     const mixing = normalizeMixing(acquisition.report, effects, items, integrity);
     const itemIds = new Set(items.map((item) => item.id));
+    const productIds = new Set(
+        acquisition.report.products.map((product, index) =>
+            stringField(product, 'id', `report.products[${index}]`)
+        )
+    );
+    const customers = normalizeCustomers(
+        acquisition.report,
+        new Set(effects.map((effect) => effect.id)),
+        productIds,
+        integrity
+    );
     const production = normalizeProduction(acquisition.report, itemIds, integrity);
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
@@ -54,6 +66,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         mixingOracleCases: acquisition.report.mixing.oracles.length,
         shops: shops.length,
         properties: properties.length,
+        customers: customers.customers.length,
         seeds: production.seeds.length,
         shroomSpawns: production.shrooms.length,
         stationRecipes: production.stationRecipes.length,
@@ -81,6 +94,10 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     for (const property of properties) {
         documents.set(`properties/${entityDirectoryName(property.code)}/summary.json`, property);
     }
+    for (const customer of customers.customers) {
+        documents.set(`customers/${entityFileName(customer.id)}`, customer);
+    }
+    documents.set('customers/catalog.json', customers.catalog);
     documents.set('mixing/rules.json', mixing);
     documents.set('production/catalog.json', production);
     documents.set('visuals/assets.json', visuals);

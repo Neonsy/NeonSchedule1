@@ -33,6 +33,10 @@ const reportShape = type({
     qualityValues: 'unknown[]',
     qualityMechanics: 'object',
     shops: 'unknown[]',
+    peopleSources: 'object',
+    people: 'unknown[]',
+    customers: 'unknown[]',
+    customerConstants: 'object',
     mixing: 'object',
     world: 'object',
     discovery: 'object',
@@ -131,6 +135,7 @@ function parseReport(document: JsonObject): RawReport {
     const world = asObject(document.world, 'report.world');
     const discovery = asObject(document.discovery, 'report.discovery');
     const qualityMechanics = asObject(document.qualityMechanics, 'report.qualityMechanics');
+    const peopleSources = asObject(document.peopleSources, 'report.peopleSources');
     const visualAssets = asObject(discovery.visualAssets, 'report.discovery.visualAssets');
     return {
         document,
@@ -165,6 +170,16 @@ function parseReport(document: JsonObject): RawReport {
             ),
         },
         shops: objectArray(document.shops, 'report.shops'),
+        peopleSources: {
+            uniqueCustomerCount: numberField(
+                peopleSources,
+                'uniqueCustomerCount',
+                'report.peopleSources'
+            ),
+        },
+        people: objectArray(document.people, 'report.people'),
+        customers: objectArray(document.customers, 'report.customers'),
+        customerConstants: asObject(document.customerConstants, 'report.customerConstants'),
         mixing: {
             maxProperties: numberField(mixing, 'maxProperties', 'report.mixing'),
             maxDeltaDifference: numberField(mixing, 'maxDeltaDifference', 'report.mixing'),

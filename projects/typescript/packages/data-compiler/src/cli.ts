@@ -41,7 +41,7 @@ async function main(): Promise<number> {
         console.log(
             `Items=${counts.items} Effects=${counts.effects} ` +
                 `MixingMaps=${counts.mixingMaps} Oracles=${counts.mixingOracleCases} ` +
-                `Shops=${counts.shops} Properties=${counts.properties} ` +
+                `Shops=${counts.shops} Properties=${counts.properties} Customers=${counts.customers} ` +
                 `Production=${productionCount} ` +
                 `Assets=${counts.directAssetFiles + counts.offlineAssetFiles}`
         );

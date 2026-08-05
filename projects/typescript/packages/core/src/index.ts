@@ -1,4 +1,5 @@
 export * from '#core/data/common';
+export * from '#core/data/customer';
 export * from '#core/data/dataset';
 export * from '#core/data/effect';
 export * from '#core/data/item';

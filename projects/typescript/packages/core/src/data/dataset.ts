@@ -7,6 +7,7 @@ export const IntegrityCountsSchema = type({
     mixingOracleCases: 'number',
     shops: 'number',
     properties: 'number',
+    customers: 'number',
     seeds: 'number',
     shroomSpawns: 'number',
     stationRecipes: 'number',

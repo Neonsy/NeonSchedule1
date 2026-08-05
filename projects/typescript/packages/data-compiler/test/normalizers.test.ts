@@ -473,6 +473,10 @@ function emptyReport(): RawReport {
             ],
         },
         shops: [],
+        peopleSources: { uniqueCustomerCount: 0 },
+        people: [],
+        customers: [],
+        customerConstants: {},
         mixing: {
             maxProperties: 8,
             maxDeltaDifference: 0.5,

@@ -22,6 +22,12 @@ export interface RawReport {
         readonly qualityScalars: JsonObject[];
     };
     readonly shops: JsonObject[];
+    readonly peopleSources: {
+        readonly uniqueCustomerCount: number;
+    };
+    readonly people: JsonObject[];
+    readonly customers: JsonObject[];
+    readonly customerConstants: JsonObject;
     readonly mixing: {
         readonly maxProperties: number;
         readonly maxDeltaDifference: number;

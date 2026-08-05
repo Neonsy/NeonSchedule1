@@ -74,6 +74,7 @@ function writeOptions(outputRoot: string): WriteDatasetOptions {
             mixingOracleCases: 0,
             shops: 0,
             properties: 0,
+            customers: 0,
             seeds: 0,
             shroomSpawns: 0,
             stationRecipes: 0,
