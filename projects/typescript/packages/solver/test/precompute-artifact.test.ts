@@ -9,6 +9,8 @@ import {
     describeCorpusFile,
     verifyRecipeCorpusArtifact,
 } from '#solver/precompute-artifact';
+import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
+import { RecipeCorpusLookup } from '#solver/precompute-query';
 import {
     partitionPath,
     type RecipeCorpusConfiguration,
@@ -48,6 +50,22 @@ describe('recipe corpus artifact', () => {
         await expect(verifyRecipeCorpusArtifact(artifact.directory)).rejects.toThrow(
             'failed integrity verification'
         );
+    });
+
+    it('queries indexed effects and costs without scanning corpus files', async () => {
+        const artifact = await writeArtifact();
+        const indexRoot = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-index-'));
+        temporaryDirectories.push(indexRoot);
+        const indexed = await writeRecipeCorpusIndexArtifact(indexRoot, artifact.directory);
+        const lookup = await RecipeCorpusLookup.load(artifact.directory, indexed.directory);
+
+        const mixed = await lookup.query({ requiredEffectIds: ['mixed-effect'], limit: 1 });
+        const affordable = await lookup.query({ maximumTotalCost: 4, limit: 10 });
+
+        expect(mixed.recipes.map((recipe) => recipe.ingredientIds)).toEqual([['ingredient']]);
+        expect(affordable.recipes.map((recipe) => recipe.ingredientIds)).toEqual([[]]);
+        expect(mixed.evidence.examinedRankingEntries).toBe(1);
+        expect(affordable.evidence.examinedRankingEntries).toBe(1);
     });
 });
 

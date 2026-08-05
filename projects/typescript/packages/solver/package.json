@@ -17,7 +17,8 @@
     "benchmark": "node dist/cli.js",
     "verify": "node dist/verify-cli.js",
     "native": "node dist/native-cli.js",
-    "precompute": "node dist/precompute-cli.js"
+    "precompute": "node dist/precompute-cli.js",
+    "precompute:verify": "node dist/precompute-verify-cli.js"
   },
   "dependencies": {
     "@neonschedule1/core": "workspace:*"

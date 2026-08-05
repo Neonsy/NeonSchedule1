@@ -15,6 +15,7 @@ export * from '#core/customer/recipe-search';
 export * from '#core/mixing/enumerate';
 export * from '#core/mixing/engine';
 export * from '#core/mixing/recipe';
+export * from '#core/mixing/recipe-ranking';
 export * from '#core/mixing/reverse-search';
 export * from '#core/mixing/search';
 export * from '#core/production/cost';

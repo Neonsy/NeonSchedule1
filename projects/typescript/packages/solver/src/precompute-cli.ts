@@ -17,6 +17,7 @@ import {
     planSelectiveCorpus,
     type SelectiveCorpusOptions,
 } from '#solver/precompute';
+import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 
 interface CliOptions {
     readonly dataset?: string;
@@ -112,15 +113,26 @@ async function main(): Promise<void> {
             await rename(stagingDirectory, artifactDirectory);
         }
         await verifyRecipeCorpusArtifact(artifactDirectory);
+        const corpusDurationMs = performance.now() - startedAt;
+        const indexStartedAt = performance.now();
+        const indexArtifact = await writeRecipeCorpusIndexArtifact(
+            path.join(outputRoot, 'indexes'),
+            artifactDirectory
+        );
 
-        const durationMs = performance.now() - startedAt;
         const byteLength = files.reduce((total, file) => total + file.byteLength, 0) +
             manifestContent.byteLength;
         process.stdout.write(
             `Verified ${manifest.counts.recipes} recipes in ${manifest.counts.partitions} ` +
-            `partitions (${formatBytes(byteLength)}) in ${durationMs.toFixed(1)} ms\n`
+            `partitions (${formatBytes(byteLength)}) in ${corpusDurationMs.toFixed(1)} ms\n`
         );
         process.stdout.write(`Artifact: ${artifactDirectory}\n`);
+        process.stdout.write(
+            `Verified lookup index ${indexArtifact.manifest.artifactSha256} ` +
+            `(${formatBytes(indexArtifact.byteLength)}) in ` +
+            `${(performance.now() - indexStartedAt).toFixed(1)} ms\n`
+        );
+        process.stdout.write(`Index: ${indexArtifact.directory}\n`);
     } catch (error) {
         await rm(stagingDirectory, { recursive: true, force: true });
         throw error;

@@ -83,7 +83,11 @@ export function buildRecipeCorpusManifest(
 }
 
 export async function verifyRecipeCorpusArtifact(
-    directory: string
+    directory: string,
+    onPartition: (
+        partition: RecipeCorpusPartition,
+        file: RecipeCorpusFile
+    ) => void = () => undefined
 ): Promise<RecipeCorpusManifest> {
     const resolvedDirectory = path.resolve(directory);
     if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
@@ -148,6 +152,7 @@ export async function verifyRecipeCorpusArtifact(
         }
         const partition = parsePartition(JSON.parse(content.toString('utf8')), file.path);
         verifyPartition(partition, file, manifest, effectStatesByProduct);
+        onPartition(partition, file);
         recipeCount += partition.recipes.length;
     }
     if (expectedPartitions.size > 0) {
@@ -159,6 +164,18 @@ export async function verifyRecipeCorpusArtifact(
         );
     }
     return manifest;
+}
+
+export async function readRecipeCorpusPartition(
+    directory: string,
+    file: RecipeCorpusFile
+): Promise<RecipeCorpusPartition> {
+    const resolvedDirectory = path.resolve(directory);
+    const content = await readFile(resolveFile(resolvedDirectory, file.path));
+    if (content.byteLength !== file.byteLength || sha256(content) !== file.sha256) {
+        throw new Error(`Recipe corpus partition failed integrity verification: ${file.path}`);
+    }
+    return parsePartition(JSON.parse(content.toString('utf8')), file.path);
 }
 
 function manifestBody(
