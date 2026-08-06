@@ -254,7 +254,7 @@ Options:
   --output PATH                   Report path; defaults to .local/benchmarks
   --depths LIST                   Comma-separated ingredient depths (default: 3,4,5)
   --iterations NUMBER             Measured runs per case (default: 3)
-  --warmups NUMBER                Unmeasured warmups per case (default: 1)
+  --warmups NUMBER                Recorded warmups per case (default: 1)
   --limit NUMBER                  Results requested per search (default: 10)
   --max-states NUMBER             State limit per recipe/product search (default: 100000)
   --transition-budget-percentiles LIST

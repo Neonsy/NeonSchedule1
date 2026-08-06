@@ -378,7 +378,7 @@ describe('recipe corpus artifact', () => {
             ...defaultSearchBenchmarkOptions(),
             depths: [1],
             iterations: 1,
-            warmups: 0,
+            warmups: 2,
             limit: 1,
             recipeCostCeilingFractions: [0.5],
             customerIds: ['customer'],
@@ -386,10 +386,14 @@ describe('recipe corpus artifact', () => {
             transitionBudgetPercentiles: [0.5],
         });
 
-        expect(report.schema).toBe('neonschedule1-search-benchmark-3');
+        expect(report.schema).toBe('neonschedule1-search-benchmark-4');
+        expect(report.cases.every((entry) => entry.warmupSamples.length === 2)).toBe(true);
+        expect(report.cases.every((entry) => entry.firstRun !== null)).toBe(true);
         expect(report.transitionBudgetSweep).not.toBeNull();
         const sweep = report.transitionBudgetSweep!;
         expect(sweep.probes).toHaveLength(4);
+        expect(sweep.probes.every((entry) => entry.warmupSamples.length === 0)).toBe(true);
+        expect(sweep.probes.every((entry) => entry.firstRun === null)).toBe(true);
         expect(sweep.candidates).toEqual([
             {
                 percentile: 0.5,
@@ -407,6 +411,16 @@ describe('recipe corpus artifact', () => {
             'work-limit',
             'work-limit',
         ]);
+        expect(sweep.cases.every((entry) => entry.warmupSamples.length === 2)).toBe(true);
+        expect(sweep.cases.every((entry) => entry.firstRun !== null)).toBe(true);
+        for (const entry of [...report.cases, ...sweep.cases]) {
+            const firstRunDurationMs = entry.warmupSamples[0]!.durationMs;
+            expect(entry.firstRun).toEqual({
+                durationMs: firstRunDurationMs,
+                deltaFromWarmedMedianMs:
+                    Math.round((firstRunDurationMs - entry.duration.medianMs) * 10) / 10,
+            });
+        }
     });
 });
 

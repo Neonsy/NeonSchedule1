@@ -41,7 +41,7 @@ export interface SearchBenchmarkOptions {
 }
 
 export interface SearchBenchmarkReport {
-    readonly schema: 'neonschedule1-search-benchmark-3';
+    readonly schema: 'neonschedule1-search-benchmark-4';
     readonly createdAt: string;
     readonly algorithmVersion: string;
     readonly dataset: {
@@ -79,6 +79,11 @@ export interface SearchBenchmarkCase {
     readonly productScope?: 'all' | 'single';
     readonly maxTransitionEvaluations?: number;
     readonly transitionBudgetPercentile?: number;
+    readonly warmupSamples: readonly SearchBenchmarkSample[];
+    readonly firstRun: {
+        readonly durationMs: number;
+        readonly deltaFromWarmedMedianMs: number;
+    } | null;
     readonly samples: readonly SearchBenchmarkSample[];
     readonly duration: {
         readonly minimumMs: number;
@@ -238,10 +243,10 @@ export function runSearchBenchmark(
             ingredientIds,
             options
         );
-        for (let index = 0; index < warmups; index++) execute();
+        const warmupSamples = Array.from({ length: warmups }, execute);
         const samples = Array.from({ length: iterations }, execute);
-        requireDeterministicSamples(definitionId(definition), samples);
-        const result = benchmarkCase(definition, samples);
+        requireDeterministicSamples(definitionId(definition), [...warmupSamples, ...samples]);
+        const result = benchmarkCase(definition, warmupSamples, samples);
         onCaseCompleted(++completedCaseCount, totalCaseCount, result);
         return result;
     };
@@ -270,7 +275,7 @@ export function runSearchBenchmark(
     }
 
     return {
-        schema: 'neonschedule1-search-benchmark-3',
+        schema: 'neonschedule1-search-benchmark-4',
         createdAt: new Date().toISOString(),
         algorithmVersion: recipeSearchAlgorithmVersion,
         dataset: {
@@ -328,9 +333,12 @@ export type BenchmarkDefinition = BenchmarkDefinitionBase & (
 
 function benchmarkCase(
     definition: BenchmarkDefinition,
+    warmupSamples: readonly SearchBenchmarkSample[],
     samples: readonly SearchBenchmarkSample[]
 ): SearchBenchmarkCase {
     const durations = samples.map((sample) => sample.durationMs).sort((left, right) => left - right);
+    const warmedMedianMs = median(durations);
+    const firstRunDurationMs = warmupSamples[0]?.durationMs;
     const base = {
         id: definitionId(definition),
         phase: definition.phase,
@@ -342,10 +350,19 @@ function benchmarkCase(
         ...(definition.transitionBudgetPercentile === undefined
             ? {}
             : { transitionBudgetPercentile: definition.transitionBudgetPercentile }),
+        warmupSamples,
+        firstRun: firstRunDurationMs === undefined
+            ? null
+            : {
+                  durationMs: firstRunDurationMs,
+                  deltaFromWarmedMedianMs: roundedMilliseconds(
+                      firstRunDurationMs - warmedMedianMs
+                  ),
+              },
         samples,
         duration: {
             minimumMs: durations[0]!,
-            medianMs: median(durations),
+            medianMs: warmedMedianMs,
             maximumMs: durations[durations.length - 1]!,
         },
     } as const;
@@ -369,6 +386,10 @@ function benchmarkCase(
                   ? { productScope: 'all' as const }
                   : { productId: definition.productId, productScope: 'single' as const }),
           };
+}
+
+function roundedMilliseconds(value: number): number {
+    return Math.round(value * 10) / 10;
 }
 
 function selectCustomers(
