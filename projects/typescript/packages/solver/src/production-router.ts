@@ -109,6 +109,7 @@ export class ProductionRequestRouter {
         const miss = this.#coverageMiss(request);
         if (miss !== null) return { kind: 'coverage-miss', request, miss };
         const {
+            productIds,
             availableIngredientIds: _availableIngredientIds,
             maxIngredients: _maxIngredients,
             ...query
@@ -116,7 +117,10 @@ export class ProductionRequestRouter {
         return {
             kind: 'exact',
             request,
-            result: await this.#production.recipes.query(query),
+            result: await this.#production.recipes.query({
+                ...query,
+                ...(sameStrings(productIds, this.#productIds) ? {} : { productIds }),
+            }),
         };
     }
 
@@ -127,6 +131,7 @@ export class ProductionRequestRouter {
         const miss = this.#coverageMiss(request);
         if (miss !== null) return { kind: 'coverage-miss', request, miss };
         const {
+            productIds,
             availableIngredientIds: _availableIngredientIds,
             maxIngredients: _maxIngredients,
             ...query
@@ -134,7 +139,10 @@ export class ProductionRequestRouter {
         return {
             kind: 'exact',
             request,
-            result: await this.#production.customers.recommend(query),
+            result: await this.#production.customers.recommend({
+                ...query,
+                ...(sameStrings(productIds, this.#productIds) ? {} : { productIds }),
+            }),
         };
     }
 

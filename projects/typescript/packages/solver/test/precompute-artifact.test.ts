@@ -211,6 +211,9 @@ describe('recipe corpus artifact', () => {
             'product-a',
             'product-b',
         ]);
+        expect(recipe.result.evidence.examinedRankingEntries).toBe(
+            recipe.result.recipes.length
+        );
         expect(customer.kind).toBe('exact');
         if (customer.kind !== 'exact') throw new Error('Expected exact customer route');
         expect(customer.result.recommendations.length).toBeGreaterThan(0);
