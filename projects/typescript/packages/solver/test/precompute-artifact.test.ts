@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -24,8 +24,10 @@ import {
 import { writeRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
 import { LiveFallbackRunner } from '#solver/live-fallback';
+import { packageRecipeCorpusProduction } from '#solver/precompute-package';
 import { loadRecipeCorpusProduction } from '#solver/precompute-production';
 import { RecipeCorpusLookup } from '#solver/precompute-query';
+import { loadProductionRuntime } from '#solver/production-runtime';
 import { ProductionRequestRouter } from '#solver/production-router';
 import {
     readRecipeCorpusProductionSelection,
@@ -216,6 +218,35 @@ describe('recipe corpus artifact', () => {
             refreshed.selection.selectionSha256
         );
 
+        const packageRoot = await temporaryDirectory('neonschedule1-runtime-package-');
+        const packaged = await packageRecipeCorpusProduction(source, {
+            outputRoot,
+            reportRoot,
+            packageRoot,
+        });
+        const repeatedPackage = await packageRecipeCorpusProduction(source, {
+            outputRoot,
+            reportRoot,
+            packageRoot,
+        });
+        expect(repeatedPackage.packageDirectory).toBe(packaged.packageDirectory);
+        expect(path.basename(packaged.packageDirectory)).toBe(
+            refreshed.selection.selectionSha256
+        );
+        const runtime = await loadProductionRuntime(source, {
+            packageDirectory: packaged.packageDirectory,
+        });
+        const packagedRecipe = await runtime.solver.recipe({
+            productIds: ['product-a'],
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
+            limit: 1,
+        }, 'quick');
+        expect(packagedRecipe.kind).toBe('precomputed-exact');
+        expect(runtime.production.selection.selectionSha256).toBe(
+            refreshed.selection.selectionSha256
+        );
+
         const miss = await router.recipe({
             productIds: ['missing-product'],
             availableIngredientIds: [],
@@ -381,6 +412,17 @@ describe('recipe corpus artifact', () => {
         await expect(
             loadRecipeCorpusProduction(source, { outputRoot, reportRoot })
         ).rejects.toThrow('verification report failed integrity verification');
+        const invalidPackageRoot = await temporaryDirectory(
+            'neonschedule1-invalid-runtime-package-'
+        );
+        await expect(packageRecipeCorpusProduction(source, {
+            outputRoot,
+            reportRoot,
+            packageRoot: invalidPackageRoot,
+        })).rejects.toThrow('verification report failed integrity verification');
+        expect(await stat(
+            path.join(invalidPackageRoot, refreshed.selection.selectionSha256)
+        ).catch(() => null)).toBeNull();
     });
 
     it('queries indexed effects and costs without scanning corpus files', async () => {
