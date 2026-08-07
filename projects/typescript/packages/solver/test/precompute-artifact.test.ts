@@ -233,6 +233,7 @@ describe('recipe corpus artifact', () => {
         const liveBudget = {
             maxStatesPerProduct: 10,
             maxTransitionEvaluationsPerProduct: 100,
+            maxDurationMsPerProduct: 10_000,
         };
         const liveRecipeRoute = await router.recipe({
             productIds: ['product-a'],
@@ -255,6 +256,7 @@ describe('recipe corpus artifact', () => {
             mode: 'quick',
             maxStatesPerProduct: 100_000,
             maxTransitionEvaluationsPerProduct: 20_560,
+            maxDurationMsPerProduct: 100,
         });
         expect(quickRecipe.evidence.coverageKey).not.toBe(
             liveRecipe.evidence.coverageKey
@@ -305,6 +307,25 @@ describe('recipe corpus artifact', () => {
             maxTransitionEvaluationsPerProduct: 1,
         });
 
+        let clockTime = 0;
+        const timedFallback = new LiveFallbackRunner(
+            source,
+            production,
+            { now: () => clockTime++ }
+        );
+        const timeLimited = timedFallback.recipe(liveRecipeRoute, {
+            ...liveBudget,
+            maxDurationMsPerProduct: 1,
+        });
+        expect(timeLimited.kind).toBe('time-limit');
+        if (timeLimited.kind !== 'time-limit') throw new Error('Expected live time limit');
+        expect(timeLimited.evidence).toMatchObject({
+            proofStatus: 'incomplete',
+            stopReason: 'time-limit',
+            transitionEvaluations: 0,
+            maxDurationMsPerProduct: 1,
+        });
+
         const liveCustomerRoute = await router.customer({
             productIds: ['product-a'],
             availableIngredientIds: [],
@@ -326,6 +347,7 @@ describe('recipe corpus artifact', () => {
         ).evidence).toMatchObject({
             mode: 'balanced',
             maxTransitionEvaluationsPerProduct: 242_704,
+            maxDurationMsPerProduct: 500,
         });
         await expect(router.recipe({
             availableIngredientIds: [],

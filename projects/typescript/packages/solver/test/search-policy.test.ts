@@ -17,12 +17,13 @@ describe('live search policy', () => {
             const policy = liveSearchPolicy(mode);
 
             expect(policy).toEqual({
-                version: '1',
+                version: '2',
                 mode,
                 maximumIngredients,
                 budget: {
                     maxStatesPerProduct: 100_000,
                     maxTransitionEvaluationsPerProduct: transitions,
+                    maxDurationMsPerProduct: maximumMs,
                 },
                 advisoryDuration: {
                     minimumMs,

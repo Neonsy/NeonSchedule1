@@ -1,6 +1,6 @@
 export interface RecipeSearchEvidence {
     readonly proofStatus: 'exact' | 'incomplete';
-    readonly stopReason: 'completed' | 'state-limit' | 'work-limit';
+    readonly stopReason: 'completed' | 'state-limit' | 'work-limit' | 'time-limit';
     /** Unique canonical states admitted to the search frontier. */
     readonly exploredStates: number;
     /** Frontier or candidate states rejected before expansion or admission. */
@@ -85,6 +85,39 @@ export class RecipeSearchWorkLimitError extends Error {
             exploredStates,
             prunedStates,
             completedDepth: depth - 1,
+            ...work,
+        };
+    }
+}
+
+export class RecipeSearchTimeLimitError extends Error {
+    readonly depth: number;
+    readonly maxDurationMs: number;
+    readonly elapsedMs: number;
+    readonly evidence: RecipeSearchEvidence;
+
+    constructor(
+        depth: number,
+        maxDurationMs: number,
+        elapsedMs: number,
+        exploredStates: number,
+        prunedStates: number,
+        completedDepth: number,
+        work: RecipeSearchWorkEvidence
+    ) {
+        super(
+            `Recipe search reached the ${maxDurationMs}-millisecond time limit at depth ${depth}`
+        );
+        this.name = 'RecipeSearchTimeLimitError';
+        this.depth = depth;
+        this.maxDurationMs = maxDurationMs;
+        this.elapsedMs = elapsedMs;
+        this.evidence = {
+            proofStatus: 'incomplete',
+            stopReason: 'time-limit',
+            exploredStates,
+            prunedStates,
+            completedDepth,
             ...work,
         };
     }

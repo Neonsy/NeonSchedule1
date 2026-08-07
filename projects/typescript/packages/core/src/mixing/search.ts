@@ -10,20 +10,26 @@ import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
     exactSearchEvidence,
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     type RecipeSearchEvidence,
 } from '#core/mixing/search-evidence';
 import {
     emptySearchWorkEvidence,
     RecipeSearchWorkBudget,
+    systemMonotonicClock,
+    type MonotonicClock,
 } from '#core/mixing/search-work';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 export {
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
 } from '#core/mixing/search-evidence';
 export type { RecipeSearchEvidence } from '#core/mixing/search-evidence';
+export { systemMonotonicClock } from '#core/mixing/search-work';
+export type { MonotonicClock } from '#core/mixing/search-work';
 export type { RecipeSearchObjective } from '#core/mixing/recipe-ranking';
 
 const defaultMaxStates = 100_000;
@@ -43,6 +49,8 @@ export interface RecipeSearchInput {
 export interface RecipeSearchOptions {
     readonly maxStates?: number;
     readonly maxTransitionEvaluations?: number;
+    readonly maxDurationMs?: number;
+    readonly clock?: MonotonicClock;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
@@ -73,6 +81,8 @@ export class RecipeSearch {
     readonly #itemsById: ReadonlyMap<string, Item>;
     readonly #maxStates: number;
     readonly #maxTransitionEvaluations: number | undefined;
+    readonly #maxDurationMs: number | undefined;
+    readonly #clock: MonotonicClock;
     readonly #productionCosts: ProductionMaterialCostResolver | undefined;
 
     constructor(
@@ -84,6 +94,8 @@ export class RecipeSearch {
         this.#itemsById = itemsById;
         this.#maxStates = options.maxStates ?? defaultMaxStates;
         this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
+        this.#maxDurationMs = options.maxDurationMs;
+        this.#clock = options.clock ?? systemMonotonicClock;
         this.#productionCosts = options.productionCosts;
         requirePositiveInteger(this.#maxStates, 'maxStates');
         if (this.#maxTransitionEvaluations !== undefined) {
@@ -91,6 +103,9 @@ export class RecipeSearch {
                 this.#maxTransitionEvaluations,
                 'maxTransitionEvaluations'
             );
+        }
+        if (this.#maxDurationMs !== undefined) {
+            requirePositiveFinite(this.#maxDurationMs, 'maxDurationMs');
         }
     }
 
@@ -101,6 +116,37 @@ export class RecipeSearch {
             requireNonNegativeFinite(input.maximumTotalCost, 'maximumTotalCost');
         }
 
+        let exploredStates = 0;
+        let prunedStates = 0;
+        let currentDepth = 0;
+        let completedDepth = 0;
+        const work = emptySearchWorkEvidence();
+        const workBudget = new RecipeSearchWorkBudget(
+            this.#maxTransitionEvaluations,
+            work,
+            (maximum) => new RecipeSearchWorkLimitError(
+                currentDepth,
+                maximum,
+                exploredStates,
+                prunedStates,
+                work
+            ),
+            this.#maxDurationMs === undefined
+                ? undefined
+                : {
+                    maximumMs: this.#maxDurationMs,
+                    clock: this.#clock,
+                    limitError: (maximum, elapsed) => new RecipeSearchTimeLimitError(
+                        currentDepth,
+                        maximum,
+                        elapsed,
+                        exploredStates,
+                        prunedStates,
+                        completedDepth,
+                        work
+                    ),
+                }
+        );
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
         const maximumTotalCost = input.maximumTotalCost ?? Number.POSITIVE_INFINITY;
@@ -115,21 +161,8 @@ export class RecipeSearch {
             ingredientIds: [],
             ingredientCost: 0,
         };
-        let exploredStates = 1;
-        let prunedStates = 0;
-        let currentDepth = 0;
-        const work = emptySearchWorkEvidence();
-        const workBudget = new RecipeSearchWorkBudget(
-            this.#maxTransitionEvaluations,
-            work,
-            (maximum) => new RecipeSearchWorkLimitError(
-                currentDepth,
-                maximum,
-                exploredStates,
-                prunedStates,
-                work
-            )
-        );
+        exploredStates = 1;
+        workBudget.checkpoint();
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
         const valueBound = new RecipeValueBound(
@@ -142,6 +175,7 @@ export class RecipeSearch {
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             currentDepth = depth;
+            workBudget.checkpoint();
             const next = new Map<string, SearchState>();
             const cutoff = new RecipeScoreCutoff(
                 outcomes,
@@ -245,8 +279,10 @@ export class RecipeSearch {
                 if (current === undefined || comparePaths(current, candidate) > 0) outcomes.set(key, candidate);
             }
             layer = next;
+            completedDepth = depth;
         }
 
+        completedDepth = input.maxIngredients;
         const recipes = [...outcomes.values()]
             .filter((recipe) =>
                 constraints.matches(recipe.effectIds) &&
@@ -255,6 +291,7 @@ export class RecipeSearch {
             )
             .sort((left, right) => compareRecipeEvaluations(left, right, objective))
             .slice(0, input.limit);
+        workBudget.checkpoint();
         return {
             recipes,
             evidence: exactSearchEvidence(
@@ -594,4 +631,10 @@ function requirePositiveInteger(value: number, name: string): void {
 
 function requireNonNegativeFinite(value: number, name: string): void {
     if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative finite number`);
+}
+
+function requirePositiveFinite(value: number, name: string): void {
+    if (!Number.isFinite(value) || value <= 0) {
+        throw new RangeError(`${name} must be a positive finite number`);
+    }
 }

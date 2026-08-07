@@ -22,10 +22,15 @@ import {
 import {
     exactSearchEvidence,
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     type RecipeSearchEvidence,
 } from '#core/mixing/search-evidence';
-import { RecipeSearchWorkBudget } from '#core/mixing/search-work';
+import {
+    RecipeSearchWorkBudget,
+    systemMonotonicClock,
+    type MonotonicClock,
+} from '#core/mixing/search-work';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 const defaultMaxStates = 100_000;
@@ -48,6 +53,8 @@ export interface CustomerRecipeSearchInput {
 export interface CustomerRecipeSearchOptions {
     readonly maxStates?: number;
     readonly maxTransitionEvaluations?: number;
+    readonly maxDurationMs?: number;
+    readonly clock?: MonotonicClock;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
@@ -88,6 +95,8 @@ export class CustomerRecipeSearch {
     readonly #offers: CustomerOfferEvaluator;
     readonly #maxStates: number;
     readonly #maxTransitionEvaluations: number | undefined;
+    readonly #maxDurationMs: number | undefined;
+    readonly #clock: MonotonicClock;
 
     constructor(
         engine: MixingEngine,
@@ -102,12 +111,17 @@ export class CustomerRecipeSearch {
         this.#offers = new CustomerOfferEvaluator(catalog);
         this.#maxStates = options.maxStates ?? defaultMaxStates;
         this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
+        this.#maxDurationMs = options.maxDurationMs;
+        this.#clock = options.clock ?? systemMonotonicClock;
         requirePositiveSafeInteger(this.#maxStates, 'maxStates');
         if (this.#maxTransitionEvaluations !== undefined) {
             requirePositiveSafeInteger(
                 this.#maxTransitionEvaluations,
                 'maxTransitionEvaluations'
             );
+        }
+        if (this.#maxDurationMs !== undefined) {
+            requirePositiveFinite(this.#maxDurationMs, 'maxDurationMs');
         }
     }
 
@@ -178,6 +192,35 @@ export class CustomerRecipeSearch {
         cutoff: () => number | null,
         metrics: SearchMetrics
     ): void {
+        let currentDepth = 0;
+        let completedDepth = 0;
+        let productExploredStates = 1;
+        const workBudget = new RecipeSearchWorkBudget(
+            this.#maxTransitionEvaluations,
+            metrics,
+            (maximum) => new RecipeSearchWorkLimitError(
+                currentDepth,
+                maximum,
+                metrics.exploredStates,
+                metrics.prunedStates,
+                metrics
+            ),
+            this.#maxDurationMs === undefined
+                ? undefined
+                : {
+                    maximumMs: this.#maxDurationMs,
+                    clock: this.#clock,
+                    limitError: (maximum, elapsed) => new RecipeSearchTimeLimitError(
+                        currentDepth,
+                        maximum,
+                        elapsed,
+                        metrics.exploredStates,
+                        metrics.prunedStates,
+                        completedDepth,
+                        metrics
+                    ),
+                }
+        );
         const baseRecipe = this.#recipes.evaluate({ productId, ingredientIds: [] });
         const product = this.#product(productId, baseRecipe);
         const acceptanceUpper = this.#offers.evaluate(
@@ -189,19 +232,6 @@ export class CustomerRecipeSearch {
             },
             input.state,
             { quality: input.quality, quantity: input.quantity, askingPrice: 0 }
-        );
-        let currentDepth = 0;
-        let productExploredStates = 1;
-        const workBudget = new RecipeSearchWorkBudget(
-            this.#maxTransitionEvaluations,
-            metrics,
-            (maximum) => new RecipeSearchWorkLimitError(
-                currentDepth,
-                maximum,
-                metrics.exploredStates,
-                metrics.prunedStates,
-                metrics
-            )
         );
         const bound = new CustomerProfitBound(
             this.#engine,
@@ -218,6 +248,7 @@ export class CustomerRecipeSearch {
             ingredientCost: 0,
         };
         metrics.exploredStates++;
+        workBudget.checkpoint();
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map(layer);
         if (constraints.matches(base.effectIds)) {
@@ -226,6 +257,7 @@ export class CustomerRecipeSearch {
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             currentDepth = depth;
+            workBudget.checkpoint();
             const remainingIngredients = input.maxIngredients - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
@@ -338,7 +370,10 @@ export class CustomerRecipeSearch {
             }
             consider(changed);
             layer = next;
+            completedDepth = depth;
         }
+        completedDepth = input.maxIngredients;
+        workBudget.checkpoint();
     }
 
     #subtreeUpper(
@@ -560,5 +595,11 @@ function requireNonNegativeSafeInteger(value: number, name: string): void {
 function requirePositiveSafeInteger(value: number, name: string): void {
     if (!Number.isSafeInteger(value) || value < 1) {
         throw new Error(`${name} must be a positive safe integer`);
+    }
+}
+
+function requirePositiveFinite(value: number, name: string): void {
+    if (!Number.isFinite(value) || value <= 0) {
+        throw new RangeError(`${name} must be a positive finite number`);
     }
 }

@@ -8,6 +8,7 @@ import {
     ReverseRecipeSearch,
     RecipeSearch,
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     type Effect,
     type Item,
@@ -322,6 +323,67 @@ describe('mixing engine', () => {
         });
         expect(exactWorkResult.evidence).toMatchObject({
             proofStatus: 'exact',
+            transitionEvaluations: 3,
+        });
+
+        let clockTime = 0;
+        const timedSearch = new RecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            {
+                maxStates: 10,
+                maxDurationMs: 1,
+                clock: { now: () => clockTime++ },
+            }
+        );
+        let timeFailure: unknown;
+        try {
+            timedSearch.search({
+                productId: 'product',
+                availableIngredientIds: ['ingredient'],
+                maxIngredients: 1,
+                limit: 1,
+            });
+        } catch (error) {
+            timeFailure = error;
+        }
+
+        expect(timeFailure).toBeInstanceOf(RecipeSearchTimeLimitError);
+        expect((timeFailure as RecipeSearchTimeLimitError).elapsedMs).toBe(1);
+        expect((timeFailure as RecipeSearchTimeLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'time-limit',
+            exploredStates: 1,
+            prunedStates: 0,
+            completedDepth: 0,
+            transitionEvaluations: 0,
+            boundTransitionEvaluations: 0,
+        });
+
+        let finalClockReads = 0;
+        const finalTimedSearch = new RecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            {
+                maxStates: 10,
+                maxDurationMs: 1,
+                clock: { now: () => ++finalClockReads === 5 ? 1 : 0 },
+            }
+        );
+        let finalTimeFailure: unknown;
+        try {
+            finalTimedSearch.search({
+                productId: 'product',
+                availableIngredientIds: ['ingredient'],
+                maxIngredients: 1,
+                limit: 1,
+            });
+        } catch (error) {
+            finalTimeFailure = error;
+        }
+        expect((finalTimeFailure as RecipeSearchTimeLimitError).evidence).toMatchObject({
+            stopReason: 'time-limit',
+            completedDepth: 1,
             transitionEvaluations: 3,
         });
     });

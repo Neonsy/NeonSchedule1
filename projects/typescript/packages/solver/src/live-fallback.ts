@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
 
 import {
     CustomerRecipeSearch,
     MixingEngine,
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     ReverseRecipeSearch,
+    systemMonotonicClock,
     type CustomerRecipeSearchResult,
+    type MonotonicClock,
     type RecipeSearchEvidence,
     type ReverseRecipeSearchResult,
 } from '@neonschedule1/core';
@@ -28,7 +30,7 @@ import {
     type LiveSearchMode,
 } from '#solver/search-policy';
 
-export const liveFallbackAlgorithmVersion = '4';
+export const liveFallbackAlgorithmVersion = '5';
 
 export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 
@@ -42,6 +44,7 @@ export interface LiveFallbackEvidence extends RecipeSearchEvidence {
     readonly coverageKey: string;
     readonly maxStatesPerProduct: number;
     readonly maxTransitionEvaluationsPerProduct: number;
+    readonly maxDurationMsPerProduct: number;
 }
 
 type CoverageMissRoute<Request> = {
@@ -59,7 +62,7 @@ export type LiveFallbackResult<Request, Result> =
         readonly evidence: LiveFallbackEvidence;
     }
     | {
-        readonly kind: 'state-limit' | 'work-limit';
+        readonly kind: 'state-limit' | 'work-limit' | 'time-limit';
         readonly request: Request;
         readonly miss: ProductionCoverageMiss;
         readonly result: null;
@@ -86,8 +89,13 @@ export class LiveFallbackRunner {
     readonly #drugTypeByProductId: ReadonlyMap<string, string>;
     readonly #selectionSha256: string;
     readonly #coverageKey: string;
+    readonly #clock: MonotonicClock;
 
-    constructor(dataset: SolverDataset, production: LoadedRecipeCorpusProduction) {
+    constructor(
+        dataset: SolverDataset,
+        production: LoadedRecipeCorpusProduction,
+        clock: MonotonicClock = systemMonotonicClock
+    ) {
         this.#dataset = dataset;
         this.#itemsById = new Map(dataset.items.map((item) => [item.id, item]));
         this.#engine = new MixingEngine(
@@ -112,6 +120,7 @@ export class LiveFallbackRunner {
         );
         this.#selectionSha256 = production.selection.selectionSha256;
         this.#coverageKey = production.selection.corpus.coverageKey;
+        this.#clock = clock;
     }
 
     recipe(
@@ -145,6 +154,8 @@ export class LiveFallbackRunner {
             () => new ReverseRecipeSearch(this.#engine, this.#itemsById, {
                 maxStates: budget.maxStatesPerProduct,
                 maxTransitionEvaluations: budget.maxTransitionEvaluationsPerProduct,
+                maxDurationMs: budget.maxDurationMsPerProduct,
+                clock: this.#clock,
             }).search(route.request)
         );
     }
@@ -189,6 +200,8 @@ export class LiveFallbackRunner {
                     maxStates: budget.maxStatesPerProduct,
                     maxTransitionEvaluations:
                         budget.maxTransitionEvaluationsPerProduct,
+                    maxDurationMs: budget.maxDurationMsPerProduct,
+                    clock: this.#clock,
                 }
             ).search(route.request)
         );
@@ -213,7 +226,7 @@ export class LiveFallbackRunner {
             mode,
             mapProfile
         );
-        const startedAt = performance.now();
+        const startedAt = this.#clock.now();
         try {
             const result = operation();
             return {
@@ -223,7 +236,7 @@ export class LiveFallbackRunner {
                 result,
                 evidence: evidence(
                     result.evidence,
-                    performance.now() - startedAt,
+                    this.#clock.now() - startedAt,
                     this.#dataset,
                     mapProfile,
                     coverageKey,
@@ -233,19 +246,22 @@ export class LiveFallbackRunner {
             };
         } catch (error) {
             if (!(error instanceof RecipeSearchLimitError) &&
-                !(error instanceof RecipeSearchWorkLimitError)) {
+                !(error instanceof RecipeSearchWorkLimitError) &&
+                !(error instanceof RecipeSearchTimeLimitError)) {
                 throw error;
             }
             return {
-                kind: error instanceof RecipeSearchWorkLimitError
-                    ? 'work-limit'
-                    : 'state-limit',
+                kind: error instanceof RecipeSearchTimeLimitError
+                    ? 'time-limit'
+                    : error instanceof RecipeSearchWorkLimitError
+                        ? 'work-limit'
+                        : 'state-limit',
                 request: route.request,
                 miss: route.miss,
                 result: null,
                 evidence: evidence(
                     error.evidence,
-                    performance.now() - startedAt,
+                    this.#clock.now() - startedAt,
                     this.#dataset,
                     mapProfile,
                     coverageKey,
@@ -287,6 +303,12 @@ export class LiveFallbackRunner {
                 'Live fallback maxTransitionEvaluationsPerProduct must be a positive safe integer'
             );
         }
+        if (!Number.isFinite(budget.maxDurationMsPerProduct) ||
+            budget.maxDurationMsPerProduct <= 0) {
+            throw new Error(
+                'Live fallback maxDurationMsPerProduct must be a positive finite number'
+            );
+        }
     }
 
     #validateMiss(miss: ProductionCoverageMiss): void {
@@ -324,6 +346,7 @@ function evidence(
         maxStatesPerProduct: budget.maxStatesPerProduct,
         maxTransitionEvaluationsPerProduct:
             budget.maxTransitionEvaluationsPerProduct,
+        maxDurationMsPerProduct: budget.maxDurationMsPerProduct,
     };
 }
 

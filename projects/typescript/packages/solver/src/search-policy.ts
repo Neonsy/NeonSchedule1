@@ -1,4 +1,4 @@
-export const liveSearchPolicyVersion = '1';
+export const liveSearchPolicyVersion = '2';
 
 export type LiveSearchMode = 'quick' | 'balanced' | 'precise';
 export type SolverSearchMode = LiveSearchMode | 'exhaustive';
@@ -6,6 +6,7 @@ export type SolverSearchMode = LiveSearchMode | 'exhaustive';
 export interface LiveFallbackBudget {
     readonly maxStatesPerProduct: number;
     readonly maxTransitionEvaluationsPerProduct: number;
+    readonly maxDurationMsPerProduct: number;
 }
 
 export interface AdvisorySearchDuration {
@@ -36,6 +37,7 @@ function definePolicy(
         budget: Object.freeze({
             maxStatesPerProduct: 100_000,
             maxTransitionEvaluationsPerProduct,
+            maxDurationMsPerProduct: maximumMs,
         }),
         advisoryDuration: Object.freeze({
             minimumMs,

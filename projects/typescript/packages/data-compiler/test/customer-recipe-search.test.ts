@@ -5,6 +5,7 @@ import {
     RecipeOutcomeEnumerator,
     RecipeSearch,
     RecipeSearchLimitError,
+    RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     type CustomerCatalog,
     type CustomerRecipeSearchInput,
@@ -218,6 +219,36 @@ describe('customer recipe search', () => {
             completedDepth: 0,
             transitionEvaluations: 2,
             boundTransitionEvaluations: 2,
+        });
+
+        let clockTime = 0;
+        const timedSearch = new CustomerRecipeSearch(
+            engine,
+            itemsById,
+            catalog(),
+            {
+                maxStates: 10,
+                maxDurationMs: 1,
+                clock: { now: () => clockTime++ },
+            }
+        );
+        let timeFailure: unknown;
+        try {
+            timedSearch.search(input);
+        } catch (error) {
+            timeFailure = error;
+        }
+
+        expect(timeFailure).toBeInstanceOf(RecipeSearchTimeLimitError);
+        expect((timeFailure as RecipeSearchTimeLimitError).elapsedMs).toBe(1);
+        expect((timeFailure as RecipeSearchTimeLimitError).evidence).toEqual({
+            proofStatus: 'incomplete',
+            stopReason: 'time-limit',
+            exploredStates: 1,
+            prunedStates: 0,
+            completedDepth: 0,
+            transitionEvaluations: 0,
+            boundTransitionEvaluations: 0,
         });
     });
 });
