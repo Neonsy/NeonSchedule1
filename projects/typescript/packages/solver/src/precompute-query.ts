@@ -70,12 +70,17 @@ export class RecipeCorpusLookup {
         corpusDirectory: string,
         corpusManifest: RecipeCorpusManifest,
         indexManifest: RecipeCorpusIndexManifest,
-        index: RecipeCorpusIndex
+        index: RecipeCorpusIndex | RuntimeRecipeCorpusIndex
     ) {
         this.#corpusDirectory = corpusDirectory;
         this.#corpusManifest = corpusManifest;
         this.#indexManifest = indexManifest;
-        this.#index = RuntimeRecipeCorpusIndex.consume(index, corpusManifest.files);
+        if (index instanceof RuntimeRecipeCorpusIndex) {
+            index.assertPartitions(corpusManifest.files);
+            this.#index = index;
+        } else {
+            this.#index = RuntimeRecipeCorpusIndex.consume(index, corpusManifest.files);
+        }
         this.#filesByPath = new Map(corpusManifest.files.map((file) => [file.path, file]));
         this.#rankPositions = {
             productValue: rankPositions(this.#index.rankings.productValue),

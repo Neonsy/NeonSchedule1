@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -8,9 +8,14 @@ import {
     recipeCorpusIndexAlgorithmVersion,
     type RecipeCorpusIndex,
 } from '#solver/precompute-index';
+import {
+    readBinaryRecipeCorpusIndex,
+    writeBinaryRecipeCorpusIndex,
+    type BinaryRecipeCorpusIndexFile,
+} from '#solver/precompute-index-binary';
+import { RuntimeRecipeCorpusIndex } from '#solver/runtime-index';
 
-export interface RecipeCorpusIndexManifest {
-    readonly schema: 'neonschedule1-recipe-corpus-index-manifest-1';
+interface RecipeCorpusIndexManifestBase {
     readonly artifactSha256: string;
     readonly algorithmVersion: string;
     readonly corpus: RecipeCorpusIndex['corpus'];
@@ -19,12 +24,26 @@ export interface RecipeCorpusIndexManifest {
         readonly products: number;
         readonly effects: number;
     };
+}
+
+export interface RecipeCorpusIndexManifestV1 extends RecipeCorpusIndexManifestBase {
+    readonly schema: 'neonschedule1-recipe-corpus-index-manifest-1';
     readonly file: {
         readonly path: 'lookup.json';
         readonly sha256: string;
         readonly byteLength: number;
     };
 }
+
+export interface RecipeCorpusIndexManifestV2 extends RecipeCorpusIndexManifestBase {
+    readonly schema: 'neonschedule1-recipe-corpus-index-manifest-2';
+    readonly storage: 'binary-columnar-1';
+    readonly file: BinaryRecipeCorpusIndexFile;
+}
+
+export type RecipeCorpusIndexManifest =
+    | RecipeCorpusIndexManifestV1
+    | RecipeCorpusIndexManifestV2;
 
 export async function writeRecipeCorpusIndexArtifact(
     indexRoot: string,
@@ -36,19 +55,23 @@ export async function writeRecipeCorpusIndexArtifact(
 }> {
     const resolvedRoot = path.resolve(indexRoot);
     await mkdir(resolvedRoot, { recursive: true });
-    const { index } = await buildRecipeCorpusIndex(corpusDirectory);
+    const { manifest: corpusManifest, index } = await buildRecipeCorpusIndex(corpusDirectory);
     const staging = path.join(resolvedRoot, `.${process.pid}.${randomUUID()}.tmp`);
     if (await stat(staging).catch(() => null)) {
         throw new Error(`Recipe index staging directory already exists: ${staging}`);
     }
     await mkdir(staging, { recursive: true });
     try {
-        const lookupFile = await writeIndex(path.join(staging, 'lookup.json'), index);
-        const manifest = buildManifest(index, lookupFile);
-        verifyIndex(index, manifest);
+        const summary = indexSummary(index);
+        const lookupFile = await writeBinaryRecipeCorpusIndex(
+            path.join(staging, 'lookup.bin'),
+            index,
+            corpusManifest.files
+        );
+        const manifest = buildManifest(summary, lookupFile);
         const manifestContent = `${JSON.stringify(manifest)}\n`;
         await writeFile(path.join(staging, 'manifest.json'), manifestContent, { flag: 'wx' });
-        await verifyRecipeCorpusIndexFiles(staging, manifest);
+        await verifyRecipeCorpusIndexArtifact(staging);
         const finalDirectory = path.join(
             resolvedRoot,
             index.corpus.artifactSha256,
@@ -57,6 +80,7 @@ export async function writeRecipeCorpusIndexArtifact(
         await mkdir(path.dirname(finalDirectory), { recursive: true });
         if (await stat(finalDirectory).catch(() => null)) {
             await verifyRecipeCorpusIndexFiles(finalDirectory, manifest);
+            await verifyRecipeCorpusIndexArtifact(finalDirectory);
             await rm(staging, { recursive: true });
         } else {
             await rename(staging, finalDirectory);
@@ -73,82 +97,11 @@ export async function writeRecipeCorpusIndexArtifact(
     }
 }
 
-async function writeIndex(
-    outputPath: string,
-    index: RecipeCorpusIndex
-): Promise<RecipeCorpusIndexManifest['file']> {
-    const output = await open(outputPath, 'wx');
-    const digest = createHash('sha256');
-    let byteLength = 0;
-    const write = async (content: string): Promise<void> => {
-        await output.writeFile(content, 'utf8');
-        digest.update(content);
-        byteLength += Buffer.byteLength(content);
-    };
-    try {
-        await write('{"schema":');
-        await write(JSON.stringify(index.schema));
-        await write(',"algorithmVersion":');
-        await write(JSON.stringify(index.algorithmVersion));
-        await write(',"corpus":');
-        await write(JSON.stringify(index.corpus));
-        await write(',"records":');
-        await writeArray(index.records, write);
-        await write(',"postings":{"products":');
-        await writePostings(index.postings.products, write);
-        await write(',"effects":');
-        await writePostings(index.postings.effects, write);
-        await write('},"rankings":{"productValue":');
-        await writeArray(index.rankings.productValue, write);
-        await write(',"netValue":');
-        await writeArray(index.rankings.netValue, write);
-        await write('},"totalCostOrder":');
-        await writeArray(index.totalCostOrder, write);
-        await write('}\n');
-    } finally {
-        await output.close();
-    }
-    return {
-        path: 'lookup.json',
-        sha256: digest.digest('hex'),
-        byteLength,
-    };
-}
-
-async function writePostings(
-    postings: Readonly<Record<string, readonly number[]>>,
-    write: (content: string) => Promise<void>
-): Promise<void> {
-    await write('{');
-    let first = true;
-    for (const [key, values] of Object.entries(postings)) {
-        if (!first) await write(',');
-        first = false;
-        await write(`${JSON.stringify(key)}:`);
-        await writeArray(values, write);
-    }
-    await write('}');
-}
-
-async function writeArray(
-    values: readonly unknown[],
-    write: (content: string) => Promise<void>
-): Promise<void> {
-    await write('[');
-    const chunkSize = 4_096;
-    for (let start = 0; start < values.length; start += chunkSize) {
-        if (start > 0) await write(',');
-        const chunk = JSON.stringify(values.slice(start, start + chunkSize));
-        await write(chunk.slice(1, -1));
-    }
-    await write(']');
-}
-
 export async function verifyRecipeCorpusIndexArtifact(
     directory: string
 ): Promise<{
     readonly manifest: RecipeCorpusIndexManifest;
-    readonly index: RecipeCorpusIndex;
+    readonly index: RecipeCorpusIndex | RuntimeRecipeCorpusIndex;
 }> {
     const resolvedDirectory = path.resolve(directory);
     if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
@@ -160,23 +113,39 @@ export async function verifyRecipeCorpusIndexArtifact(
         sha256(lookupContent) !== manifest.file.sha256) {
         throw new Error('Recipe index lookup file failed integrity verification');
     }
+    if (manifest.schema === 'neonschedule1-recipe-corpus-index-manifest-2') {
+        const index = readBinaryRecipeCorpusIndex(lookupContent);
+        verifyRuntimeIndex(index, manifest);
+        return { manifest, index };
+    }
     const index = parseIndex(JSON.parse(lookupContent.toString('utf8')));
     verifyIndex(index, manifest);
     return { manifest, index };
 }
 
-function buildManifest(
-    index: RecipeCorpusIndex,
-    file: RecipeCorpusIndexManifest['file']
-): RecipeCorpusIndexManifest {
-    const counts = {
+interface RecipeCorpusIndexSummary {
+    readonly corpus: RecipeCorpusIndex['corpus'];
+    readonly counts: RecipeCorpusIndexManifest['counts'];
+}
+
+function indexSummary(index: RecipeCorpusIndex): RecipeCorpusIndexSummary {
+    return {
+        corpus: index.corpus,
+        counts: {
         recipes: index.records.length,
         products: Object.keys(index.postings.products).length,
         effects: Object.keys(index.postings.effects).length,
+        },
     };
-    const body = manifestBody(index.corpus, counts, file);
+}
+
+function buildManifest(
+    summary: RecipeCorpusIndexSummary,
+    file: BinaryRecipeCorpusIndexFile
+): RecipeCorpusIndexManifestV2 {
+    const body = manifestBodyV2(summary.corpus, summary.counts, file);
     return {
-        schema: 'neonschedule1-recipe-corpus-index-manifest-1',
+        schema: 'neonschedule1-recipe-corpus-index-manifest-2',
         artifactSha256: sha256(jsonBytes(body)),
         ...body,
     };
@@ -206,11 +175,11 @@ async function readManifest(directory: string): Promise<RecipeCorpusIndexManifes
     const manifest = parseManifest(
         JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'))
     );
-    const expectedArtifactHash = sha256(jsonBytes(manifestBody(
-        manifest.corpus,
-        manifest.counts,
-        manifest.file
-    )));
+    const expectedArtifactHash = sha256(jsonBytes(
+        manifest.schema === 'neonschedule1-recipe-corpus-index-manifest-1'
+            ? manifestBodyV1(manifest.corpus, manifest.counts, manifest.file)
+            : manifestBodyV2(manifest.corpus, manifest.counts, manifest.file)
+    ));
     if (manifest.artifactSha256 !== expectedArtifactHash) {
         throw new Error('Recipe index manifest failed artifact identity verification');
     }
@@ -223,15 +192,29 @@ async function sha256File(filePath: string): Promise<string> {
     return digest.digest('hex');
 }
 
-function manifestBody(
+function manifestBodyV1(
     corpus: RecipeCorpusIndex['corpus'],
     counts: RecipeCorpusIndexManifest['counts'],
-    file: RecipeCorpusIndexManifest['file']
-): Omit<RecipeCorpusIndexManifest, 'schema' | 'artifactSha256'> {
+    file: RecipeCorpusIndexManifestV1['file']
+): Omit<RecipeCorpusIndexManifestV1, 'schema' | 'artifactSha256'> {
     return {
         algorithmVersion: recipeCorpusIndexAlgorithmVersion,
         corpus,
         counts,
+        file,
+    };
+}
+
+function manifestBodyV2(
+    corpus: RecipeCorpusIndex['corpus'],
+    counts: RecipeCorpusIndexManifest['counts'],
+    file: RecipeCorpusIndexManifestV2['file']
+): Omit<RecipeCorpusIndexManifestV2, 'schema' | 'artifactSha256'> {
+    return {
+        algorithmVersion: recipeCorpusIndexAlgorithmVersion,
+        corpus,
+        counts,
+        storage: 'binary-columnar-1',
         file,
     };
 }
@@ -268,6 +251,17 @@ function verifyIndex(
     }
 }
 
+function verifyRuntimeIndex(
+    index: RuntimeRecipeCorpusIndex,
+    manifest: RecipeCorpusIndexManifestV2
+): void {
+    if (index.recordCount !== manifest.counts.recipes ||
+        Object.keys(index.postings.products).length !== manifest.counts.products ||
+        Object.keys(index.postings.effects).length !== manifest.counts.effects) {
+        throw new Error('Recipe index lookup metadata differs from its manifest');
+    }
+}
+
 function verifyPermutation(values: readonly number[], count: number, label: string): void {
     if (values.length !== count) throw new Error(`Recipe index ${label} has the wrong length`);
     const seen = new Uint8Array(count);
@@ -296,16 +290,13 @@ function requireOrdinal(value: number, count: number, label: string): void {
 
 function parseManifest(value: unknown): RecipeCorpusIndexManifest {
     const record = object(value, 'Recipe index manifest');
-    if (record.schema !== 'neonschedule1-recipe-corpus-index-manifest-1' ||
-        record.algorithmVersion !== recipeCorpusIndexAlgorithmVersion) {
+    if (record.algorithmVersion !== recipeCorpusIndexAlgorithmVersion) {
         throw new Error('Recipe index manifest has an unsupported contract');
     }
     const corpus = object(record.corpus, 'Recipe index corpus identity');
     const counts = object(record.counts, 'Recipe index counts');
     const file = object(record.file, 'Recipe index file');
-    if (file.path !== 'lookup.json') throw new Error('Recipe index has an unsupported file path');
-    return {
-        schema: record.schema,
+    const common = {
         artifactSha256: hash(record.artifactSha256, 'artifactSha256'),
         algorithmVersion: record.algorithmVersion,
         corpus: {
@@ -318,12 +309,29 @@ function parseManifest(value: unknown): RecipeCorpusIndexManifest {
             products: integer(counts.products, 'counts.products'),
             effects: integer(counts.effects, 'counts.effects'),
         },
-        file: {
-            path: file.path,
-            sha256: hash(file.sha256, 'file.sha256'),
-            byteLength: integer(file.byteLength, 'file.byteLength'),
-        },
     };
+    const fileIdentity = {
+        sha256: hash(file.sha256, 'file.sha256'),
+        byteLength: integer(file.byteLength, 'file.byteLength'),
+    };
+    if (record.schema === 'neonschedule1-recipe-corpus-index-manifest-1' &&
+        file.path === 'lookup.json') {
+        return {
+            schema: record.schema,
+            ...common,
+            file: { path: file.path, ...fileIdentity },
+        };
+    }
+    if (record.schema === 'neonschedule1-recipe-corpus-index-manifest-2' &&
+        record.storage === 'binary-columnar-1' && file.path === 'lookup.bin') {
+        return {
+            schema: record.schema,
+            ...common,
+            storage: record.storage,
+            file: { path: file.path, ...fileIdentity },
+        };
+    }
+    throw new Error('Recipe index manifest has an unsupported contract');
 }
 
 function parseIndex(value: unknown): RecipeCorpusIndex {
