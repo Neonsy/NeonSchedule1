@@ -63,7 +63,7 @@ export class RecipeCorpusLookup {
     readonly #index: RuntimeRecipeCorpusIndex;
     readonly #filesByPath: ReadonlyMap<string, RecipeCorpusFile>;
     readonly #rankPositions: Readonly<Record<RecipeSearchObjective, Uint32Array>>;
-    readonly #minimumCostTrees: Readonly<Record<RecipeSearchObjective, MinimumCostTree>>;
+    readonly #minimumCostTrees: Partial<Record<RecipeSearchObjective, MinimumCostTree>> = {};
     readonly #partitionCache = new Map<string, RecipeCorpusPartition>();
 
     private constructor(
@@ -85,16 +85,6 @@ export class RecipeCorpusLookup {
         this.#rankPositions = {
             productValue: rankPositions(this.#index.rankings.productValue),
             netValue: rankPositions(this.#index.rankings.netValue),
-        };
-        this.#minimumCostTrees = {
-            productValue: minimumCostTree(
-                this.#index.rankings.productValue,
-                this.#index.totalCosts
-            ),
-            netValue: minimumCostTree(
-                this.#index.rankings.netValue,
-                this.#index.totalCosts
-            ),
         };
     }
 
@@ -159,7 +149,7 @@ export class RecipeCorpusLookup {
         } else if (input.maximumTotalCost !== undefined) {
             const selected = selectAffordable(
                 this.#index.rankings[objective],
-                this.#minimumCostTrees[objective],
+                this.#minimumCostTree(objective),
                 input.maximumTotalCost,
                 forbidden,
                 input.limit
@@ -223,6 +213,17 @@ export class RecipeCorpusLookup {
                 candidateCount,
             },
         };
+    }
+
+    #minimumCostTree(objective: RecipeSearchObjective): MinimumCostTree {
+        const existing = this.#minimumCostTrees[objective];
+        if (existing !== undefined) return existing;
+        const tree = minimumCostTree(
+            this.#index.rankings[objective],
+            this.#index.totalCosts
+        );
+        this.#minimumCostTrees[objective] = tree;
+        return tree;
     }
 
     async #recipe(ordinal: number): Promise<RecipeCorpusEntry> {
