@@ -22,16 +22,19 @@ import type {
     ProductionCustomerRouteResult,
     ProductionRecipeRouteResult,
 } from '#solver/production-router';
+import {
+    liveSearchPolicyForRequest,
+    type LiveFallbackBudget,
+    type LiveSearchMode,
+} from '#solver/search-policy';
 
 export const liveFallbackAlgorithmVersion = '4';
 
-export interface LiveFallbackBudget {
-    readonly maxStatesPerProduct: number;
-    readonly maxTransitionEvaluationsPerProduct: number;
-}
+export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 
 export interface LiveFallbackEvidence extends RecipeSearchEvidence {
     readonly source: 'live';
+    readonly mode?: LiveSearchMode;
     readonly elapsedMs: number;
     readonly algorithmVersion: string;
     readonly dataset: RecipeCorpusDatasetIdentity;
@@ -115,6 +118,22 @@ export class LiveFallbackRunner {
         route: Extract<ProductionRecipeRouteResult, { readonly kind: 'coverage-miss' }>,
         budget: LiveFallbackBudget
     ): LiveRecipeFallbackResult {
+        return this.#recipe(route, budget);
+    }
+
+    recipeForMode(
+        route: Extract<ProductionRecipeRouteResult, { readonly kind: 'coverage-miss' }>,
+        mode: LiveSearchMode
+    ): LiveRecipeFallbackResult {
+        const policy = liveSearchPolicyForRequest(mode, route.request.maxIngredients);
+        return this.#recipe(route, policy.budget, mode);
+    }
+
+    #recipe(
+        route: Extract<ProductionRecipeRouteResult, { readonly kind: 'coverage-miss' }>,
+        budget: LiveFallbackBudget,
+        mode?: LiveSearchMode
+    ): LiveRecipeFallbackResult {
         this.#validateBudget(budget);
         this.#validateMiss(route.miss);
         this.#validateRequest(route.request);
@@ -122,6 +141,7 @@ export class LiveFallbackRunner {
             'recipe',
             route,
             budget,
+            mode,
             () => new ReverseRecipeSearch(this.#engine, this.#itemsById, {
                 maxStates: budget.maxStatesPerProduct,
                 maxTransitionEvaluations: budget.maxTransitionEvaluationsPerProduct,
@@ -132,6 +152,22 @@ export class LiveFallbackRunner {
     customer(
         route: Extract<ProductionCustomerRouteResult, { readonly kind: 'coverage-miss' }>,
         budget: LiveFallbackBudget
+    ): LiveCustomerFallbackResult {
+        return this.#customer(route, budget);
+    }
+
+    customerForMode(
+        route: Extract<ProductionCustomerRouteResult, { readonly kind: 'coverage-miss' }>,
+        mode: LiveSearchMode
+    ): LiveCustomerFallbackResult {
+        const policy = liveSearchPolicyForRequest(mode, route.request.maxIngredients);
+        return this.#customer(route, policy.budget, mode);
+    }
+
+    #customer(
+        route: Extract<ProductionCustomerRouteResult, { readonly kind: 'coverage-miss' }>,
+        budget: LiveFallbackBudget,
+        mode?: LiveSearchMode
     ): LiveCustomerFallbackResult {
         this.#validateBudget(budget);
         this.#validateMiss(route.miss);
@@ -144,6 +180,7 @@ export class LiveFallbackRunner {
             'customer',
             route,
             budget,
+            mode,
             () => new CustomerRecipeSearch(
                 this.#engine,
                 this.#itemsById,
@@ -164,6 +201,7 @@ export class LiveFallbackRunner {
         kind: 'recipe' | 'customer',
         route: CoverageMissRoute<Request>,
         budget: LiveFallbackBudget,
+        mode: LiveSearchMode | undefined,
         operation: () => Result
     ): LiveFallbackResult<Request, Result> {
         const mapProfile = this.#mapProfile(route.request.productIds);
@@ -172,6 +210,7 @@ export class LiveFallbackRunner {
             identity(this.#dataset),
             route.request,
             budget,
+            mode,
             mapProfile
         );
         const startedAt = performance.now();
@@ -188,7 +227,8 @@ export class LiveFallbackRunner {
                     this.#dataset,
                     mapProfile,
                     coverageKey,
-                    budget
+                    budget,
+                    mode
                 ),
             };
         } catch (error) {
@@ -209,7 +249,8 @@ export class LiveFallbackRunner {
                     this.#dataset,
                     mapProfile,
                     coverageKey,
-                    budget
+                    budget,
+                    mode
                 ),
             };
         }
@@ -268,11 +309,13 @@ function evidence(
     dataset: SolverDataset,
     mapProfile: readonly string[],
     coverageKey: string,
-    budget: LiveFallbackBudget
+    budget: LiveFallbackBudget,
+    mode?: LiveSearchMode
 ): LiveFallbackEvidence {
     return {
         source: 'live',
         ...search,
+        ...(mode === undefined ? {} : { mode }),
         elapsedMs,
         algorithmVersion: liveFallbackAlgorithmVersion,
         dataset: identity(dataset),
@@ -289,6 +332,7 @@ function liveCoverageKey(
     dataset: RecipeCorpusDatasetIdentity,
     request: unknown,
     budget: LiveFallbackBudget,
+    mode: LiveSearchMode | undefined,
     mapProfile: readonly string[]
 ): string {
     return createHash('sha256').update(JSON.stringify({
@@ -298,6 +342,7 @@ function liveCoverageKey(
         mapProfile,
         request,
         budget,
+        ...(mode === undefined ? {} : { mode }),
     })).digest('hex');
 }
 

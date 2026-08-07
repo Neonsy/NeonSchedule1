@@ -249,6 +249,17 @@ describe('recipe corpus artifact', () => {
         expect(liveRecipe.result.recipes).toHaveLength(1);
         expect(liveRecipe.evidence.source).toBe('live');
 
+        const quickRecipe = fallback.recipeForMode(liveRecipeRoute, 'quick');
+        expect(quickRecipe.kind).toBe('completed');
+        expect(quickRecipe.evidence).toMatchObject({
+            mode: 'quick',
+            maxStatesPerProduct: 100_000,
+            maxTransitionEvaluationsPerProduct: 20_560,
+        });
+        expect(quickRecipe.evidence.coverageKey).not.toBe(
+            liveRecipe.evidence.coverageKey
+        );
+
         const costBoundRoute = await router.recipe({
             productIds: ['product-a'],
             availableIngredientIds: [],
@@ -309,10 +320,13 @@ describe('recipe corpus artifact', () => {
         if (liveCustomerRoute.kind !== 'coverage-miss') {
             throw new Error('Expected live customer coverage miss');
         }
-        expect(fallback.customer(
+        expect(fallback.customerForMode(
             liveCustomerRoute,
-            liveBudget
-        ).kind).toBe('completed');
+            'balanced'
+        ).evidence).toMatchObject({
+            mode: 'balanced',
+            maxTransitionEvaluationsPerProduct: 242_704,
+        });
         await expect(router.recipe({
             availableIngredientIds: [],
             maxIngredients: 0,
