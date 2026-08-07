@@ -11,11 +11,9 @@ import {
     verifyRecipeCorpusIndexArtifact,
     type RecipeCorpusIndexManifest,
 } from '#solver/precompute-index-artifact';
-import type {
-    RecipeCorpusIndex,
-    RecipeCorpusIndexRecord,
-} from '#solver/precompute-index';
+import type { RecipeCorpusIndex } from '#solver/precompute-index';
 import type { RecipeCorpusEntry, RecipeCorpusPartition } from '#solver/precompute';
+import { RuntimeRecipeCorpusIndex } from '#solver/runtime-index';
 
 export interface RecipeCorpusFilter {
     readonly productIds?: readonly string[];
@@ -62,7 +60,7 @@ export class RecipeCorpusLookup {
     readonly #corpusDirectory: string;
     readonly #corpusManifest: RecipeCorpusManifest;
     readonly #indexManifest: RecipeCorpusIndexManifest;
-    readonly #index: RecipeCorpusIndex;
+    readonly #index: RuntimeRecipeCorpusIndex;
     readonly #filesByPath: ReadonlyMap<string, RecipeCorpusFile>;
     readonly #rankPositions: Readonly<Record<RecipeSearchObjective, Uint32Array>>;
     readonly #minimumCostTrees: Readonly<Record<RecipeSearchObjective, MinimumCostTree>>;
@@ -77,15 +75,21 @@ export class RecipeCorpusLookup {
         this.#corpusDirectory = corpusDirectory;
         this.#corpusManifest = corpusManifest;
         this.#indexManifest = indexManifest;
-        this.#index = index;
+        this.#index = RuntimeRecipeCorpusIndex.consume(index, corpusManifest.files);
         this.#filesByPath = new Map(corpusManifest.files.map((file) => [file.path, file]));
         this.#rankPositions = {
-            productValue: rankPositions(index.rankings.productValue),
-            netValue: rankPositions(index.rankings.netValue),
+            productValue: rankPositions(this.#index.rankings.productValue),
+            netValue: rankPositions(this.#index.rankings.netValue),
         };
         this.#minimumCostTrees = {
-            productValue: minimumCostTree(index.rankings.productValue, index.records),
-            netValue: minimumCostTree(index.rankings.netValue, index.records),
+            productValue: minimumCostTree(
+                this.#index.rankings.productValue,
+                this.#index.totalCosts
+            ),
+            netValue: minimumCostTree(
+                this.#index.rankings.netValue,
+                this.#index.totalCosts
+            ),
         };
     }
 
@@ -139,7 +143,7 @@ export class RecipeCorpusLookup {
                 (ordinal) =>
                     !forbidden.has(ordinal) &&
                     (input.maximumTotalCost === undefined ||
-                        this.#index.records[ordinal]!.totalCost <= input.maximumTotalCost)
+                        this.#index.totalCosts[ordinal]! <= input.maximumTotalCost)
             );
             examinedRankingEntries = candidates.length;
             selectedOrdinals = selectTopRanked(
@@ -170,7 +174,7 @@ export class RecipeCorpusLookup {
         }
         const recipes: RecipeCorpusEntry[] = [];
         for (const ordinal of selectedOrdinals) {
-            recipes.push(await this.#recipe(this.#index.records[ordinal]!));
+            recipes.push(await this.#recipe(ordinal));
         }
         return {
             recipes,
@@ -192,12 +196,13 @@ export class RecipeCorpusLookup {
             allowed,
             forbidden,
             input.maximumTotalCost,
-            this.#index.records,
+            this.#index.recordCount,
+            this.#index.totalCosts,
             this.#index.totalCostOrder
         );
         const recipes: RecipeCorpusEntry[] = [];
         for (const ordinal of ordinals) {
-            recipes.push(await this.#recipe(this.#index.records[ordinal]!));
+            recipes.push(await this.#recipe(ordinal));
         }
         if (recipes.length !== candidateCount) {
             throw new Error('Recipe corpus selection differs from its index count');
@@ -215,20 +220,22 @@ export class RecipeCorpusLookup {
         };
     }
 
-    async #recipe(record: RecipeCorpusIndexRecord): Promise<RecipeCorpusEntry> {
-        let partition = this.#partitionCache.get(record.partitionPath);
+    async #recipe(ordinal: number): Promise<RecipeCorpusEntry> {
+        const partitionPath = this.#index.partitionPathAt(ordinal);
+        let partition = this.#partitionCache.get(partitionPath);
         if (partition === undefined) {
-            const file = this.#filesByPath.get(record.partitionPath);
+            const file = this.#filesByPath.get(partitionPath);
             if (file === undefined) {
-                throw new Error(`Recipe index references unknown partition ${record.partitionPath}`);
+                throw new Error(`Recipe index references unknown partition ${partitionPath}`);
             }
             partition = await readRecipeCorpusPartition(this.#corpusDirectory, file);
-            this.#partitionCache.set(record.partitionPath, partition);
+            this.#partitionCache.set(partitionPath, partition);
         }
-        const recipe = partition.recipes[record.recipeIndex];
-        if (recipe === undefined || recipe.costs.total !== record.totalCost) {
+        const recipeIndex = this.#index.recipeIndexAt(ordinal);
+        const recipe = partition.recipes[recipeIndex];
+        if (recipe === undefined || recipe.costs.total !== this.#index.totalCosts[ordinal]) {
             throw new Error(
-                `Recipe index contains an invalid reference ${record.partitionPath}:${record.recipeIndex}`
+                `Recipe index contains an invalid reference ${partitionPath}:${recipeIndex}`
             );
         }
         return recipe;
@@ -241,15 +248,15 @@ interface MinimumCostTree {
 }
 
 function minimumCostTree(
-    ranking: readonly number[],
-    records: readonly RecipeCorpusIndexRecord[]
+    ranking: Uint32Array,
+    totalCosts: Float64Array
 ): MinimumCostTree {
     let leafOffset = 1;
     while (leafOffset < ranking.length) leafOffset *= 2;
     const values = new Float64Array(leafOffset * 2);
     values.fill(Number.POSITIVE_INFINITY);
     ranking.forEach((ordinal, position) => {
-        values[leafOffset + position] = records[ordinal]!.totalCost;
+        values[leafOffset + position] = totalCosts[ordinal]!;
     });
     for (let index = leafOffset - 1; index > 0; index--) {
         values[index] = Math.min(values[index * 2]!, values[index * 2 + 1]!);
@@ -258,7 +265,7 @@ function minimumCostTree(
 }
 
 function selectAffordable(
-    ranking: readonly number[],
+    ranking: Uint32Array,
     tree: MinimumCostTree,
     maximumTotalCost: number,
     forbidden: ReadonlySet<number>,
@@ -288,26 +295,27 @@ function countCandidates(
     allowed: ReadonlySet<number> | null,
     forbidden: ReadonlySet<number>,
     maximumTotalCost: number | undefined,
-    records: readonly RecipeCorpusIndexRecord[],
-    totalCostOrder: readonly number[]
+    recordCount: number,
+    totalCosts: Float64Array,
+    totalCostOrder: Uint32Array
 ): number {
     if (allowed !== null) {
         let count = 0;
         for (const ordinal of allowed) {
             if (!forbidden.has(ordinal) &&
                 (maximumTotalCost === undefined ||
-                    records[ordinal]!.totalCost <= maximumTotalCost)) {
+                    totalCosts[ordinal]! <= maximumTotalCost)) {
                 count++;
             }
         }
         return count;
     }
-    if (maximumTotalCost === undefined) return records.length - forbidden.size;
+    if (maximumTotalCost === undefined) return recordCount - forbidden.size;
     let lower = 0;
     let upper = totalCostOrder.length;
     while (lower < upper) {
         const middle = lower + Math.floor((upper - lower) / 2);
-        if (records[totalCostOrder[middle]!]!.totalCost <= maximumTotalCost) {
+        if (totalCosts[totalCostOrder[middle]!]! <= maximumTotalCost) {
             lower = middle + 1;
         } else {
             upper = middle;
@@ -315,7 +323,7 @@ function countCandidates(
     }
     let count = lower;
     for (const ordinal of forbidden) {
-        if (records[ordinal]!.totalCost <= maximumTotalCost) count--;
+        if (totalCosts[ordinal]! <= maximumTotalCost) count--;
     }
     return count;
 }
@@ -324,23 +332,28 @@ function candidateOrdinals(
     allowed: ReadonlySet<number> | null,
     forbidden: ReadonlySet<number>,
     maximumTotalCost: number | undefined,
-    records: readonly RecipeCorpusIndexRecord[],
-    totalCostOrder: readonly number[]
+    recordCount: number,
+    totalCosts: Float64Array,
+    totalCostOrder: Uint32Array
 ): number[] {
     if (allowed !== null) {
         return [...allowed].filter(
             (ordinal) =>
                 !forbidden.has(ordinal) &&
                 (maximumTotalCost === undefined ||
-                    records[ordinal]!.totalCost <= maximumTotalCost)
+                    totalCosts[ordinal]! <= maximumTotalCost)
         );
     }
     if (maximumTotalCost === undefined) {
-        return records.flatMap((_, ordinal) => forbidden.has(ordinal) ? [] : [ordinal]);
+        const ordinals: number[] = [];
+        for (let ordinal = 0; ordinal < recordCount; ordinal++) {
+            if (!forbidden.has(ordinal)) ordinals.push(ordinal);
+        }
+        return ordinals;
     }
     const ordinals: number[] = [];
     for (const ordinal of totalCostOrder) {
-        if (records[ordinal]!.totalCost > maximumTotalCost) break;
+        if (totalCosts[ordinal]! > maximumTotalCost) break;
         if (!forbidden.has(ordinal)) ordinals.push(ordinal);
     }
     return ordinals;
@@ -352,7 +365,7 @@ interface FilterState {
     readonly candidateCount: number;
 }
 
-function filterState(input: RecipeCorpusFilter, index: RecipeCorpusIndex): FilterState {
+function filterState(input: RecipeCorpusFilter, index: RuntimeRecipeCorpusIndex): FilterState {
     validateFilter(input);
     const products = unique(input.productIds ?? [], 'product');
     const requiredEffects = unique(input.requiredEffectIds ?? [], 'required effect');
@@ -365,17 +378,13 @@ function filterState(input: RecipeCorpusFilter, index: RecipeCorpusIndex): Filte
 
     let allowed: Set<number> | null = null;
     if (products.length > 0) {
-        allowed = new Set(
-            products.flatMap((productId) => index.postings.products[productId] ?? [])
-        );
+        allowed = postingSet(products, index.postings.products);
     }
     const requiredPostings = requiredEffects
         .map((effectId) => index.postings.effects[effectId] ?? [])
         .sort((left, right) => left.length - right.length);
     for (const posting of requiredPostings) allowed = intersect(allowed, posting);
-    const forbidden = new Set(
-        forbiddenEffects.flatMap((effectId) => index.postings.effects[effectId] ?? [])
-    );
+    const forbidden = postingSet(forbiddenEffects, index.postings.effects);
     return {
         allowed,
         forbidden,
@@ -383,13 +392,25 @@ function filterState(input: RecipeCorpusFilter, index: RecipeCorpusIndex): Filte
             allowed,
             forbidden,
             input.maximumTotalCost,
-            index.records,
+            index.recordCount,
+            index.totalCosts,
             index.totalCostOrder
         ),
     };
 }
 
-function rankPositions(ranking: readonly number[]): Uint32Array {
+function postingSet(
+    keys: readonly string[],
+    postings: Readonly<Record<string, Uint32Array>>
+): Set<number> {
+    const result = new Set<number>();
+    for (const key of keys) {
+        for (const ordinal of postings[key] ?? []) result.add(ordinal);
+    }
+    return result;
+}
+
+function rankPositions(ranking: Uint32Array): Uint32Array {
     const positions = new Uint32Array(ranking.length);
     ranking.forEach((ordinal, position) => {
         positions[ordinal] = position;
@@ -416,7 +437,10 @@ function selectTopRanked(
     return selected;
 }
 
-function intersect(current: Set<number> | null, values: readonly number[]): Set<number> {
+function intersect(
+    current: Set<number> | null,
+    values: readonly number[] | Uint32Array
+): Set<number> {
     if (current === null) return new Set(values);
     const next = new Set<number>();
     for (const value of values) {
