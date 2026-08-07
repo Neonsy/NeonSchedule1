@@ -25,7 +25,8 @@ export async function loadProductionRuntime(
 ): Promise<LoadedProductionRuntime> {
     const production = await loadPackagedRecipeCorpusProduction(
         dataset,
-        options.packageDirectory
+        options.packageDirectory,
+        { corpusVerification: 'integrity' }
     );
     const router = new ProductionRequestRouter(production);
     const fallback = new LiveFallbackRunner(

@@ -3,6 +3,7 @@ import type { RecipeSearchObjective } from '@neonschedule1/core';
 import {
     readRecipeCorpusPartition,
     verifyRecipeCorpusArtifact,
+    verifyRecipeCorpusArtifactIntegrity,
     type RecipeCorpusFile,
     type RecipeCorpusManifest,
 } from '#solver/precompute-artifact';
@@ -26,6 +27,10 @@ export interface RecipeCorpusFilter {
 export interface RecipeCorpusQuery extends RecipeCorpusFilter {
     readonly objective?: RecipeSearchObjective;
     readonly limit: number;
+}
+
+export interface RecipeCorpusLookupLoadOptions {
+    readonly corpusVerification?: 'semantic' | 'integrity';
 }
 
 export interface RecipeCorpusSelectionResult {
@@ -86,10 +91,19 @@ export class RecipeCorpusLookup {
 
     static async load(
         corpusDirectory: string,
-        indexDirectory: string
+        indexDirectory: string,
+        options: RecipeCorpusLookupLoadOptions = {}
     ): Promise<RecipeCorpusLookup> {
+        const corpusVerification = options.corpusVerification ?? 'semantic';
+        if (corpusVerification !== 'semantic' && corpusVerification !== 'integrity') {
+            throw new Error(
+                `Unknown recipe corpus verification mode ${JSON.stringify(corpusVerification)}`
+            );
+        }
         const [corpusManifest, indexArtifact] = await Promise.all([
-            verifyRecipeCorpusArtifact(corpusDirectory),
+            corpusVerification === 'semantic'
+                ? verifyRecipeCorpusArtifact(corpusDirectory)
+                : verifyRecipeCorpusArtifactIntegrity(corpusDirectory),
             verifyRecipeCorpusIndexArtifact(indexDirectory),
         ]);
         if (indexArtifact.manifest.corpus.artifactSha256 !== corpusManifest.artifactSha256 ||

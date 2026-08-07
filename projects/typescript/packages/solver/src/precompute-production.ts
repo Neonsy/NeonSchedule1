@@ -4,7 +4,10 @@ import path from 'node:path';
 
 import type { SolverDataset } from '#solver/dataset';
 import { CustomerCorpusRecommendationLookup } from '#solver/precompute-customer';
-import { RecipeCorpusLookup } from '#solver/precompute-query';
+import {
+    RecipeCorpusLookup,
+    type RecipeCorpusLookupLoadOptions,
+} from '#solver/precompute-query';
 import {
     readRecipeCorpusProductionSelection,
     type RecipeCorpusProductionSelection,
@@ -14,6 +17,7 @@ import { identity } from '#solver/precompute';
 export interface RecipeCorpusProductionLoadOptions {
     readonly outputRoot: string;
     readonly reportRoot: string;
+    readonly corpusVerification?: RecipeCorpusLookupLoadOptions['corpusVerification'];
 }
 
 export interface LoadedRecipeCorpusProduction {
@@ -55,7 +59,11 @@ export async function loadRecipeCorpusProduction(
     const reportPath = childPath(reportRoot, selection.verification.reportFile);
     await verifySelectedReport(reportPath, selection);
 
-    const recipes = await RecipeCorpusLookup.load(corpusDirectory, indexDirectory);
+    const recipes = await RecipeCorpusLookup.load(corpusDirectory, indexDirectory, {
+        ...(options.corpusVerification === undefined
+            ? {}
+            : { corpusVerification: options.corpusVerification }),
+    });
     requireSame(
         'Production selection corpus dataset',
         recipes.corpusManifest.dataset,

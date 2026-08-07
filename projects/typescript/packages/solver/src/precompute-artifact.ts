@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -94,60 +95,11 @@ export async function verifyRecipeCorpusArtifact(
         file: RecipeCorpusFile
     ) => void = () => undefined
 ): Promise<RecipeCorpusManifest> {
-    const resolvedDirectory = path.resolve(directory);
-    if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
-        throw new Error(`Recipe corpus directory does not exist: ${resolvedDirectory}`);
-    }
-    const manifest = parseManifest(
-        JSON.parse(await readFile(path.join(resolvedDirectory, 'manifest.json'), 'utf8'))
-    );
-    const expectedArtifactHash = sha256(
-        jsonBytes(
-            manifestBody(
-                manifest.coverageKey,
-                manifest.dataset,
-                manifest.configuration,
-                manifest.estimatedOrderedSequences,
-                manifest.files
-            )
-        )
-    );
-    if (manifest.artifactSha256 !== expectedArtifactHash) {
-        throw new Error('Recipe corpus manifest failed artifact identity verification');
-    }
-    const expectedCoverageKey = recipeCorpusCoverageKey(
-        manifest.dataset,
-        manifest.configuration
-    );
-    if (manifest.coverageKey !== expectedCoverageKey) {
-        throw new Error('Recipe corpus manifest failed coverage-key verification');
-    }
-
-    if (manifest.counts.products !== manifest.configuration.productIds.length ||
-        manifest.counts.ingredients !== manifest.configuration.ingredientIds.length ||
-        manifest.counts.partitions !== manifest.files.length) {
-        throw new Error('Recipe corpus manifest counts are inconsistent');
-    }
-
-    const expectedPartitions = new Set(
-        manifest.configuration.productIds.flatMap((productId) =>
-            Array.from(
-                { length: manifest.configuration.maxIngredients + 1 },
-                (_, depth) => JSON.stringify([productId, depth])
-            )
-        )
-    );
-    const paths = new Set<string>();
+    const { resolvedDirectory, manifest } = await verifiedManifest(directory);
     const effectStatesByProduct = new Map<string, Set<string>>();
 
     let recipeCount = 0;
     for (const file of manifest.files) {
-        if (paths.has(file.path)) throw new Error(`Duplicate recipe corpus path: ${file.path}`);
-        paths.add(file.path);
-        const partitionKey = JSON.stringify([file.productId, file.resultDepth]);
-        if (!expectedPartitions.delete(partitionKey)) {
-            throw new Error(`Unexpected recipe corpus partition: ${partitionKey}`);
-        }
         const content = await readFile(resolveFile(resolvedDirectory, file.path));
         if (content.byteLength !== file.byteLength || sha256(content) !== file.sha256) {
             throw new Error(`Recipe corpus partition failed integrity verification: ${file.path}`);
@@ -157,13 +109,25 @@ export async function verifyRecipeCorpusArtifact(
         onPartition(partition, file);
         recipeCount += partition.recipes.length;
     }
-    if (expectedPartitions.size > 0) {
-        throw new Error(`Recipe corpus is missing ${expectedPartitions.size} configured partitions`);
-    }
     if (recipeCount !== manifest.counts.recipes) {
         throw new Error(
             `Recipe corpus contains ${recipeCount} recipes, manifest declares ${manifest.counts.recipes}`
         );
+    }
+    return manifest;
+}
+
+export async function verifyRecipeCorpusArtifactIntegrity(
+    directory: string
+): Promise<RecipeCorpusManifest> {
+    const { resolvedDirectory, manifest } = await verifiedManifest(directory);
+    for (const file of manifest.files) {
+        const filePath = resolveFile(resolvedDirectory, file.path);
+        const fileStat = await stat(filePath).catch(() => null);
+        if (!fileStat?.isFile() || fileStat.size !== file.byteLength ||
+            await sha256File(filePath) !== file.sha256) {
+            throw new Error(`Recipe corpus partition failed integrity verification: ${file.path}`);
+        }
     }
     return manifest;
 }
@@ -178,6 +142,70 @@ export async function readRecipeCorpusPartition(
         throw new Error(`Recipe corpus partition failed integrity verification: ${file.path}`);
     }
     return parsePartition(JSON.parse(content.toString('utf8')), file.path);
+}
+
+async function verifiedManifest(directory: string): Promise<{
+    readonly resolvedDirectory: string;
+    readonly manifest: RecipeCorpusManifest;
+}> {
+    const resolvedDirectory = path.resolve(directory);
+    if (!(await stat(resolvedDirectory).catch(() => null))?.isDirectory()) {
+        throw new Error(`Recipe corpus directory does not exist: ${resolvedDirectory}`);
+    }
+    const manifest = parseManifest(
+        JSON.parse(await readFile(path.join(resolvedDirectory, 'manifest.json'), 'utf8'))
+    );
+    const expectedArtifactHash = sha256(jsonBytes(manifestBody(
+        manifest.coverageKey,
+        manifest.dataset,
+        manifest.configuration,
+        manifest.estimatedOrderedSequences,
+        manifest.files
+    )));
+    if (manifest.artifactSha256 !== expectedArtifactHash) {
+        throw new Error('Recipe corpus manifest failed artifact identity verification');
+    }
+    if (manifest.coverageKey !== recipeCorpusCoverageKey(
+        manifest.dataset,
+        manifest.configuration
+    )) {
+        throw new Error('Recipe corpus manifest failed coverage-key verification');
+    }
+    const declaredRecipeCount = manifest.files.reduce(
+        (total, file) => total + file.recipeCount,
+        0
+    );
+    if (manifest.counts.products !== manifest.configuration.productIds.length ||
+        manifest.counts.ingredients !== manifest.configuration.ingredientIds.length ||
+        manifest.counts.partitions !== manifest.files.length ||
+        manifest.counts.recipes !== declaredRecipeCount) {
+        throw new Error('Recipe corpus manifest counts are inconsistent');
+    }
+    verifyManifestPartitions(manifest);
+    return { resolvedDirectory, manifest };
+}
+
+function verifyManifestPartitions(manifest: RecipeCorpusManifest): void {
+    const expected = new Set(
+        manifest.configuration.productIds.flatMap((productId) =>
+            Array.from(
+                { length: manifest.configuration.maxIngredients + 1 },
+                (_, depth) => JSON.stringify([productId, depth])
+            )
+        )
+    );
+    const paths = new Set<string>();
+    for (const file of manifest.files) {
+        if (paths.has(file.path)) throw new Error(`Duplicate recipe corpus path: ${file.path}`);
+        paths.add(file.path);
+        const partition = JSON.stringify([file.productId, file.resultDepth]);
+        if (!expected.delete(partition)) {
+            throw new Error(`Unexpected recipe corpus partition: ${partition}`);
+        }
+    }
+    if (expected.size > 0) {
+        throw new Error(`Recipe corpus is missing ${expected.size} configured partitions`);
+    }
 }
 
 function manifestBody(
@@ -376,6 +404,12 @@ function jsonBytes(value: unknown): Buffer {
 
 function sha256(content: Uint8Array): string {
     return createHash('sha256').update(content).digest('hex');
+}
+
+async function sha256File(filePath: string): Promise<string> {
+    const digest = createHash('sha256');
+    for await (const chunk of createReadStream(filePath)) digest.update(chunk);
+    return digest.digest('hex');
 }
 
 function object(value: unknown, label: string): Record<string, unknown> {

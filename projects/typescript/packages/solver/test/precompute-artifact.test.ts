@@ -16,6 +16,7 @@ import {
     buildRecipeCorpusManifest,
     describeCorpusFile,
     verifyRecipeCorpusArtifact,
+    verifyRecipeCorpusArtifactIntegrity,
 } from '#solver/precompute-artifact';
 import {
     defaultSearchBenchmarkOptions,
@@ -60,8 +61,10 @@ describe('recipe corpus artifact', () => {
         const artifact = await writeArtifact();
 
         const verified = await verifyRecipeCorpusArtifact(artifact.directory);
+        const integrity = await verifyRecipeCorpusArtifactIntegrity(artifact.directory);
 
         expect(verified.artifactSha256).toBe(artifact.artifactSha256);
+        expect(integrity).toEqual(verified);
         expect(verified.counts).toEqual({
             products: 1,
             ingredients: 1,
@@ -76,6 +79,22 @@ describe('recipe corpus artifact', () => {
 
         await expect(verifyRecipeCorpusArtifact(artifact.directory)).rejects.toThrow(
             'failed integrity verification'
+        );
+        await expect(
+            verifyRecipeCorpusArtifactIntegrity(artifact.directory)
+        ).rejects.toThrow('failed integrity verification');
+    });
+
+    it('keeps semantic verification at the package boundary', async () => {
+        const artifact = await writeArtifact('selective', (partition, content) =>
+            partition.coverage.resultDepth === 0 ? Buffer.from('{}\n') : content
+        );
+
+        await expect(
+            verifyRecipeCorpusArtifactIntegrity(artifact.directory)
+        ).resolves.toMatchObject({ artifactSha256: artifact.artifactSha256 });
+        await expect(verifyRecipeCorpusArtifact(artifact.directory)).rejects.toThrow(
+            'partition has an unsupported schema'
         );
     });
 
@@ -517,7 +536,13 @@ describe('recipe corpus artifact', () => {
     });
 });
 
-async function writeArtifact(mode: RecipeCorpusMode = 'selective'): Promise<{
+async function writeArtifact(
+    mode: RecipeCorpusMode = 'selective',
+    contentFor: (
+        partition: RecipeCorpusPartition,
+        content: Buffer
+    ) => Buffer = (_partition, content) => content
+): Promise<{
     readonly directory: string;
     readonly artifactSha256: string;
     readonly partitionPaths: readonly string[];
@@ -529,7 +554,7 @@ async function writeArtifact(mode: RecipeCorpusMode = 'selective'): Promise<{
     const partitionPaths: string[] = [];
     for (const value of partitions) {
         const relativePath = partitionPath(value);
-        const content = Buffer.from(`${JSON.stringify(value)}\n`);
+        const content = contentFor(value, Buffer.from(`${JSON.stringify(value)}\n`));
         const output = path.join(directory, ...relativePath.split('/'));
         await mkdir(path.dirname(output), { recursive: true });
         await writeFile(output, content);

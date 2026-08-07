@@ -91,12 +91,14 @@ export async function packageRecipeCorpusProduction(
 
 export async function loadPackagedRecipeCorpusProduction(
     dataset: SolverDataset,
-    packageDirectory: string
+    packageDirectory: string,
+    options: Pick<RecipeCorpusProductionLoadOptions, 'corpusVerification'> = {}
 ): Promise<LoadedRecipeCorpusProduction> {
     const root = path.resolve(packageDirectory);
     return loadRecipeCorpusProduction(dataset, {
         outputRoot: root,
         reportRoot: childPath(root, 'reports'),
+        ...options,
     });
 }
 
