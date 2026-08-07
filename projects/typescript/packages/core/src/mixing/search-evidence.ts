@@ -1,6 +1,14 @@
+export type RecipeSearchStopReason =
+    | 'completed'
+    | 'state-limit'
+    | 'work-limit'
+    | 'time-limit';
+
+export type RecipeSearchLimitReason = Exclude<RecipeSearchStopReason, 'completed'>;
+
 export interface RecipeSearchEvidence {
     readonly proofStatus: 'exact' | 'incomplete';
-    readonly stopReason: 'completed' | 'state-limit' | 'work-limit' | 'time-limit';
+    readonly stopReason: RecipeSearchStopReason;
     /** Unique canonical states admitted to the search frontier. */
     readonly exploredStates: number;
     /** Frontier or candidate states rejected before expansion or admission. */
@@ -34,7 +42,28 @@ export function exactSearchEvidence(
     };
 }
 
-export class RecipeSearchLimitError extends Error {
+export function incompleteSearchEvidence(
+    stopReason: RecipeSearchLimitReason,
+    exploredStates: number,
+    prunedStates: number,
+    completedDepth: number,
+    work?: RecipeSearchWorkEvidence
+): RecipeSearchEvidence {
+    return {
+        proofStatus: 'incomplete',
+        stopReason,
+        exploredStates,
+        prunedStates,
+        completedDepth,
+        ...work,
+    };
+}
+
+export abstract class RecipeSearchInterruptedError extends Error {
+    abstract readonly evidence: RecipeSearchEvidence;
+}
+
+export class RecipeSearchLimitError extends RecipeSearchInterruptedError {
     readonly depth: number;
     readonly maxStates: number;
     readonly evidence: RecipeSearchEvidence;
@@ -50,18 +79,17 @@ export class RecipeSearchLimitError extends Error {
         this.name = 'RecipeSearchLimitError';
         this.depth = depth;
         this.maxStates = maxStates;
-        this.evidence = {
-            proofStatus: 'incomplete',
-            stopReason: 'state-limit',
+        this.evidence = incompleteSearchEvidence(
+            'state-limit',
             exploredStates,
             prunedStates,
-            completedDepth: depth - 1,
-            ...work,
-        };
+            depth - 1,
+            work
+        );
     }
 }
 
-export class RecipeSearchWorkLimitError extends Error {
+export class RecipeSearchWorkLimitError extends RecipeSearchInterruptedError {
     readonly depth: number;
     readonly maxTransitionEvaluations: number;
     readonly evidence: RecipeSearchEvidence;
@@ -79,18 +107,17 @@ export class RecipeSearchWorkLimitError extends Error {
         this.name = 'RecipeSearchWorkLimitError';
         this.depth = depth;
         this.maxTransitionEvaluations = maxTransitionEvaluations;
-        this.evidence = {
-            proofStatus: 'incomplete',
-            stopReason: 'work-limit',
+        this.evidence = incompleteSearchEvidence(
+            'work-limit',
             exploredStates,
             prunedStates,
-            completedDepth: depth - 1,
-            ...work,
-        };
+            depth - 1,
+            work
+        );
     }
 }
 
-export class RecipeSearchTimeLimitError extends Error {
+export class RecipeSearchTimeLimitError extends RecipeSearchInterruptedError {
     readonly depth: number;
     readonly maxDurationMs: number;
     readonly elapsedMs: number;
@@ -112,13 +139,12 @@ export class RecipeSearchTimeLimitError extends Error {
         this.depth = depth;
         this.maxDurationMs = maxDurationMs;
         this.elapsedMs = elapsedMs;
-        this.evidence = {
-            proofStatus: 'incomplete',
-            stopReason: 'time-limit',
+        this.evidence = incompleteSearchEvidence(
+            'time-limit',
             exploredStates,
             prunedStates,
             completedDepth,
-            ...work,
-        };
+            work
+        );
     }
 }

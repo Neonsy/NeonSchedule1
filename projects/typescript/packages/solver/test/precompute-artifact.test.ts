@@ -279,10 +279,10 @@ describe('recipe corpus artifact', () => {
         expect(costBound.result.recipes[0]!.totalCost).toBeLessThanOrEqual(10);
 
         const limitedRoute = await router.recipe({
-            productIds: ['product-a'],
+            productIds: ['product-a', 'product-b'],
             availableIngredientIds: ['ingredient'],
             maxIngredients: 2,
-            limit: 1,
+            limit: 2,
         });
         if (limitedRoute.kind !== 'coverage-miss') {
             throw new Error('Expected limited recipe coverage miss');
@@ -294,6 +294,13 @@ describe('recipe corpus artifact', () => {
         expect(limited.kind).toBe('state-limit');
         if (limited.kind !== 'state-limit') throw new Error('Expected live state limit');
         expect(limited.evidence.completedDepth).toBe(0);
+        expect(limited.result.recipes.map((recipe) => recipe.productId)).toEqual([
+            'product-a',
+            'product-b',
+        ]);
+        expect(limited.result.recipes.every(
+            (recipe) => recipe.ingredientIds.length === 0
+        )).toBe(true);
 
         const workLimited = fallback.recipe(limitedRoute, {
             ...liveBudget,
@@ -303,9 +310,13 @@ describe('recipe corpus artifact', () => {
         if (workLimited.kind !== 'work-limit') throw new Error('Expected live work limit');
         expect(workLimited.evidence).toMatchObject({
             stopReason: 'work-limit',
-            transitionEvaluations: 1,
+            transitionEvaluations: 2,
             maxTransitionEvaluationsPerProduct: 1,
         });
+        expect(workLimited.result.recipes.map((recipe) => recipe.productId)).toEqual([
+            'product-a',
+            'product-b',
+        ]);
 
         let clockTime = 0;
         const timedFallback = new LiveFallbackRunner(
@@ -325,6 +336,7 @@ describe('recipe corpus artifact', () => {
             transitionEvaluations: 0,
             maxDurationMsPerProduct: 1,
         });
+        expect(timeLimited.result.recipes.map((recipe) => recipe.ingredientIds)).toEqual([[]]);
 
         const liveCustomerRoute = await router.customer({
             productIds: ['product-a'],

@@ -21,11 +21,15 @@ import {
 } from '#core/mixing/recipe';
 import {
     exactSearchEvidence,
+    incompleteSearchEvidence,
+    RecipeSearchInterruptedError,
     RecipeSearchLimitError,
     RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
     type RecipeSearchEvidence,
+    type RecipeSearchLimitReason,
 } from '#core/mixing/search-evidence';
+import type { RecipeSearchLimitBehavior } from '#core/mixing/search';
 import {
     RecipeSearchWorkBudget,
     systemMonotonicClock,
@@ -55,6 +59,7 @@ export interface CustomerRecipeSearchOptions {
     readonly maxTransitionEvaluations?: number;
     readonly maxDurationMs?: number;
     readonly clock?: MonotonicClock;
+    readonly limitBehavior?: RecipeSearchLimitBehavior;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
 
@@ -97,6 +102,7 @@ export class CustomerRecipeSearch {
     readonly #maxTransitionEvaluations: number | undefined;
     readonly #maxDurationMs: number | undefined;
     readonly #clock: MonotonicClock;
+    readonly #limitBehavior: RecipeSearchLimitBehavior;
 
     constructor(
         engine: MixingEngine,
@@ -113,6 +119,7 @@ export class CustomerRecipeSearch {
         this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
         this.#maxDurationMs = options.maxDurationMs;
         this.#clock = options.clock ?? systemMonotonicClock;
+        this.#limitBehavior = options.limitBehavior ?? 'throw';
         requirePositiveSafeInteger(this.#maxStates, 'maxStates');
         if (this.#maxTransitionEvaluations !== undefined) {
             requirePositiveSafeInteger(
@@ -123,6 +130,7 @@ export class CustomerRecipeSearch {
         if (this.#maxDurationMs !== undefined) {
             requirePositiveFinite(this.#maxDurationMs, 'maxDurationMs');
         }
+        requireLimitBehavior(this.#limitBehavior);
     }
 
     search(input: CustomerRecipeSearchInput): CustomerRecipeSearchResult {
@@ -144,6 +152,8 @@ export class CustomerRecipeSearch {
         };
         let topCandidates: CustomerRecommendationCandidate[] = [];
         let topRecommendations: CustomerRecommendation[] = [];
+        let stopReason: RecipeSearchLimitReason | undefined;
+        let completedDepth = input.maxIngredients;
 
         const consider = (candidates: readonly CustomerRecommendationCandidate[]): void => {
             if (candidates.length === 0) return;
@@ -169,17 +179,44 @@ export class CustomerRecipeSearch {
                 );
             }
             seenProductIds.add(productId);
-            this.#searchProduct(input, productId, actions, constraints, consider, cutoff, metrics);
+            try {
+                this.#searchProduct(
+                    input,
+                    productId,
+                    actions,
+                    constraints,
+                    consider,
+                    cutoff,
+                    metrics
+                );
+            } catch (error) {
+                if (!(error instanceof RecipeSearchInterruptedError) ||
+                    this.#limitBehavior === 'throw') {
+                    throw error;
+                }
+                const reason = error.evidence.stopReason;
+                if (reason === 'completed') throw new Error('Invalid completed search interruption');
+                stopReason ??= reason;
+                completedDepth = Math.min(completedDepth, error.evidence.completedDepth);
+            }
         }
 
         return {
             recommendations: topRecommendations,
-            evidence: exactSearchEvidence(
-                metrics.exploredStates,
-                metrics.prunedStates,
-                input.maxIngredients,
-                metrics
-            ),
+            evidence: stopReason === undefined
+                ? exactSearchEvidence(
+                    metrics.exploredStates,
+                    metrics.prunedStates,
+                    input.maxIngredients,
+                    metrics
+                )
+                : incompleteSearchEvidence(
+                    stopReason,
+                    metrics.exploredStates,
+                    metrics.prunedStates,
+                    completedDepth,
+                    metrics
+                ),
         };
     }
 
@@ -248,12 +285,12 @@ export class CustomerRecipeSearch {
             ingredientCost: 0,
         };
         metrics.exploredStates++;
-        workBudget.checkpoint();
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map(layer);
         if (constraints.matches(base.effectIds)) {
             consider([candidate(baseRecipe, product.customerDrugType)]);
         }
+        workBudget.checkpoint();
 
         for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
             currentDepth = depth;
@@ -601,5 +638,11 @@ function requirePositiveSafeInteger(value: number, name: string): void {
 function requirePositiveFinite(value: number, name: string): void {
     if (!Number.isFinite(value) || value <= 0) {
         throw new RangeError(`${name} must be a positive finite number`);
+    }
+}
+
+function requireLimitBehavior(value: RecipeSearchLimitBehavior): void {
+    if (value !== 'throw' && value !== 'return-best-found') {
+        throw new Error(`Unknown recipe search limit behavior ${JSON.stringify(value)}`);
     }
 }

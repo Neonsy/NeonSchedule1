@@ -3,9 +3,6 @@ import { createHash } from 'node:crypto';
 import {
     CustomerRecipeSearch,
     MixingEngine,
-    RecipeSearchLimitError,
-    RecipeSearchTimeLimitError,
-    RecipeSearchWorkLimitError,
     ReverseRecipeSearch,
     systemMonotonicClock,
     type CustomerRecipeSearchResult,
@@ -30,7 +27,7 @@ import {
     type LiveSearchMode,
 } from '#solver/search-policy';
 
-export const liveFallbackAlgorithmVersion = '5';
+export const liveFallbackAlgorithmVersion = '6';
 
 export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 
@@ -65,7 +62,7 @@ export type LiveFallbackResult<Request, Result> =
         readonly kind: 'state-limit' | 'work-limit' | 'time-limit';
         readonly request: Request;
         readonly miss: ProductionCoverageMiss;
-        readonly result: null;
+        readonly result: Result;
         readonly evidence: LiveFallbackEvidence;
     };
 
@@ -156,6 +153,7 @@ export class LiveFallbackRunner {
                 maxTransitionEvaluations: budget.maxTransitionEvaluationsPerProduct,
                 maxDurationMs: budget.maxDurationMsPerProduct,
                 clock: this.#clock,
+                limitBehavior: 'return-best-found',
             }).search(route.request)
         );
     }
@@ -202,6 +200,7 @@ export class LiveFallbackRunner {
                         budget.maxTransitionEvaluationsPerProduct,
                     maxDurationMs: budget.maxDurationMsPerProduct,
                     clock: this.#clock,
+                    limitBehavior: 'return-best-found',
                 }
             ).search(route.request)
         );
@@ -227,49 +226,36 @@ export class LiveFallbackRunner {
             mapProfile
         );
         const startedAt = this.#clock.now();
-        try {
-            const result = operation();
+        const result = operation();
+        const liveEvidence = evidence(
+            result.evidence,
+            this.#clock.now() - startedAt,
+            this.#dataset,
+            mapProfile,
+            coverageKey,
+            budget,
+            mode
+        );
+        if (result.evidence.proofStatus === 'incomplete') {
+            const stopReason = result.evidence.stopReason;
+            if (stopReason === 'completed') {
+                throw new Error('Invalid completed live fallback interruption');
+            }
             return {
-                kind: 'completed',
+                kind: stopReason,
                 request: route.request,
                 miss: route.miss,
                 result,
-                evidence: evidence(
-                    result.evidence,
-                    this.#clock.now() - startedAt,
-                    this.#dataset,
-                    mapProfile,
-                    coverageKey,
-                    budget,
-                    mode
-                ),
-            };
-        } catch (error) {
-            if (!(error instanceof RecipeSearchLimitError) &&
-                !(error instanceof RecipeSearchWorkLimitError) &&
-                !(error instanceof RecipeSearchTimeLimitError)) {
-                throw error;
-            }
-            return {
-                kind: error instanceof RecipeSearchTimeLimitError
-                    ? 'time-limit'
-                    : error instanceof RecipeSearchWorkLimitError
-                        ? 'work-limit'
-                        : 'state-limit',
-                request: route.request,
-                miss: route.miss,
-                result: null,
-                evidence: evidence(
-                    error.evidence,
-                    this.#clock.now() - startedAt,
-                    this.#dataset,
-                    mapProfile,
-                    coverageKey,
-                    budget,
-                    mode
-                ),
+                evidence: liveEvidence,
             };
         }
+        return {
+            kind: 'completed',
+            request: route.request,
+            miss: route.miss,
+            result,
+            evidence: liveEvidence,
+        };
     }
 
     #validateRequest(request: {

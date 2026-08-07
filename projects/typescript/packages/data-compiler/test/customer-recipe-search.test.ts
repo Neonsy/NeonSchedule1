@@ -199,6 +199,20 @@ describe('customer recipe search', () => {
             boundTransitionEvaluations: 2,
         });
 
+        const bestFound = new CustomerRecipeSearch(
+            engine,
+            itemsById,
+            catalog(),
+            { maxStates: 1, limitBehavior: 'return-best-found' }
+        ).search(input);
+        expect(bestFound.evidence).toMatchObject({
+            proofStatus: 'incomplete',
+            stopReason: 'state-limit',
+            completedDepth: 0,
+        });
+        expect(bestFound.recommendations).toHaveLength(1);
+        expect(bestFound.recommendations[0]!.recipe.ingredientIds).toEqual([]);
+
         const workSearch = new CustomerRecipeSearch(engine, itemsById, catalog(), {
             maxStates: 10,
             maxTransitionEvaluations: 2,

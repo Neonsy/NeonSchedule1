@@ -283,6 +283,23 @@ describe('mixing engine', () => {
             boundTransitionEvaluations: 2,
         });
 
+        const bestFound = new RecipeSearch(
+            engine,
+            new Map(items.map((entry) => [entry.id, entry])),
+            { maxStates: 1, limitBehavior: 'return-best-found' }
+        ).search({
+            productId: 'product',
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
+            limit: 1,
+        });
+        expect(bestFound.evidence).toMatchObject({
+            proofStatus: 'incomplete',
+            stopReason: 'state-limit',
+            completedDepth: 0,
+        });
+        expect(bestFound.recipes.map((recipe) => recipe.ingredientIds)).toEqual([[]]);
+
         const workSearch = new RecipeSearch(
             engine,
             new Map(items.map((entry) => [entry.id, entry])),

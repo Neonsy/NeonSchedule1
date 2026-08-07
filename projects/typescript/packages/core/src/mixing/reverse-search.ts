@@ -5,7 +5,12 @@ import {
     type RecipeSearchObjective,
 } from '#core/mixing/recipe-ranking';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
-import { exactSearchEvidence, type RecipeSearchEvidence } from '#core/mixing/search-evidence';
+import {
+    exactSearchEvidence,
+    incompleteSearchEvidence,
+    type RecipeSearchEvidence,
+    type RecipeSearchLimitReason,
+} from '#core/mixing/search-evidence';
 import { RecipeSearch, type RecipeSearchOptions } from '#core/mixing/search';
 
 export interface ReverseRecipeSearchInput {
@@ -55,6 +60,8 @@ export class ReverseRecipeSearch {
         let prunedStates = 0;
         let transitionEvaluations = 0;
         let boundTransitionEvaluations = 0;
+        let stopReason: RecipeSearchLimitReason | undefined;
+        let completedDepth = input.maxIngredients;
 
         // A recipe below one base's top limit already has enough same-base recipes ahead of it
         // to exclude it from the combined top limit.
@@ -81,6 +88,17 @@ export class ReverseRecipeSearch {
             transitionEvaluations += result.evidence.transitionEvaluations ?? 0;
             boundTransitionEvaluations +=
                 result.evidence.boundTransitionEvaluations ?? 0;
+            if (result.evidence.proofStatus === 'incomplete') {
+                const reason = result.evidence.stopReason;
+                if (reason === 'completed') {
+                    throw new Error('Invalid completed search interruption');
+                }
+                stopReason ??= reason;
+                completedDepth = Math.min(
+                    completedDepth,
+                    result.evidence.completedDepth
+                );
+            }
         }
 
         return {
@@ -91,12 +109,20 @@ export class ReverseRecipeSearch {
                     ...recipe,
                     ingredientQuantities: groupIngredients(recipe.ingredientIds),
                 })),
-            evidence: exactSearchEvidence(
-                exploredStates,
-                prunedStates,
-                input.maxIngredients,
-                { transitionEvaluations, boundTransitionEvaluations }
-            ),
+            evidence: stopReason === undefined
+                ? exactSearchEvidence(
+                    exploredStates,
+                    prunedStates,
+                    input.maxIngredients,
+                    { transitionEvaluations, boundTransitionEvaluations }
+                )
+                : incompleteSearchEvidence(
+                    stopReason,
+                    exploredStates,
+                    prunedStates,
+                    completedDepth,
+                    { transitionEvaluations, boundTransitionEvaluations }
+                ),
         };
     }
 

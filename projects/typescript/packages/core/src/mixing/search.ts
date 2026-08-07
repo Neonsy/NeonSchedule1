@@ -9,6 +9,7 @@ import {
 import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
     exactSearchEvidence,
+    RecipeSearchInterruptedError,
     RecipeSearchLimitError,
     RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
@@ -23,6 +24,7 @@ import {
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 export {
+    RecipeSearchInterruptedError,
     RecipeSearchLimitError,
     RecipeSearchTimeLimitError,
     RecipeSearchWorkLimitError,
@@ -51,8 +53,11 @@ export interface RecipeSearchOptions {
     readonly maxTransitionEvaluations?: number;
     readonly maxDurationMs?: number;
     readonly clock?: MonotonicClock;
+    readonly limitBehavior?: RecipeSearchLimitBehavior;
     readonly productionCosts?: ProductionMaterialCostResolver;
 }
+
+export type RecipeSearchLimitBehavior = 'throw' | 'return-best-found';
 
 export interface RecipeSearchResult {
     readonly recipes: readonly RecipeEvaluation[];
@@ -83,6 +88,7 @@ export class RecipeSearch {
     readonly #maxTransitionEvaluations: number | undefined;
     readonly #maxDurationMs: number | undefined;
     readonly #clock: MonotonicClock;
+    readonly #limitBehavior: RecipeSearchLimitBehavior;
     readonly #productionCosts: ProductionMaterialCostResolver | undefined;
 
     constructor(
@@ -96,6 +102,7 @@ export class RecipeSearch {
         this.#maxTransitionEvaluations = options.maxTransitionEvaluations;
         this.#maxDurationMs = options.maxDurationMs;
         this.#clock = options.clock ?? systemMonotonicClock;
+        this.#limitBehavior = options.limitBehavior ?? 'throw';
         this.#productionCosts = options.productionCosts;
         requirePositiveInteger(this.#maxStates, 'maxStates');
         if (this.#maxTransitionEvaluations !== undefined) {
@@ -107,6 +114,7 @@ export class RecipeSearch {
         if (this.#maxDurationMs !== undefined) {
             requirePositiveFinite(this.#maxDurationMs, 'maxDurationMs');
         }
+        requireLimitBehavior(this.#limitBehavior);
     }
 
     search(input: RecipeSearchInput): RecipeSearchResult {
@@ -162,7 +170,6 @@ export class RecipeSearch {
             ingredientCost: 0,
         };
         exploredStates = 1;
-        workBudget.checkpoint();
         let layer = new Map([[stateKey(base.effectIds), base]]);
         const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
         const valueBound = new RecipeValueBound(
@@ -172,117 +179,124 @@ export class RecipeSearch {
             objective,
             workBudget
         );
+        let interruption: RecipeSearchInterruptedError | undefined;
 
-        for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
-            currentDepth = depth;
+        try {
             workBudget.checkpoint();
-            const next = new Map<string, SearchState>();
-            const cutoff = new RecipeScoreCutoff(
-                outcomes,
-                input.limit,
-                constraints,
-                objective,
-                input.maximumTotalCost
-            );
-            const remainingIngredients = input.maxIngredients - depth + 1;
-            const rankedStates = [...layer.values()]
-                .map((state) => ({
-                    state,
-                    upperScore: valueBound.relaxedUpperScore(
-                        state.effectIds,
-                        state.ingredientCost,
-                        remainingIngredients
-                    ),
-                }))
-                .sort(
-                    (left, right) =>
-                        right.upperScore - left.upperScore ||
-                        compareStrings(left.state.effectIds, right.state.effectIds)
+            for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
+                currentDepth = depth;
+                workBudget.checkpoint();
+                const next = new Map<string, SearchState>();
+                const cutoff = new RecipeScoreCutoff(
+                    outcomes,
+                    input.limit,
+                    constraints,
+                    objective,
+                    input.maximumTotalCost
                 );
-            for (const ranked of rankedStates) {
-                const { state } = ranked;
-                let { upperScore } = ranked;
-                if (cutoff.value !== null && upperScore < cutoff.value) {
-                    prunedStates++;
-                    continue;
-                }
-                if (remainingIngredients <= 2) {
-                    const exact = valueBound.exactShortHorizon(
-                        state.effectIds,
-                        state.ingredientCost,
-                        remainingIngredients,
-                        constraints,
-                        maximumTotalCost
+                const remainingIngredients = input.maxIngredients - depth + 1;
+                const rankedStates = [...layer.values()]
+                    .map((state) => ({
+                        state,
+                        upperScore: valueBound.relaxedUpperScore(
+                            state.effectIds,
+                            state.ingredientCost,
+                            remainingIngredients
+                        ),
+                    }))
+                    .sort(
+                        (left, right) =>
+                            right.upperScore - left.upperScore ||
+                            compareStrings(left.state.effectIds, right.state.effectIds)
                     );
-                    if (exact === null) {
-                        prunedStates++;
-                        continue;
-                    }
-                    cutoff.add(exact.key, exact.value);
-                    upperScore = exact.value;
+                for (const ranked of rankedStates) {
+                    const { state } = ranked;
+                    let { upperScore } = ranked;
                     if (cutoff.value !== null && upperScore < cutoff.value) {
                         prunedStates++;
                         continue;
                     }
-                }
-                for (const action of actions) {
-                    workBudget.transition();
-                    const candidate: SearchState = {
-                        effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
-                        ingredientIds: [...state.ingredientIds, action.id],
-                        ingredientCost: state.ingredientCost + action.cost,
-                    };
-                    if (product.baseProductCost + candidate.ingredientCost > maximumTotalCost) {
-                        prunedStates++;
-                        continue;
-                    }
-                    const key = stateKey(candidate.effectIds);
-                    const prior = outcomes.get(key);
-                    if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) {
-                        prunedStates++;
-                        continue;
-                    }
-                    const current = next.get(key);
-                    if (current !== undefined && comparePaths(current, candidate) <= 0) {
-                        prunedStates++;
-                        continue;
-                    }
-                    if (current === undefined && exploredStates + next.size >= this.#maxStates) {
-                        throw new RecipeSearchLimitError(
-                            depth,
-                            this.#maxStates,
-                            exploredStates + next.size,
-                            prunedStates,
-                            work
+                    if (remainingIngredients <= 2) {
+                        const exact = valueBound.exactShortHorizon(
+                            state.effectIds,
+                            state.ingredientCost,
+                            remainingIngredients,
+                            constraints,
+                            maximumTotalCost
                         );
+                        if (exact === null) {
+                            prunedStates++;
+                            continue;
+                        }
+                        cutoff.add(exact.key, exact.value);
+                        upperScore = exact.value;
+                        if (cutoff.value !== null && upperScore < cutoff.value) {
+                            prunedStates++;
+                            continue;
+                        }
                     }
-                    if (current !== undefined) prunedStates++;
-                    next.set(key, candidate);
-                    if (constraints.matches(candidate.effectIds)) {
-                        cutoff.add(
-                            key,
-                            recipeSearchScore(
-                                this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
-                                product.baseProductCost,
-                                candidate.ingredientCost,
-                                objective
-                            )
-                        );
+                    for (const action of actions) {
+                        workBudget.transition();
+                        const candidate: SearchState = {
+                            effectIds: this.#engine.mixEffectIds(product.drugType, state.effectIds, action.effectId),
+                            ingredientIds: [...state.ingredientIds, action.id],
+                            ingredientCost: state.ingredientCost + action.cost,
+                        };
+                        if (product.baseProductCost + candidate.ingredientCost > maximumTotalCost) {
+                            prunedStates++;
+                            continue;
+                        }
+                        const key = stateKey(candidate.effectIds);
+                        const prior = outcomes.get(key);
+                        if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) {
+                            prunedStates++;
+                            continue;
+                        }
+                        const current = next.get(key);
+                        if (current !== undefined && comparePaths(current, candidate) <= 0) {
+                            prunedStates++;
+                            continue;
+                        }
+                        if (current === undefined && exploredStates + next.size >= this.#maxStates) {
+                            throw new RecipeSearchLimitError(
+                                depth,
+                                this.#maxStates,
+                                exploredStates + next.size,
+                                prunedStates,
+                                work
+                            );
+                        }
+                        if (current !== undefined) prunedStates++;
+                        next.set(key, candidate);
+                        if (constraints.matches(candidate.effectIds)) {
+                            cutoff.add(
+                                key,
+                                recipeSearchScore(
+                                    this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
+                                    product.baseProductCost,
+                                    candidate.ingredientCost,
+                                    objective
+                                )
+                            );
+                        }
                     }
                 }
+
+                exploredStates += next.size;
+                for (const [key, state] of next) {
+                    const candidate = evaluateState(input.productId, product, state, this.#engine);
+                    const current = outcomes.get(key);
+                    if (current === undefined || comparePaths(current, candidate) > 0) outcomes.set(key, candidate);
+                }
+                layer = next;
+                completedDepth = depth;
             }
 
-            exploredStates += next.size;
-            for (const [key, state] of next) {
-                const candidate = evaluateState(input.productId, product, state, this.#engine);
-                const current = outcomes.get(key);
-                if (current === undefined || comparePaths(current, candidate) > 0) outcomes.set(key, candidate);
-            }
-            layer = next;
-            completedDepth = depth;
+            completedDepth = input.maxIngredients;
+        } catch (error) {
+            interruption = recipeSearchInterruption(error);
+            if (interruption === undefined || this.#limitBehavior === 'throw') throw error;
         }
-
-        completedDepth = input.maxIngredients;
         const recipes = [...outcomes.values()]
             .filter((recipe) =>
                 constraints.matches(recipe.effectIds) &&
@@ -291,10 +305,17 @@ export class RecipeSearch {
             )
             .sort((left, right) => compareRecipeEvaluations(left, right, objective))
             .slice(0, input.limit);
-        workBudget.checkpoint();
+        if (interruption === undefined) {
+            try {
+                workBudget.checkpoint();
+            } catch (error) {
+                interruption = recipeSearchInterruption(error);
+                if (interruption === undefined || this.#limitBehavior === 'throw') throw error;
+            }
+        }
         return {
             recipes,
-            evidence: exactSearchEvidence(
+            evidence: interruption?.evidence ?? exactSearchEvidence(
                 exploredStates,
                 prunedStates,
                 input.maxIngredients,
@@ -637,4 +658,14 @@ function requirePositiveFinite(value: number, name: string): void {
     if (!Number.isFinite(value) || value <= 0) {
         throw new RangeError(`${name} must be a positive finite number`);
     }
+}
+
+function requireLimitBehavior(value: RecipeSearchLimitBehavior): void {
+    if (value !== 'throw' && value !== 'return-best-found') {
+        throw new Error(`Unknown recipe search limit behavior ${JSON.stringify(value)}`);
+    }
+}
+
+function recipeSearchInterruption(error: unknown): RecipeSearchInterruptedError | undefined {
+    return error instanceof RecipeSearchInterruptedError ? error : undefined;
 }
