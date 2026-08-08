@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
     canonicalJson,
     CustomerAllocationOptimizer,
+    type CustomerAllocationResourceLimit,
     type CustomerAllocationResult,
     type CustomerRecommendation,
 } from '@neonschedule1/core';
@@ -52,7 +53,7 @@ export class CustomerRecommendationAllocator {
     allocate(
         input: CustomerRecommendationAllocationInput
     ): CustomerRecommendationAllocationResult {
-        requireDatasetIdentity(input.datasetSha256);
+        assertCustomerAllocationDatasetIdentity(input.datasetSha256);
         const customerIds = uniqueCustomerIds(input.recommendationSets);
         const indexed = input.recommendationSets.flatMap(({ customerId, recommendations }) =>
             recommendations.map((recommendation) => indexRecommendation(
@@ -65,14 +66,13 @@ export class CustomerRecommendationAllocator {
         if (byOptionId.size !== indexed.length) {
             throw new Error('Customer recommendations contain duplicate allocation options');
         }
-        const stock = input.stock === undefined
-            ? undefined
-            : indexStock(input.stock, new Set(indexed.map(({ stockResourceId }) => stockResourceId)));
-        const resourceLimits = stock === undefined
-            ? []
-            : [...new Set(indexed.map(({ stockResourceId }) => stockResourceId))]
-                .sort()
-                .map((resourceId) => ({ resourceId, quantity: stock.get(resourceId) ?? 0 }));
+        const hasStock = input.stock !== undefined;
+        const resourceLimits = hasStock
+            ? customerRecommendationStockLimits(
+                  input.stock,
+                  indexed.map(({ stockResourceId }) => stockResourceId)
+              )
+            : [];
         const result = this.#optimizer.optimize({
             customerIds,
             options: indexed.map((entry) => ({
@@ -80,12 +80,12 @@ export class CustomerRecommendationAllocator {
                 customerId: entry.customerId,
                 productionCost: entry.recommendation.productionCost,
                 expectedProfit: entry.recommendation.expectedProfit,
-                resourceUsage: stock === undefined
-                    ? []
-                    : [{
+                resourceUsage: hasStock
+                    ? [{
                           resourceId: entry.stockResourceId,
                           quantity: entry.recommendation.quantity,
-                      }],
+                      }]
+                    : [],
             })),
             maximumProductionCost: input.maximumProductionCost,
             resourceLimits,
@@ -109,12 +109,30 @@ export function customerRecommendationStockResourceId(
     datasetSha256: string,
     recommendation: CustomerRecommendation
 ): string {
-    requireDatasetIdentity(datasetSha256);
+    assertCustomerAllocationDatasetIdentity(datasetSha256);
     return `mix:${digest({
         datasetSha256,
         quality: recommendation.quality,
         productId: recommendation.recipe.productId,
         ingredientIds: recommendation.recipe.ingredientIds,
+    })}`;
+}
+
+export function customerRecommendationAllocationOptionId(
+    datasetSha256: string,
+    customerId: string,
+    recommendation: CustomerRecommendation
+): string {
+    assertCustomerAllocationDatasetIdentity(datasetSha256);
+    requireId(customerId, 'Customer');
+    const stockResourceId = customerRecommendationStockResourceId(datasetSha256, recommendation);
+    return `offer:${digest({
+        customerId,
+        stockResourceId,
+        quantity: recommendation.quantity,
+        askingPrice: recommendation.askingPrice,
+        productionCost: recommendation.productionCost,
+        expectedProfit: recommendation.expectedProfit,
     })}`;
 }
 
@@ -131,22 +149,20 @@ function indexRecommendation(
     return {
         customerId,
         stockResourceId,
-        optionId: `offer:${digest({
+        optionId: customerRecommendationAllocationOptionId(
+            datasetSha256,
             customerId,
-            stockResourceId,
-            quantity: recommendation.quantity,
-            askingPrice: recommendation.askingPrice,
-            productionCost: recommendation.productionCost,
-            expectedProfit: recommendation.expectedProfit,
-        })}`,
+            recommendation
+        ),
         recommendation,
     };
 }
 
-function indexStock(
+export function customerRecommendationStockLimits(
     entries: readonly CustomerRecommendationStock[],
-    knownResourceIds: ReadonlySet<string>
-): ReadonlyMap<string, number> {
+    knownResourceIdsInput: Iterable<string>
+): CustomerAllocationResourceLimit[] {
+    const knownResourceIds = new Set(knownResourceIdsInput);
     const result = new Map<string, number>();
     for (const entry of entries) {
         requireId(entry.resourceId, 'Stock resource');
@@ -163,7 +179,9 @@ function indexStock(
         }
         result.set(entry.resourceId, entry.quantity);
     }
-    return result;
+    return [...knownResourceIds]
+        .sort()
+        .map((resourceId) => ({ resourceId, quantity: result.get(resourceId) ?? 0 }));
 }
 
 function uniqueCustomerIds(sets: readonly CustomerRecommendationSet[]): string[] {
@@ -182,7 +200,7 @@ function digest(value: unknown): string {
     return createHash('sha256').update(canonicalJson(value), 'utf8').digest('hex');
 }
 
-function requireDatasetIdentity(value: string): void {
+export function assertCustomerAllocationDatasetIdentity(value: string): void {
     if (!sha256Pattern.test(value)) {
         throw new Error('Customer allocation dataset identity must be a lowercase SHA-256');
     }
