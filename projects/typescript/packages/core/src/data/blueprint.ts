@@ -34,9 +34,27 @@ export const BlueprintSurfacePlacementSchema = type({
 });
 export type BlueprintSurfacePlacement = typeof BlueprintSurfacePlacementSchema.infer;
 
-export const BlueprintPlacementSchema = BlueprintGridPlacementSchema.or(
-    BlueprintSurfacePlacementSchema
-);
+export const BlueprintProceduralTileReferenceSchema = type({
+    x: 'number',
+    y: 'number',
+    tileId: 'string',
+});
+export type BlueprintProceduralTileReference =
+    typeof BlueprintProceduralTileReferenceSchema.infer;
+
+export const BlueprintProceduralGridPlacementSchema = type({
+    id: 'string',
+    kind: "'procedural-grid'",
+    itemId: 'string',
+    parentPlacementId: 'string | null',
+    tiles: BlueprintProceduralTileReferenceSchema.array(),
+});
+export type BlueprintProceduralGridPlacement =
+    typeof BlueprintProceduralGridPlacementSchema.infer;
+
+export const BlueprintPlacementSchema = BlueprintGridPlacementSchema
+    .or(BlueprintSurfacePlacementSchema)
+    .or(BlueprintProceduralGridPlacementSchema);
 export type BlueprintPlacement = typeof BlueprintPlacementSchema.infer;
 
 export const BlueprintDocumentSchema = type({

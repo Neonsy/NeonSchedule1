@@ -25,6 +25,7 @@ import {
     type BlueprintValidationResult,
     type ResolvedBlueprintGridPlacement,
     type ResolvedBlueprintPlacement,
+    type ResolvedBlueprintProceduralGridPlacement,
     type ResolvedBlueprintSurfacePlacement,
 } from '#core/blueprint/validation';
 
@@ -73,9 +74,18 @@ export interface ProjectedBlueprintSurfacePlacement extends ProjectedBlueprintPl
     readonly worldHitPoint: Vector3;
 }
 
+export interface ProjectedBlueprintProceduralGridPlacement
+    extends ProjectedBlueprintPlacementBase {
+    readonly kind: 'procedural-grid';
+    readonly parentPlacementId: string | null;
+    readonly tileType: string;
+    readonly tileIds: readonly string[];
+}
+
 export type ProjectedBlueprintPlacement =
     | ProjectedBlueprintGridPlacement
-    | ProjectedBlueprintSurfacePlacement;
+    | ProjectedBlueprintSurfacePlacement
+    | ProjectedBlueprintProceduralGridPlacement;
 
 export type BlueprintProjectionIssueCode =
     | 'elevation-offset-unsupported'
@@ -118,7 +128,16 @@ interface SurfaceProjectionContext {
     readonly placement: ResolvedBlueprintSurfacePlacement;
 }
 
-type ProjectionContext = GridProjectionContext | SurfaceProjectionContext;
+interface ProceduralProjectionContext {
+    readonly kind: 'procedural-grid';
+    readonly buildable: Buildable;
+    readonly placement: ResolvedBlueprintProceduralGridPlacement;
+}
+
+type ProjectionContext =
+    | GridProjectionContext
+    | SurfaceProjectionContext
+    | ProceduralProjectionContext;
 
 interface PlacementFrame {
     readonly rootPosition: Vector3;
@@ -161,10 +180,33 @@ export class BlueprintProjector {
         const issues = contexts.flatMap((context) => projectionIssues(context));
         if (issues.length > 0) return rejected(validation, issues);
 
+        const contextById = new Map(contexts.map((context) => [context.placement.id, context]));
+        const projectedById = new Map<string, ProjectedBlueprintPlacement>();
+        const project = (context: ProjectionContext): ProjectedBlueprintPlacement => {
+            const existing = projectedById.get(context.placement.id);
+            if (existing !== undefined) return existing;
+            let parentRoot: BlueprintWorldTransform | undefined;
+            if (
+                context.kind === 'procedural-grid' &&
+                context.placement.frame.space === 'parent'
+            ) {
+                const parentPlacementId = context.placement.parentPlacementId;
+                const parent = parentPlacementId === null
+                    ? undefined
+                    : contextById.get(parentPlacementId);
+                if (parent === undefined) {
+                    throw new Error('Validated blueprint references unavailable projection data');
+                }
+                parentRoot = project(parent).root;
+            }
+            const projected = projectPlacement(context, placementFrame(context, parentRoot));
+            projectedById.set(context.placement.id, projected);
+            return projected;
+        };
         return {
             kind: 'projected',
             validation,
-            placements: contexts.map(projectPlacement),
+            placements: contexts.map(project),
             issues: [],
         };
     }
@@ -181,6 +223,9 @@ export class BlueprintProjector {
             }
             return { kind: 'grid', buildable, grid, placement };
         }
+        if (placement.kind === 'procedural-grid') {
+            return { kind: 'procedural-grid', buildable, placement };
+        }
         const surface = property.surfaces.find((candidate) => candidate.id === placement.surfaceId);
         if (surface === undefined) {
             throw new Error('Validated blueprint references unavailable projection data');
@@ -190,7 +235,7 @@ export class BlueprintProjector {
 }
 
 function projectionIssues(context: ProjectionContext): BlueprintProjectionIssue[] {
-    if (context.kind === 'surface') return [];
+    if (context.kind !== 'grid') return [];
     const { buildable, grid, placement } = context;
     const tiles = placement.occupiedTiles.map(({ x, y }) => ({ x, y }));
     if (placement.occupiedTiles.some((tile) =>
@@ -233,8 +278,10 @@ function projectionIssues(context: ProjectionContext): BlueprintProjectionIssue[
     return [];
 }
 
-function projectPlacement(context: ProjectionContext): ProjectedBlueprintPlacement {
-    const frame = placementFrame(context);
+function projectPlacement(
+    context: ProjectionContext,
+    frame: PlacementFrame
+): ProjectedBlueprintPlacement {
     const projected = projectBuildable(context.buildable, frame);
     if (context.kind === 'grid') {
         return {
@@ -243,6 +290,17 @@ function projectPlacement(context: ProjectionContext): ProjectedBlueprintPlaceme
             itemId: context.placement.itemId,
             gridId: context.placement.gridId,
             worldYaw: gridWorldYaw(context),
+            ...projected,
+        };
+    }
+    if (context.kind === 'procedural-grid') {
+        return {
+            id: context.placement.id,
+            kind: 'procedural-grid',
+            itemId: context.placement.itemId,
+            parentPlacementId: context.placement.parentPlacementId,
+            tileType: context.placement.tileType,
+            tileIds: context.placement.tiles.map((tile) => tile.tileId),
             ...projected,
         };
     }
@@ -280,7 +338,26 @@ function projectBuildable(buildable: Buildable, frame: PlacementFrame): Projecte
     };
 }
 
-function placementFrame(context: ProjectionContext): PlacementFrame {
+function placementFrame(
+    context: ProjectionContext,
+    parentRoot?: BlueprintWorldTransform
+): PlacementFrame {
+    if (context.kind === 'procedural-grid') {
+        const frame = context.placement.frame;
+        if (frame.space === 'world') {
+            return { rootPosition: frame.position, rootRotation: frame.rotation };
+        }
+        if (parentRoot === undefined) {
+            throw new Error('Validated blueprint references unavailable projection data');
+        }
+        return {
+            rootPosition: add(
+                parentRoot.worldPosition,
+                rotateVectorByQuaternion(parentRoot.worldRotation, frame.position)
+            ),
+            rootRotation: multiplyQuaternions(parentRoot.worldRotation, frame.rotation),
+        };
+    }
     if (context.kind === 'surface') {
         const surfaceRotation = quaternionFromUnityEuler(context.surface.transform.worldRotation);
         return {

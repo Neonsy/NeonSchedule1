@@ -3,6 +3,8 @@ import {
     type BlueprintDocument,
     type BlueprintGridCoordinate,
     type BlueprintGridRotation,
+    type BlueprintPlacement,
+    type BlueprintProceduralTileReference,
 } from '#core/data/blueprint';
 import { BuildableSchema, type Buildable } from '#core/data/buildable';
 import { PropertyLayoutSchema, type PropertyLayout } from '#core/data/property-layout';
@@ -19,6 +21,12 @@ import {
     resolveSurfacePlacement,
     type ResolvedBlueprintSurfacePlacement,
 } from '#core/blueprint/surface-validation';
+import {
+    indexProceduralTiles,
+    proceduralTileSharingIssues,
+    resolveProceduralGridPlacement,
+    type ProceduralPlacementFrame,
+} from '#core/blueprint/procedural-grid-validation';
 
 export type { ResolvedBlueprintSurfacePlacement } from '#core/blueprint/surface-validation';
 
@@ -49,7 +57,13 @@ export type BlueprintValidationIssueCode =
     | 'surface-geometry-unsupported'
     | 'surface-point-outside-collider'
     | 'surface-face-incompatible'
-    | 'surface-face-unsupported';
+    | 'surface-face-unsupported'
+    | 'procedural-parent-unavailable'
+    | 'procedural-parent-cycle'
+    | 'procedural-tile-unavailable'
+    | 'procedural-tile-type-incompatible'
+    | 'procedural-footprint-incompatible'
+    | 'procedural-tile-sharing-incompatible';
 
 export interface BlueprintValidationIssue {
     readonly code: BlueprintValidationIssueCode;
@@ -58,6 +72,7 @@ export interface BlueprintValidationIssue {
     readonly gridId: string | null;
     readonly surfaceId?: string;
     readonly tiles: readonly BlueprintGridCoordinate[];
+    readonly proceduralTileIds?: readonly string[];
 }
 
 export interface ResolvedBlueprintGridTile extends BlueprintGridCoordinate {
@@ -81,9 +96,20 @@ export interface ResolvedBlueprintGridPlacement {
     readonly cornerObstacles: readonly ResolvedBlueprintCornerObstacle[];
 }
 
+export interface ResolvedBlueprintProceduralGridPlacement {
+    readonly id: string;
+    readonly kind: 'procedural-grid';
+    readonly itemId: string;
+    readonly parentPlacementId: string | null;
+    readonly tileType: string;
+    readonly tiles: readonly BlueprintProceduralTileReference[];
+    readonly frame: ProceduralPlacementFrame;
+}
+
 export type ResolvedBlueprintPlacement =
     | ResolvedBlueprintGridPlacement
-    | ResolvedBlueprintSurfacePlacement;
+    | ResolvedBlueprintSurfacePlacement
+    | ResolvedBlueprintProceduralGridPlacement;
 
 export interface BlueprintValidationResult {
     readonly document: BlueprintDocument;
@@ -98,6 +124,7 @@ interface IndexedProperty {
     readonly surfaceById: ReturnType<typeof indexPropertySurfaces>;
     readonly surfaceMeshById: ReturnType<typeof indexSurfaceMeshes>;
     readonly convexSurfaceHullByMeshId: ReturnType<typeof indexConvexSurfaceHulls>;
+    readonly proceduralTileById: ReturnType<typeof indexProceduralTiles>;
 }
 
 const sha256Pattern = /^[a-f0-9]{64}$/u;
@@ -132,6 +159,10 @@ export class BlueprintValidator {
                         layout,
                         surfaceMeshById
                     ),
+                    proceduralTileById: indexProceduralTiles(
+                        layout.proceduralTiles,
+                        `Property ${JSON.stringify(layout.propertyCode)}`
+                    ),
                 };
             }),
             ({ layout }) => layout.propertyCode,
@@ -152,25 +183,103 @@ export class BlueprintValidator {
             )]);
         }
 
-        const resolvedPlacements: ResolvedBlueprintPlacement[] = [];
-        const issues: BlueprintValidationIssue[] = [];
-        for (const placement of document.placements) {
-            const placementResult = placement.kind === 'grid'
-                ? resolveGridPlacement(placement, this.#buildableByItemId, property.gridById)
-                : resolveSurfacePlacement(
+        const placementById = new Map(document.placements.map((placement) => [placement.id, placement]));
+        const cycleIds = proceduralParentCycleIds(document.placements, placementById);
+        const resolutionById = new Map<string, {
+            readonly placement: ResolvedBlueprintPlacement | null;
+            readonly issues: readonly BlueprintValidationIssue[];
+        }>();
+        const resolve = (placement: BlueprintPlacement): void => {
+            if (resolutionById.has(placement.id)) return;
+            if (placement.kind === 'grid') {
+                resolutionById.set(
+                    placement.id,
+                    resolveGridPlacement(placement, this.#buildableByItemId, property.gridById)
+                );
+                return;
+            }
+            if (placement.kind === 'surface') {
+                resolutionById.set(placement.id, resolveSurfacePlacement(
                     placement,
                     this.#buildableByItemId,
                     property.surfaceById,
                     property.surfaceMeshById,
                     property.convexSurfaceHullByMeshId
+                ));
+                return;
+            }
+            if (cycleIds.has(placement.id)) {
+                resolutionById.set(placement.id, {
+                    placement: null,
+                    issues: [proceduralIssue(
+                        'procedural-parent-cycle',
+                        `Placement ${JSON.stringify(placement.id)} belongs to a procedural parent cycle`,
+                        placement.id
+                    )],
+                });
+                return;
+            }
+            let tileById = property.proceduralTileById;
+            let frameSpace: 'world' | 'parent' = 'world';
+            if (placement.parentPlacementId !== null) {
+                const parent = placementById.get(placement.parentPlacementId);
+                if (parent === undefined) {
+                    resolutionById.set(placement.id, {
+                        placement: null,
+                        issues: [proceduralIssue(
+                            'procedural-parent-unavailable',
+                            `Placement ${JSON.stringify(placement.id)} references unavailable parent ` +
+                                JSON.stringify(placement.parentPlacementId),
+                            placement.id
+                        )],
+                    });
+                    return;
+                }
+                resolve(parent);
+                const resolvedParent = resolutionById.get(parent.id)?.placement;
+                if (resolvedParent === null || resolvedParent === undefined) {
+                    resolutionById.set(placement.id, {
+                        placement: null,
+                        issues: [proceduralIssue(
+                            'procedural-parent-unavailable',
+                            `Placement ${JSON.stringify(placement.id)} depends on unresolved parent ` +
+                                JSON.stringify(parent.id),
+                            placement.id
+                        )],
+                    });
+                    return;
+                }
+                const parentBuildable = this.#buildableByItemId.get(parent.itemId)!;
+                tileById = indexProceduralTiles(
+                    parentBuildable.proceduralTiles,
+                    `Buildable ${JSON.stringify(parentBuildable.itemId)}`
                 );
-            if (placementResult.placement === null) issues.push(...placementResult.issues);
-            else resolvedPlacements.push(placementResult.placement);
-        }
+                frameSpace = 'parent';
+            }
+            resolutionById.set(placement.id, resolveProceduralGridPlacement(
+                placement,
+                this.#buildableByItemId,
+                tileById,
+                frameSpace
+            ));
+        };
+        for (const placement of document.placements) resolve(placement);
+        const resolvedPlacements = document.placements.flatMap((placement) => {
+            const resolved = resolutionById.get(placement.id)!.placement;
+            return resolved === null ? [] : [resolved];
+        });
+        const issues = document.placements.flatMap(
+            (placement) => resolutionById.get(placement.id)!.issues
+        );
         const gridPlacements = resolvedPlacements.filter(
             (placement): placement is ResolvedBlueprintGridPlacement => placement.kind === 'grid'
         );
         issues.push(...tileSharingIssues(gridPlacements));
+        const proceduralPlacements = resolvedPlacements.filter(
+            (placement): placement is ResolvedBlueprintProceduralGridPlacement =>
+                placement.kind === 'procedural-grid'
+        );
+        issues.push(...proceduralTileSharingIssues(proceduralPlacements));
         return result(document, resolvedPlacements, issues);
     }
 
@@ -213,6 +322,47 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
                 ...placement,
                 anchor: { x: placement.anchor.x, y: placement.anchor.y },
             };
+        }
+        if (placement.kind === 'procedural-grid') {
+            if (placement.parentPlacementId !== null) {
+                requireNonBlank(
+                    placement.parentPlacementId,
+                    `Blueprint placement parent ID at index ${index}`
+                );
+            }
+            const coordinates = new Set<string>();
+            const tileIds = new Set<string>();
+            const tiles = placement.tiles.map((tile, tileIndex) => {
+                requireSafeInteger(
+                    tile.x,
+                    `Blueprint procedural tile X at placement ${index}, tile ${tileIndex}`
+                );
+                requireSafeInteger(
+                    tile.y,
+                    `Blueprint procedural tile Y at placement ${index}, tile ${tileIndex}`
+                );
+                requireNonBlank(
+                    tile.tileId,
+                    `Blueprint procedural tile ID at placement ${index}, tile ${tileIndex}`
+                );
+                const coordinate = `${tile.x},${tile.y}`;
+                if (coordinates.has(coordinate)) {
+                    throw new TypeError(
+                        `Blueprint placement ${JSON.stringify(placement.id)} maps duplicate ` +
+                            `footprint coordinate ${JSON.stringify(coordinate)}`
+                    );
+                }
+                if (tileIds.has(tile.tileId)) {
+                    throw new TypeError(
+                        `Blueprint placement ${JSON.stringify(placement.id)} maps duplicate ` +
+                            `procedural tile ${JSON.stringify(tile.tileId)}`
+                    );
+                }
+                coordinates.add(coordinate);
+                tileIds.add(tile.tileId);
+                return { x: tile.x, y: tile.y, tileId: tile.tileId };
+            });
+            return { ...placement, tiles };
         }
         requireNonBlank(placement.surfaceId, `Blueprint placement surface ID at index ${index}`);
         requireNonBlank(
@@ -268,6 +418,41 @@ function result(
 
 function issue(code: BlueprintValidationIssueCode, message: string): BlueprintValidationIssue {
     return { code, message, placementIds: [], gridId: null, tiles: [] };
+}
+
+function proceduralIssue(
+    code: BlueprintValidationIssueCode,
+    message: string,
+    placementId: string
+): BlueprintValidationIssue {
+    return { code, message, placementIds: [placementId], gridId: null, tiles: [] };
+}
+
+function proceduralParentCycleIds(
+    placements: readonly BlueprintPlacement[],
+    placementById: ReadonlyMap<string, BlueprintPlacement>
+): ReadonlySet<string> {
+    const state = new Map<string, 'visiting' | 'complete'>();
+    const stack: string[] = [];
+    const cycles = new Set<string>();
+    const visit = (placement: BlueprintPlacement): void => {
+        if (state.get(placement.id) === 'complete') return;
+        const existing = stack.indexOf(placement.id);
+        if (existing >= 0) {
+            for (const id of stack.slice(existing)) cycles.add(id);
+            return;
+        }
+        state.set(placement.id, 'visiting');
+        stack.push(placement.id);
+        if (placement.kind === 'procedural-grid' && placement.parentPlacementId !== null) {
+            const parent = placementById.get(placement.parentPlacementId);
+            if (parent !== undefined) visit(parent);
+        }
+        stack.pop();
+        state.set(placement.id, 'complete');
+    };
+    for (const placement of placements) visit(placement);
+    return cycles;
 }
 
 function indexUnique<T>(

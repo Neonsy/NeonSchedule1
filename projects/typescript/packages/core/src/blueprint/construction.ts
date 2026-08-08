@@ -2,14 +2,25 @@ import type { BlueprintGridCoordinate } from '#core/data/blueprint';
 import type {
     BlueprintValidationResult,
     ResolvedBlueprintGridPlacement,
+    ResolvedBlueprintProceduralGridPlacement,
 } from '#core/blueprint/validation';
 
-export interface BlueprintConstructionConstraint {
+export interface BlueprintGridConstructionConstraint {
     readonly beforePlacementId: string;
     readonly afterPlacementId: string;
     readonly gridId: string;
     readonly cornerTiles: readonly BlueprintGridCoordinate[];
 }
+
+export interface BlueprintProceduralConstructionConstraint {
+    readonly beforePlacementId: string;
+    readonly afterPlacementId: string;
+    readonly parentPlacementId: string;
+}
+
+export type BlueprintConstructionConstraint =
+    | BlueprintGridConstructionConstraint
+    | BlueprintProceduralConstructionConstraint;
 
 interface BlueprintConstructionResultBase {
     readonly validation: BlueprintValidationResult;
@@ -52,7 +63,14 @@ export function planBlueprintConstructionOrder(
     const gridPlacements = validation.resolvedPlacements.filter(
         (placement): placement is ResolvedBlueprintGridPlacement => placement.kind === 'grid'
     );
-    const constraints = constructionConstraints(gridPlacements);
+    const proceduralPlacements = validation.resolvedPlacements.filter(
+        (placement): placement is ResolvedBlueprintProceduralGridPlacement =>
+            placement.kind === 'procedural-grid'
+    );
+    const constraints = [
+        ...constructionConstraints(gridPlacements),
+        ...proceduralConstructionConstraints(proceduralPlacements),
+    ].sort(compareConstraints);
     const originalIndex = new Map(
         validation.document.placements.map((placement, index) => [placement.id, index])
     );
@@ -109,8 +127,8 @@ export function planBlueprintConstructionOrder(
 
 function constructionConstraints(
     placements: readonly ResolvedBlueprintGridPlacement[]
-): BlueprintConstructionConstraint[] {
-    const constraints = new Map<string, BlueprintConstructionConstraint>();
+): BlueprintGridConstructionConstraint[] {
+    const constraints = new Map<string, BlueprintGridConstructionConstraint>();
     const occupiedByPlacementId = new Map(
         placements.map((placement) => [
             placement.id,
@@ -133,11 +151,19 @@ function constructionConstraints(
             }
         }
     }
-    return [...constraints.values()].sort((left, right) =>
-        left.beforePlacementId.localeCompare(right.beforePlacementId) ||
-        left.afterPlacementId.localeCompare(right.afterPlacementId) ||
-        left.gridId.localeCompare(right.gridId) ||
-        compareCoordinates(left.cornerTiles[0]!, right.cornerTiles[0]!)
+    return [...constraints.values()];
+}
+
+function proceduralConstructionConstraints(
+    placements: readonly ResolvedBlueprintProceduralGridPlacement[]
+): BlueprintProceduralConstructionConstraint[] {
+    return placements.flatMap((placement) => placement.parentPlacementId === null
+        ? []
+        : [{
+            beforePlacementId: placement.parentPlacementId,
+            afterPlacementId: placement.id,
+            parentPlacementId: placement.parentPlacementId,
+        }]
     );
 }
 
@@ -153,13 +179,25 @@ function comparePlacementIds(
     return originalIndex.get(left)! - originalIndex.get(right)! || left.localeCompare(right);
 }
 
-function constraintKey(constraint: BlueprintConstructionConstraint): string {
+function constraintKey(constraint: BlueprintGridConstructionConstraint): string {
     return JSON.stringify([
         constraint.beforePlacementId,
         constraint.afterPlacementId,
         constraint.gridId,
         constraint.cornerTiles.map(coordinateKey),
     ]);
+}
+
+function compareConstraints(
+    left: BlueprintConstructionConstraint,
+    right: BlueprintConstructionConstraint
+): number {
+    return left.beforePlacementId.localeCompare(right.beforePlacementId) ||
+        left.afterPlacementId.localeCompare(right.afterPlacementId) ||
+        ('gridId' in left && 'gridId' in right
+            ? left.gridId.localeCompare(right.gridId) ||
+                compareCoordinates(left.cornerTiles[0]!, right.cornerTiles[0]!)
+            : 'gridId' in left ? -1 : 'gridId' in right ? 1 : 0);
 }
 
 function coordinateKey(coordinate: BlueprintGridCoordinate): string {
