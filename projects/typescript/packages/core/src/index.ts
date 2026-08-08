@@ -33,3 +33,4 @@ export * from '#core/production/plan';
 export * from '#core/production/time';
 export * from '#core/relationship/graph';
 export * from '#core/world/projection';
+export * from '#core/world/navigation';
