@@ -17,6 +17,12 @@ export const IntegrityCountsSchema = type({
     offlineAssetFiles: 'number',
     meshAssets: 'number',
     materialAssets: 'number',
+    'worldRegions?': 'number',
+    'worldLocations?': 'number',
+    'mapServices?': 'number',
+    'timedAccessZones?': 'number',
+    'navigationSamples?': 'number',
+    'navigationEdges?': 'number',
 });
 export type IntegrityCounts = typeof IntegrityCountsSchema.infer;
 

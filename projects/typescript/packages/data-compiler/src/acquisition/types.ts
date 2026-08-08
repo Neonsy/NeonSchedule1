@@ -71,6 +71,11 @@ export interface RawReport {
         readonly scheduleActionCount: number;
         readonly visualMeshes: JsonObject[];
         readonly visualMaterials: JsonObject[];
+        readonly map: JsonObject;
+        readonly navigation: JsonObject;
+        readonly locations: JsonObject[];
+        readonly mapServices: JsonObject[];
+        readonly timedAccessZones: JsonObject[];
     };
 }
 

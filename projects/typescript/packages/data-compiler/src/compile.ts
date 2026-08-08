@@ -20,14 +20,14 @@ import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeTrade } from '#data-compiler/normalize/trade';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
+import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.19';
+export const NORMALIZER_VERSION = '0.0.20';
 
 const deferredDomains = [
     'buildable-geometry',
     'property-layouts',
-    'world-and-navigation',
 ] as const;
 
 export async function compileDataset(acquisitionPath: string, outputRoot?: string): Promise<WrittenDataset> {
@@ -57,6 +57,13 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
     const people = normalizePeople(acquisition.report, assets, integrity);
     const trade = normalizeTrade(acquisition.report, people.people, shops, itemIds, integrity);
+    const world = normalizeWorld(
+        acquisition.report,
+        assets,
+        new Set(people.people.map((person) => person.id)),
+        new Set(shops.map((shop) => shop.code)),
+        integrity
+    );
 
     const buildables = indexUnique(
         acquisition.report.discovery.buildables,
@@ -84,6 +91,12 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         offlineAssetFiles: assets.offlineFileCount,
         meshAssets: visuals.meshes.length,
         materialAssets: visuals.materials.length,
+        worldRegions: world.map.regions.length,
+        worldLocations: world.locations.locations.length,
+        mapServices: world.locations.services.length,
+        timedAccessZones: world.locations.timedAccessZones.length,
+        navigationSamples: world.navigation.samples.length,
+        navigationEdges: world.navigation.edges.length,
     };
     const report = IntegrityReportSchema.assert({
         schema: 'neonschedule1-integrity-report-1',
@@ -114,6 +127,9 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     documents.set('mixing/rules.json', mixing);
     documents.set('production/catalog.json', production);
     documents.set('visuals/assets.json', visuals);
+    documents.set('world/map.json', world.map);
+    documents.set('world/locations.json', world.locations);
+    documents.set('world/navigation.json', world.navigation);
     documents.set('reports/integrity.json', report);
 
     return writeDataset({

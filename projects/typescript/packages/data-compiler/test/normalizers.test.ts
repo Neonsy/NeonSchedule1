@@ -530,6 +530,11 @@ function emptyReport(): RawReport {
             scheduleActionCount: 0,
             visualMeshes: [],
             visualMaterials: [],
+            map: {},
+            navigation: {},
+            locations: [],
+            mapServices: [],
+            timedAccessZones: [],
         },
     };
 }

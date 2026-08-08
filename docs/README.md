@@ -16,6 +16,7 @@ The repository currently supports:
 - Evaluate customer preferences, offers, and recommendations
 - Generate and query verified precomputed recipe data
 - Allocate customers and dealers under shared resource limits
+- Normalize world, property, shop, and navigation evidence
 
 ## Planned player features
 
