@@ -80,6 +80,7 @@ describe('customer allocation', () => {
             option('c-premium', 'carol', 5, 11, 2),
             option('c-compact', 'carol', 2, 4, 1),
         ];
+        let equivalentStatePrunes = 0;
 
         for (let maximumProductionCost = 0; maximumProductionCost <= 10; maximumProductionCost++) {
             for (let stock = 0; stock <= 4; stock++) {
@@ -93,8 +94,10 @@ describe('customer allocation', () => {
                 const expected = exhaustive(options, customerIds, maximumProductionCost, stock);
                 expect(actual.status).toBe('exact');
                 expect(summary(actual)).toEqual(expected);
+                equivalentStatePrunes += actual.evidence.prunedByEquivalentState;
             }
         }
+        expect(equivalentStatePrunes).toBeGreaterThan(0);
     });
 
     it('rejects resource use without a declared limit', () => {

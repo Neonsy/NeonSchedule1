@@ -15,6 +15,7 @@
     "check": "tsc -p tsconfig.json",
     "test": "vitest run",
     "benchmark": "node dist/cli.js",
+    "benchmark:allocation": "node dist/allocation-benchmark-cli.js",
     "verify": "node dist/verify-cli.js",
     "native": "node dist/native-cli.js",
     "precompute": "node dist/precompute-cli.js",

@@ -38,6 +38,7 @@ export interface CustomerAllocationEvidence {
     readonly prunedByProductionCost: number;
     readonly prunedByResources: number;
     readonly prunedByProfitBound: number;
+    readonly prunedByEquivalentState: number;
 }
 
 export interface CustomerAllocationResult {
@@ -75,6 +76,12 @@ interface MutableEvidence {
     prunedByProductionCost: number;
     prunedByResources: number;
     prunedByProfitBound: number;
+    prunedByEquivalentState: number;
+}
+
+interface MemoizedSelection {
+    readonly expectedProfit: number;
+    readonly options: readonly IndexedOption[];
 }
 
 export class CustomerAllocationOptimizer {
@@ -83,6 +90,7 @@ export class CustomerAllocationOptimizer {
         const groups = orderGroups(normalized.groups);
         const suffixProfit = maximumRemainingProfit(groups);
         const evidence = normalized.evidence;
+        const memo = new Map<string, MemoizedSelection>();
         let best = emptySelection(normalized.resourceIds.length);
         let stateLimitReached = false;
 
@@ -98,6 +106,19 @@ export class CustomerAllocationOptimizer {
                 return;
             }
             evidence.visitedStates++;
+
+            const stateKey = allocationStateKey(groupIndex, productionCost, usage);
+            const previous = memo.get(stateKey);
+            if (
+                previous !== undefined &&
+                (previous.expectedProfit > expectedProfit ||
+                    previous.expectedProfit === expectedProfit &&
+                    compareAllocationKeys(previous.options, selected) <= 0)
+            ) {
+                evidence.prunedByEquivalentState++;
+                return;
+            }
+            memo.set(stateKey, { expectedProfit, options: selected });
 
             const candidate = { options: selected, productionCost, expectedProfit, usage };
             if (isBetter(candidate, best)) best = candidate;
@@ -365,6 +386,14 @@ function safelyBelow(upperBound: number, incumbent: number, groupCount: number):
     return upperBound < incumbent - slack;
 }
 
+function allocationStateKey(
+    groupIndex: number,
+    productionCost: number,
+    usage: readonly number[]
+): string {
+    return `${groupIndex}|${productionCost}|${usage.join(',')}`;
+}
+
 function compareNumbers(left: readonly number[], right: readonly number[]): number {
     for (let index = 0; index < Math.min(left.length, right.length); index++) {
         const comparison = left[index]! - right[index]!;
@@ -396,6 +425,7 @@ function emptyEvidence(): MutableEvidence {
         prunedByProductionCost: 0,
         prunedByResources: 0,
         prunedByProfitBound: 0,
+        prunedByEquivalentState: 0,
     };
 }
 
