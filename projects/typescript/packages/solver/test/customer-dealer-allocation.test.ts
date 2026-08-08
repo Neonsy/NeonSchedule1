@@ -188,6 +188,43 @@ describe('customer recommendation dealer allocation', () => {
             evidence: { stopReasons: ['allocation-state-limit'] },
         });
     });
+
+    it('applies one mode budget without hiding an incomplete result', () => {
+        const dealers = Array.from({ length: 7 }, (_, index) =>
+            dealer(`d${index}`, index / 100, 0)
+        );
+        const allocator = new CustomerRecommendationDealerAllocator(tradeCatalog(10, dealers));
+        const allocation = allocator.allocateForMode({
+            datasetSha256,
+            dealers: dealers.map(({ personId }) => ({ personId, signingFeePaid: true })),
+            recommendationSets: [{
+                customerId: 'customer',
+                recommendations: [recommendation('offer', 10, 10, 1)],
+            }],
+            maximumProductionCost: 1,
+        }, 'quick');
+
+        expect(allocation).toMatchObject({
+            mode: 'quick',
+            policy: {
+                version: '1',
+                budget: {
+                    maximumDealerConfigurations: 64,
+                    maximumStatesPerDealerConfiguration: 50_000,
+                },
+            },
+            result: {
+                status: 'incomplete',
+                evidence: {
+                    possibleDealerClassSelections: 128,
+                    evaluatedDealerSubsets: 64,
+                    maximumDealerSubsets: 64,
+                    maximumStatesPerDealerSubset: 50_000,
+                    stopReasons: ['dealer-subset-limit'],
+                },
+            },
+        });
+    });
 });
 
 function recommendation(

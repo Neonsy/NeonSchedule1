@@ -16,6 +16,11 @@ import {
     customerRecommendationStockLimits,
     type CustomerRecommendationStock,
 } from '#solver/customer-allocation';
+import {
+    jointAllocationPolicy,
+    type JointAllocationMode,
+    type JointAllocationPolicy,
+} from '#solver/joint-allocation-policy';
 
 export interface CustomerDealerRecommendationSet {
     readonly customerId: string;
@@ -46,6 +51,16 @@ export interface CustomerDealerAllocationResult {
     readonly allocations: readonly ResolvedCustomerDealerAllocation[];
 }
 
+export type ModeCustomerDealerAllocationInput = Omit<
+    CustomerDealerAllocationInput,
+    'maximumDealerSubsets' | 'maximumStatesPerDealerSubset'
+>;
+
+export interface ModeCustomerDealerAllocationResult extends CustomerDealerAllocationResult {
+    readonly mode: JointAllocationMode;
+    readonly policy: JointAllocationPolicy;
+}
+
 interface IndexedRecommendation {
     readonly customerId: string;
     readonly optionId: string;
@@ -65,6 +80,23 @@ export class CustomerRecommendationDealerAllocator {
             logicalDealerProfiles(catalog).map((profile) => [profile.personId, profile])
         );
         this.#maximumCustomers = catalog.dealerMechanics.maximumCustomers;
+    }
+
+    allocateForMode(
+        input: ModeCustomerDealerAllocationInput,
+        mode: JointAllocationMode
+    ): ModeCustomerDealerAllocationResult {
+        const policy = jointAllocationPolicy(mode);
+        return {
+            mode,
+            policy,
+            ...this.allocate({
+                ...input,
+                maximumDealerSubsets: policy.budget.maximumDealerConfigurations,
+                maximumStatesPerDealerSubset:
+                    policy.budget.maximumStatesPerDealerConfiguration,
+            }),
+        };
     }
 
     allocate(input: CustomerDealerAllocationInput): CustomerDealerAllocationResult {
