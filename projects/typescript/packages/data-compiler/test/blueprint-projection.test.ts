@@ -23,6 +23,8 @@ describe('blueprint world projection', () => {
         if (result.kind !== 'projected') return;
 
         const projected = result.placements[0]!;
+        expect(projected.kind).toBe('grid');
+        if (projected.kind !== 'grid') return;
         expect(projected.worldYaw).toBe(180);
         expect(projected.root.worldPosition).toEqual(vector(10.5, 2.5, 20));
         expect(projected.root.worldRotation).toEqual(expect.objectContaining({
@@ -105,9 +107,11 @@ describe('blueprint world projection', () => {
 
     it('does not project a blueprint rejected by grid validation', () => {
         const input = blueprint();
+        const placement = input.placements[0]!;
+        if (placement.kind !== 'grid') throw new Error('Expected grid fixture');
         const result = new BlueprintProjector(dataset()).project({
             ...input,
-            placements: [{ ...input.placements[0]!, anchor: { x: 9, y: 9 } }],
+            placements: [{ ...placement, anchor: { x: 9, y: 9 } }],
         });
 
         expect(result.kind).toBe('rejected');

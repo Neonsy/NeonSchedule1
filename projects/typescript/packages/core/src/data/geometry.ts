@@ -12,6 +12,14 @@ export const TransformSchema = type({
 });
 export type Transform = typeof TransformSchema.infer;
 
+export const QuaternionSchema = type({
+    x: 'number',
+    y: 'number',
+    z: 'number',
+    w: 'number',
+});
+export type Quaternion = typeof QuaternionSchema.infer;
+
 export const ColliderShapeSchema = type("'box' | 'capsule' | 'mesh' | 'sphere' | 'other'");
 export type ColliderShape = typeof ColliderShapeSchema.infer;
 

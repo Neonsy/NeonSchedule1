@@ -49,7 +49,10 @@ export function planBlueprintConstructionOrder(
         };
     }
 
-    const constraints = constructionConstraints(validation.resolvedPlacements);
+    const gridPlacements = validation.resolvedPlacements.filter(
+        (placement): placement is ResolvedBlueprintGridPlacement => placement.kind === 'grid'
+    );
+    const constraints = constructionConstraints(gridPlacements);
     const originalIndex = new Map(
         validation.document.placements.map((placement, index) => [placement.id, index])
     );

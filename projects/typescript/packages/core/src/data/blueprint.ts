@@ -1,5 +1,8 @@
 import { type } from 'arktype';
 
+import { Vector3Schema } from '#core/data/common';
+import { QuaternionSchema } from '#core/data/geometry';
+
 export const BlueprintGridCoordinateSchema = type({
     x: 'number',
     y: 'number',
@@ -19,11 +22,28 @@ export const BlueprintGridPlacementSchema = type({
 });
 export type BlueprintGridPlacement = typeof BlueprintGridPlacementSchema.infer;
 
+export const BlueprintSurfacePlacementSchema = type({
+    id: 'string',
+    kind: "'surface'",
+    itemId: 'string',
+    surfaceId: 'string',
+    surfaceColliderPath: 'string',
+    relativeHitPoint: Vector3Schema,
+    relativePosition: Vector3Schema,
+    relativeRotation: QuaternionSchema,
+});
+export type BlueprintSurfacePlacement = typeof BlueprintSurfacePlacementSchema.infer;
+
+export const BlueprintPlacementSchema = BlueprintGridPlacementSchema.or(
+    BlueprintSurfacePlacementSchema
+);
+export type BlueprintPlacement = typeof BlueprintPlacementSchema.infer;
+
 export const BlueprintDocumentSchema = type({
     schema: "'neonschedule1-blueprint-1'",
     gameVersion: 'string',
     datasetSha256: 'string',
     propertyCode: 'string',
-    placements: BlueprintGridPlacementSchema.array(),
+    placements: BlueprintPlacementSchema.array(),
 });
 export type BlueprintDocument = typeof BlueprintDocumentSchema.infer;

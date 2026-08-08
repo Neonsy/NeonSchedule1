@@ -101,27 +101,31 @@ internal static partial class DiscoveryCollector
                     }
                 }
 
-                if (surface.Container is not null)
+                var surfaceColliders = surface.GetComponentsInChildren<Collider>(true);
+                for (var colliderIndex = 0;
+                     colliderIndex < surfaceColliders.Length;
+                     colliderIndex++)
                 {
-                    var surfaceColliders = surface.Container.GetComponentsInChildren<Collider>(true);
-                    for (var colliderIndex = 0;
-                         colliderIndex < surfaceColliders.Length;
-                         colliderIndex++)
+                    var nativeCollider = surfaceColliders[colliderIndex];
+                    var owningSurface = nativeCollider.GetComponentInParent<
+                        Il2CppScheduleOne.Building.Surface>();
+                    if (owningSurface is null ||
+                        owningSurface.GetInstanceID() != surface.GetInstanceID())
                     {
-                        var nativeCollider = surfaceColliders[colliderIndex];
-                        var collider = ColliderSnapshot.FromCollider(nativeCollider);
-                        if (collider is null)
-                        {
-                            continue;
-                        }
-                        collider.Source = "property-surface";
-                        var meshCollider = nativeCollider.TryCast<MeshCollider>();
-                        if (meshCollider?.sharedMesh is not null)
-                        {
-                            visualAssets.RegisterMesh(meshCollider.sharedMesh);
-                        }
-                        surfaceSnapshot.Colliders.Add(collider);
+                        continue;
                     }
+                    var collider = ColliderSnapshot.FromCollider(nativeCollider);
+                    if (collider is null)
+                    {
+                        continue;
+                    }
+                    collider.Source = "property-surface";
+                    var meshCollider = nativeCollider.TryCast<MeshCollider>();
+                    if (meshCollider?.sharedMesh is not null)
+                    {
+                        visualAssets.RegisterMesh(meshCollider.sharedMesh);
+                    }
+                    surfaceSnapshot.Colliders.Add(collider);
                 }
                 surfaceSnapshot.Colliders = surfaceSnapshot.Colliders
                     .OrderBy(x => x.Transform?.Path, StringComparer.Ordinal)

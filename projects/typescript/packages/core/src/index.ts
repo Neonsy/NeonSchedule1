@@ -25,6 +25,7 @@ export * from '#core/customer/recipe-search';
 export * from '#core/dealer/assignment';
 export * from '#core/dealer/customer-allocation';
 export * from '#core/geometry/box-collision';
+export * from '#core/geometry/transform';
 export * from '#core/mixing/enumerate';
 export * from '#core/mixing/engine';
 export * from '#core/mixing/recipe';

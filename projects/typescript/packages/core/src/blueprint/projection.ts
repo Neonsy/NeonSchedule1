@@ -1,28 +1,32 @@
-import {
-    type BlueprintDocument,
-    type BlueprintGridCoordinate,
-} from '#core/data/blueprint';
+import { type BlueprintDocument, type BlueprintGridCoordinate } from '#core/data/blueprint';
 import { type Buildable, type InteractionPoint } from '#core/data/buildable';
 import { type Vector3 } from '#core/data/common';
 import {
     type Collider,
     type ColliderWorldBasis,
+    type Quaternion,
     type Transform,
 } from '#core/data/geometry';
-import { type PropertyGrid, type PropertyLayout } from '#core/data/property-layout';
+import {
+    type PropertyGrid,
+    type PropertyLayout,
+    type PropertySurface,
+} from '#core/data/property-layout';
+import {
+    axisQuaternion,
+    multiplyQuaternions,
+    quaternionFromUnityEuler,
+    rotateVectorByQuaternion,
+    transformPoint,
+} from '#core/geometry/transform';
 import {
     BlueprintValidator,
     type BlueprintDataset,
     type BlueprintValidationResult,
     type ResolvedBlueprintGridPlacement,
+    type ResolvedBlueprintPlacement,
+    type ResolvedBlueprintSurfacePlacement,
 } from '#core/blueprint/validation';
-
-export interface Quaternion {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-    readonly w: number;
-}
 
 export interface BlueprintWorldTransform {
     readonly worldPosition: Vector3;
@@ -44,11 +48,9 @@ export type ProjectedInteractionPoint = Omit<InteractionPoint, 'transform'> & {
     readonly transform: ProjectedBuildableTransform;
 };
 
-export interface ProjectedBlueprintPlacement {
+interface ProjectedBlueprintPlacementBase {
     readonly id: string;
     readonly itemId: string;
-    readonly gridId: string;
-    readonly worldYaw: number;
     readonly root: BlueprintWorldTransform;
     readonly buildPoint: ProjectedBuildableTransform;
     readonly boundingCollider: ProjectedCollider;
@@ -57,6 +59,23 @@ export interface ProjectedBlueprintPlacement {
     readonly isTransitEntity: boolean;
     readonly transitAccessPoints: readonly ProjectedBuildableTransform[];
 }
+
+export interface ProjectedBlueprintGridPlacement extends ProjectedBlueprintPlacementBase {
+    readonly kind: 'grid';
+    readonly gridId: string;
+    readonly worldYaw: number;
+}
+
+export interface ProjectedBlueprintSurfacePlacement extends ProjectedBlueprintPlacementBase {
+    readonly kind: 'surface';
+    readonly surfaceId: string;
+    readonly surfaceColliderPath: string;
+    readonly worldHitPoint: Vector3;
+}
+
+export type ProjectedBlueprintPlacement =
+    | ProjectedBlueprintGridPlacement
+    | ProjectedBlueprintSurfacePlacement;
 
 export type BlueprintProjectionIssueCode =
     | 'elevation-offset-unsupported'
@@ -85,16 +104,31 @@ export type BlueprintProjectionResult =
         readonly issues: readonly BlueprintProjectionIssue[];
     };
 
-interface ProjectionContext {
+interface GridProjectionContext {
+    readonly kind: 'grid';
     readonly buildable: Buildable;
     readonly grid: PropertyGrid;
     readonly placement: ResolvedBlueprintGridPlacement;
 }
 
+interface SurfaceProjectionContext {
+    readonly kind: 'surface';
+    readonly buildable: Buildable;
+    readonly surface: PropertySurface;
+    readonly placement: ResolvedBlueprintSurfacePlacement;
+}
+
+type ProjectionContext = GridProjectionContext | SurfaceProjectionContext;
+
 interface PlacementFrame {
     readonly rootPosition: Vector3;
-    readonly worldYaw: number;
+    readonly rootRotation: Quaternion;
 }
+
+type ProjectedBuildable = Omit<
+    ProjectedBlueprintPlacementBase,
+    'id' | 'itemId'
+>;
 
 const offsetTolerance = 1e-6;
 const rotationTolerance = 1e-3;
@@ -135,20 +169,28 @@ export class BlueprintProjector {
         };
     }
 
-    #context(
-        property: PropertyLayout,
-        placement: ResolvedBlueprintGridPlacement
-    ): ProjectionContext {
+    #context(property: PropertyLayout, placement: ResolvedBlueprintPlacement): ProjectionContext {
         const buildable = this.#buildableByItemId.get(placement.itemId);
-        const grid = property.grids.find((candidate) => candidate.id === placement.gridId);
-        if (buildable === undefined || grid === undefined) {
+        if (buildable === undefined) {
             throw new Error('Validated blueprint references unavailable projection data');
         }
-        return { buildable, grid, placement };
+        if (placement.kind === 'grid') {
+            const grid = property.grids.find((candidate) => candidate.id === placement.gridId);
+            if (grid === undefined) {
+                throw new Error('Validated blueprint references unavailable projection data');
+            }
+            return { kind: 'grid', buildable, grid, placement };
+        }
+        const surface = property.surfaces.find((candidate) => candidate.id === placement.surfaceId);
+        if (surface === undefined) {
+            throw new Error('Validated blueprint references unavailable projection data');
+        }
+        return { kind: 'surface', buildable, surface, placement };
     }
 }
 
 function projectionIssues(context: ProjectionContext): BlueprintProjectionIssue[] {
+    if (context.kind === 'surface') return [];
     const { buildable, grid, placement } = context;
     const tiles = placement.occupiedTiles.map(({ x, y }) => ({ x, y }));
     if (placement.occupiedTiles.some((tile) =>
@@ -193,15 +235,36 @@ function projectionIssues(context: ProjectionContext): BlueprintProjectionIssue[
 
 function projectPlacement(context: ProjectionContext): ProjectedBlueprintPlacement {
     const frame = placementFrame(context);
-    const { buildable, placement } = context;
+    const projected = projectBuildable(context.buildable, frame);
+    if (context.kind === 'grid') {
+        return {
+            id: context.placement.id,
+            kind: 'grid',
+            itemId: context.placement.itemId,
+            gridId: context.placement.gridId,
+            worldYaw: gridWorldYaw(context),
+            ...projected,
+        };
+    }
     return {
-        id: placement.id,
-        itemId: placement.itemId,
-        gridId: placement.gridId,
-        worldYaw: frame.worldYaw,
+        id: context.placement.id,
+        kind: 'surface',
+        itemId: context.placement.itemId,
+        surfaceId: context.placement.surfaceId,
+        surfaceColliderPath: context.placement.surfaceColliderPath,
+        worldHitPoint: transformPoint(
+            context.surface.transform,
+            context.placement.relativeHitPoint
+        ),
+        ...projected,
+    };
+}
+
+function projectBuildable(buildable: Buildable, frame: PlacementFrame): ProjectedBuildable {
+    return {
         root: {
             worldPosition: frame.rootPosition,
-            worldRotation: yawQuaternion(frame.worldYaw),
+            worldRotation: frame.rootRotation,
         },
         buildPoint: projectTransform(buildable.placement.buildPoint, frame),
         boundingCollider: projectCollider(buildable.placement.boundingCollider, frame),
@@ -218,18 +281,40 @@ function projectPlacement(context: ProjectionContext): ProjectedBlueprintPlaceme
 }
 
 function placementFrame(context: ProjectionContext): PlacementFrame {
+    if (context.kind === 'surface') {
+        const surfaceRotation = quaternionFromUnityEuler(context.surface.transform.worldRotation);
+        return {
+            rootPosition: transformPoint(
+                context.surface.transform,
+                context.placement.relativePosition
+            ),
+            rootRotation: multiplyQuaternions(
+                surfaceRotation,
+                context.placement.relativeRotation
+            ),
+        };
+    }
     const destinationTiles = resolveDestinationTiles(context.grid, context.placement);
     const destinationCenter = average(destinationTiles.map((tile) => tile.worldPosition));
     const sourceCenter = average(
         context.buildable.placement.footprintTiles.map((tile) => tile.transform.worldPosition)
     );
-    const gridYaw = destinationTiles[0]?.worldRotation.y ?? 0;
-    const worldYaw = normalizeDegrees(gridYaw + context.placement.rotation);
-    const rotatedSourceCenter = rotateAroundY(sourceCenter, worldYaw);
+    const worldYaw = gridWorldYaw(context);
+    const rootRotation = axisQuaternion('y', worldYaw);
     return {
-        rootPosition: subtract(destinationCenter, rotatedSourceCenter),
-        worldYaw,
+        rootPosition: subtract(
+            destinationCenter,
+            rotateVectorByQuaternion(rootRotation, sourceCenter)
+        ),
+        rootRotation,
     };
+}
+
+function gridWorldYaw(context: GridProjectionContext): number {
+    const destinationTiles = resolveDestinationTiles(context.grid, context.placement);
+    return normalizeDegrees(
+        (destinationTiles[0]?.worldRotation.y ?? 0) + context.placement.rotation
+    );
 }
 
 function projectCollider(collider: Collider, frame: PlacementFrame): ProjectedCollider {
@@ -243,9 +328,9 @@ function projectCollider(collider: Collider, frame: PlacementFrame): ProjectedCo
         ...definition,
         transform: projectTransform(sourceTransform, frame),
         worldBasis: {
-            right: rotateAroundY(sourceBasis.right, frame.worldYaw),
-            up: rotateAroundY(sourceBasis.up, frame.worldYaw),
-            forward: rotateAroundY(sourceBasis.forward, frame.worldYaw),
+            right: rotateVectorByQuaternion(frame.rootRotation, sourceBasis.right),
+            up: rotateVectorByQuaternion(frame.rootRotation, sourceBasis.up),
+            forward: rotateVectorByQuaternion(frame.rootRotation, sourceBasis.forward),
         },
     };
 }
@@ -259,11 +344,11 @@ function projectTransform(
         path: transform.path,
         worldPosition: add(
             frame.rootPosition,
-            rotateAroundY(transform.worldPosition, frame.worldYaw)
+            rotateVectorByQuaternion(frame.rootRotation, transform.worldPosition)
         ),
         worldRotation: multiplyQuaternions(
-            yawQuaternion(frame.worldYaw),
-            unityEulerQuaternion(transform.worldRotation)
+            frame.rootRotation,
+            quaternionFromUnityEuler(transform.worldRotation)
         ),
         localScale: transform.localScale,
     };
@@ -283,65 +368,6 @@ function resolveDestinationTiles(
         }
         return tile;
     });
-}
-
-function unityEulerQuaternion(rotation: Vector3): Quaternion {
-    const x = axisQuaternion('x', rotation.x);
-    const y = axisQuaternion('y', rotation.y);
-    const z = axisQuaternion('z', rotation.z);
-    return multiplyQuaternions(multiplyQuaternions(y, x), z);
-}
-
-function yawQuaternion(yaw: number): Quaternion {
-    return axisQuaternion('y', yaw);
-}
-
-function axisQuaternion(axis: 'x' | 'y' | 'z', degrees: number): Quaternion {
-    const halfRadians = degrees * Math.PI / 360;
-    const sine = Math.sin(halfRadians);
-    const cosine = Math.cos(halfRadians);
-    return canonicalQuaternion({
-        x: axis === 'x' ? sine : 0,
-        y: axis === 'y' ? sine : 0,
-        z: axis === 'z' ? sine : 0,
-        w: cosine,
-    });
-}
-
-function multiplyQuaternions(left: Quaternion, right: Quaternion): Quaternion {
-    return canonicalQuaternion({
-        x: left.w * right.x + left.x * right.w + left.y * right.z - left.z * right.y,
-        y: left.w * right.y - left.x * right.z + left.y * right.w + left.z * right.x,
-        z: left.w * right.z + left.x * right.y - left.y * right.x + left.z * right.w,
-        w: left.w * right.w - left.x * right.x - left.y * right.y - left.z * right.z,
-    });
-}
-
-function canonicalQuaternion(input: Quaternion): Quaternion {
-    const length = Math.hypot(input.x, input.y, input.z, input.w);
-    if (length === 0) throw new Error('Cannot normalize a zero-length quaternion');
-    const sign = input.w < 0 ? -1 : 1;
-    return {
-        x: normalizeZero(sign * input.x / length),
-        y: normalizeZero(sign * input.y / length),
-        z: normalizeZero(sign * input.z / length),
-        w: normalizeZero(sign * input.w / length),
-    };
-}
-
-function normalizeZero(value: number): number {
-    return Math.abs(value) <= Number.EPSILON ? 0 : value;
-}
-
-function rotateAroundY(vector: Vector3, degrees: number): Vector3 {
-    const radians = degrees * Math.PI / 180;
-    const cosine = Math.cos(radians);
-    const sine = Math.sin(radians);
-    return {
-        x: normalizeZero(cosine * vector.x + sine * vector.z),
-        y: normalizeZero(vector.y),
-        z: normalizeZero(-sine * vector.x + cosine * vector.z),
-    };
 }
 
 function average(vectors: readonly Vector3[]): Vector3 {

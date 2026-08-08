@@ -28,6 +28,7 @@ describe('blueprint validation', () => {
         expect(result.resolvedPlacements).toEqual([
             {
                 id: 'bench-1',
+                kind: 'grid',
                 itemId: 'bench',
                 gridId: 'main',
                 rotation: 90,
@@ -53,7 +54,10 @@ describe('blueprint validation', () => {
         ]));
 
         expect(result.valid).toBe(true);
-        expect(result.resolvedPlacements[0]?.occupiedTiles.map((tile) => [
+        const resolved = result.resolvedPlacements[0];
+        expect(resolved?.kind).toBe('grid');
+        if (resolved?.kind !== 'grid') return;
+        expect(resolved.occupiedTiles.map((tile) => [
             tile.x,
             tile.y,
             tile.requiredOffset,
@@ -122,7 +126,10 @@ describe('blueprint validation', () => {
         const plan = planBlueprintConstructionOrder(validation);
 
         expect(validation.valid).toBe(true);
-        expect(validation.resolvedPlacements[1]?.cornerObstacles).toEqual([{
+        const resolved = validation.resolvedPlacements[1];
+        expect(resolved?.kind).toBe('grid');
+        if (resolved?.kind !== 'grid') return;
+        expect(resolved.cornerObstacles).toEqual([{
             sourceTile: { x: 1, y: 1 },
             neighbouringTiles: [
                 { x: 0, y: 1 },

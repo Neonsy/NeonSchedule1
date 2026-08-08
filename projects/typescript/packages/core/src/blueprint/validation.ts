@@ -2,16 +2,23 @@ import {
     BlueprintDocumentSchema,
     type BlueprintDocument,
     type BlueprintGridCoordinate,
-    type BlueprintGridPlacement,
     type BlueprintGridRotation,
 } from '#core/data/blueprint';
 import { BuildableSchema, type Buildable } from '#core/data/buildable';
+import { PropertyLayoutSchema, type PropertyLayout } from '#core/data/property-layout';
 import {
-    PropertyLayoutSchema,
-    type PropertyGrid,
-    type PropertyLayout,
-} from '#core/data/property-layout';
-import { rotateFootprint } from '#core/blueprint/grid-footprint';
+    indexPropertyGrids,
+    resolveGridPlacement,
+    tileSharingIssues,
+    type IndexedGrid,
+} from '#core/blueprint/grid-validation';
+import {
+    indexPropertySurfaces,
+    resolveSurfacePlacement,
+    type ResolvedBlueprintSurfacePlacement,
+} from '#core/blueprint/surface-validation';
+
+export type { ResolvedBlueprintSurfacePlacement } from '#core/blueprint/surface-validation';
 
 export interface BlueprintDataset {
     readonly manifest: {
@@ -33,13 +40,21 @@ export type BlueprintValidationIssueCode =
     | 'tile-unavailable'
     | 'tile-offset-incompatible'
     | 'tile-sharing-unsupported'
-    | 'tile-sharing-incompatible';
+    | 'tile-sharing-incompatible'
+    | 'surface-unavailable'
+    | 'surface-type-incompatible'
+    | 'surface-collider-unavailable'
+    | 'surface-geometry-unsupported'
+    | 'surface-point-outside-collider'
+    | 'surface-face-incompatible'
+    | 'surface-face-unsupported';
 
 export interface BlueprintValidationIssue {
     readonly code: BlueprintValidationIssueCode;
     readonly message: string;
     readonly placementIds: readonly string[];
     readonly gridId: string | null;
+    readonly surfaceId?: string;
     readonly tiles: readonly BlueprintGridCoordinate[];
 }
 
@@ -55,6 +70,7 @@ export interface ResolvedBlueprintCornerObstacle {
 
 export interface ResolvedBlueprintGridPlacement {
     readonly id: string;
+    readonly kind: 'grid';
     readonly itemId: string;
     readonly gridId: string;
     readonly rotation: BlueprintGridRotation;
@@ -63,24 +79,25 @@ export interface ResolvedBlueprintGridPlacement {
     readonly cornerObstacles: readonly ResolvedBlueprintCornerObstacle[];
 }
 
+export type ResolvedBlueprintPlacement =
+    | ResolvedBlueprintGridPlacement
+    | ResolvedBlueprintSurfacePlacement;
+
 export interface BlueprintValidationResult {
     readonly document: BlueprintDocument;
     readonly valid: boolean;
-    readonly resolvedPlacements: readonly ResolvedBlueprintGridPlacement[];
+    readonly resolvedPlacements: readonly ResolvedBlueprintPlacement[];
     readonly issues: readonly BlueprintValidationIssue[];
-}
-
-interface IndexedGrid {
-    readonly grid: PropertyGrid;
-    readonly tileByCoordinate: ReadonlyMap<string, PropertyGrid['tiles'][number]>;
 }
 
 interface IndexedProperty {
     readonly layout: PropertyLayout;
     readonly gridById: ReadonlyMap<string, IndexedGrid>;
+    readonly surfaceById: ReturnType<typeof indexPropertySurfaces>;
 }
 
 const sha256Pattern = /^[a-f0-9]{64}$/u;
+const quaternionLengthTolerance = 1e-4;
 
 export class BlueprintValidator {
     readonly #gameVersion: string;
@@ -101,7 +118,11 @@ export class BlueprintValidator {
         this.#propertyByCode = indexUnique(
             dataset.propertyLayouts.map((input) => {
                 const layout = PropertyLayoutSchema.assert(input);
-                return { layout, gridById: indexPropertyGrids(layout) };
+                return {
+                    layout,
+                    gridById: indexPropertyGrids(layout),
+                    surfaceById: indexPropertySurfaces(layout),
+                };
             }),
             ({ layout }) => layout.propertyCode,
             'property layout code'
@@ -111,29 +132,29 @@ export class BlueprintValidator {
     validate(input: BlueprintDocument): BlueprintValidationResult {
         const document = validateDocument(BlueprintDocumentSchema.assert(input));
         const compatibilityIssues = this.#compatibilityIssues(document);
-        if (compatibilityIssues.length > 0) {
-            return result(document, [], compatibilityIssues);
-        }
+        if (compatibilityIssues.length > 0) return result(document, [], compatibilityIssues);
 
         const property = this.#propertyByCode.get(document.propertyCode);
         if (property === undefined) {
             return result(document, [], [issue(
                 'property-unavailable',
-                `Blueprint property ${JSON.stringify(document.propertyCode)} is unavailable`,
-                [],
-                null,
-                []
+                `Blueprint property ${JSON.stringify(document.propertyCode)} is unavailable`
             )]);
         }
 
-        const resolvedPlacements: ResolvedBlueprintGridPlacement[] = [];
+        const resolvedPlacements: ResolvedBlueprintPlacement[] = [];
         const issues: BlueprintValidationIssue[] = [];
         for (const placement of document.placements) {
-            const placementResult = this.#resolvePlacement(placement, property.gridById);
+            const placementResult = placement.kind === 'grid'
+                ? resolveGridPlacement(placement, this.#buildableByItemId, property.gridById)
+                : resolveSurfacePlacement(placement, this.#buildableByItemId, property.surfaceById);
             if (placementResult.placement === null) issues.push(...placementResult.issues);
             else resolvedPlacements.push(placementResult.placement);
         }
-        issues.push(...tileSharingIssues(resolvedPlacements));
+        const gridPlacements = resolvedPlacements.filter(
+            (placement): placement is ResolvedBlueprintGridPlacement => placement.kind === 'grid'
+        );
+        issues.push(...tileSharingIssues(gridPlacements));
         return result(document, resolvedPlacements, issues);
     }
 
@@ -143,158 +164,16 @@ export class BlueprintValidator {
             issues.push(issue(
                 'game-version-mismatch',
                 `Blueprint game version ${JSON.stringify(document.gameVersion)} does not match ` +
-                    `${JSON.stringify(this.#gameVersion)}`,
-                [],
-                null,
-                []
+                    JSON.stringify(this.#gameVersion)
             ));
         }
         if (document.datasetSha256 !== this.#datasetSha256) {
             issues.push(issue(
                 'dataset-mismatch',
-                'Blueprint dataset identity does not match the loaded dataset',
-                [],
-                null,
-                []
+                'Blueprint dataset identity does not match the loaded dataset'
             ));
         }
         return issues;
-    }
-
-    #resolvePlacement(
-        placement: BlueprintGridPlacement,
-        gridById: ReadonlyMap<string, IndexedGrid>
-    ):
-        | { readonly placement: ResolvedBlueprintGridPlacement; readonly issues: readonly [] }
-        | { readonly placement: null; readonly issues: readonly BlueprintValidationIssue[] } {
-        const buildable = this.#buildableByItemId.get(placement.itemId);
-        if (buildable === undefined) {
-            return failedPlacement(
-                'buildable-unavailable',
-                `Placement ${JSON.stringify(placement.id)} references unavailable buildable ` +
-                    JSON.stringify(placement.itemId),
-                placement
-            );
-        }
-        if (buildable.placement.kind !== 'grid') {
-            return failedPlacement(
-                'placement-kind-incompatible',
-                `Buildable ${JSON.stringify(placement.itemId)} uses ` +
-                    `${JSON.stringify(buildable.placement.kind)} placement, not property-grid placement`,
-                placement
-            );
-        }
-        const tileSharingRule = buildable.placement.tileSharingRule;
-        if (tileSharingRule !== 'standard' && tileSharingRule !== 'floor-rack') {
-            return failedPlacement(
-                'tile-sharing-unsupported',
-                `Buildable ${JSON.stringify(placement.itemId)} has no supported tile-sharing rule`,
-                placement
-            );
-        }
-        const grid = gridById.get(placement.gridId);
-        if (grid === undefined) {
-            return failedPlacement(
-                'grid-unavailable',
-                `Placement ${JSON.stringify(placement.id)} references unavailable grid ` +
-                    JSON.stringify(placement.gridId),
-                placement
-            );
-        }
-
-        const footprint = validatedFootprint(buildable);
-        const rotated = rotateFootprint(footprint, placement.rotation);
-        const occupiedTiles: ResolvedBlueprintGridTile[] = [];
-        const outside: BlueprintGridCoordinate[] = [];
-        const unavailable: BlueprintGridCoordinate[] = [];
-        for (const tile of rotated) {
-            const coordinate = {
-                x: placement.anchor.x + tile.x,
-                y: placement.anchor.y + tile.y,
-            };
-            if (
-                !Number.isSafeInteger(coordinate.x) ||
-                !Number.isSafeInteger(coordinate.y) ||
-                coordinate.x < 0 ||
-                coordinate.y < 0 ||
-                coordinate.x >= grid.grid.width ||
-                coordinate.y >= grid.grid.height
-            ) {
-                outside.push(coordinate);
-                continue;
-            }
-            const propertyTile = grid.tileByCoordinate.get(coordinateKey(coordinate));
-            if (propertyTile === undefined) {
-                unavailable.push(coordinate);
-                continue;
-            }
-            occupiedTiles.push({
-                ...coordinate,
-                requiredOffset: tile.requiredOffset,
-                availableOffset: propertyTile.availableOffset,
-            });
-        }
-        if (outside.length > 0) {
-            const placementIssues = [issue(
-                'tile-outside-grid',
-                `Placement ${JSON.stringify(placement.id)} extends outside grid ` +
-                    JSON.stringify(placement.gridId),
-                [placement.id],
-                placement.gridId,
-                sortedCoordinates(outside)
-            )];
-            if (unavailable.length > 0) {
-                placementIssues.push(issue(
-                    'tile-unavailable',
-                    `Placement ${JSON.stringify(placement.id)} uses unavailable tiles in grid ` +
-                        JSON.stringify(placement.gridId),
-                    [placement.id],
-                    placement.gridId,
-                    sortedCoordinates(unavailable)
-                ));
-            }
-            return { placement: null, issues: placementIssues };
-        }
-        if (unavailable.length > 0) {
-            return {
-                placement: null,
-                issues: [issue(
-                    'tile-unavailable',
-                    `Placement ${JSON.stringify(placement.id)} uses unavailable tiles in grid ` +
-                        JSON.stringify(placement.gridId),
-                    [placement.id],
-                    placement.gridId,
-                    sortedCoordinates(unavailable)
-                )],
-            };
-        }
-        const incompatibleOffsets = occupiedTiles.filter((tile) =>
-            tile.availableOffset !== 0 &&
-            tile.requiredOffset !== 0 &&
-            tile.requiredOffset > tile.availableOffset
-        );
-        if (incompatibleOffsets.length > 0) {
-            return failedPlacement(
-                'tile-offset-incompatible',
-                `Placement ${JSON.stringify(placement.id)} requires more offset than grid ` +
-                    `${JSON.stringify(placement.gridId)} provides`,
-                placement,
-                sortedCoordinates(incompatibleOffsets.map(({ x, y }) => ({ x, y })))
-            );
-        }
-        const cornerObstacles = resolvedCornerObstacles(rotated, placement.anchor, grid);
-        return {
-            placement: {
-                id: placement.id,
-                itemId: placement.itemId,
-                gridId: placement.gridId,
-                rotation: placement.rotation,
-                tileSharingRule,
-                occupiedTiles: occupiedTiles.sort(compareCoordinates),
-                cornerObstacles,
-            },
-            issues: [],
-        };
     }
 }
 
@@ -306,195 +185,73 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
     const placements = document.placements.map((placement, index) => {
         requireNonBlank(placement.id, `Blueprint placement ID at index ${index}`);
         requireNonBlank(placement.itemId, `Blueprint placement item ID at index ${index}`);
-        requireNonBlank(placement.gridId, `Blueprint placement grid ID at index ${index}`);
-        requireSafeInteger(placement.anchor.x, `Blueprint placement anchor X at index ${index}`);
-        requireSafeInteger(placement.anchor.y, `Blueprint placement anchor Y at index ${index}`);
         if (placementIds.has(placement.id)) {
             throw new TypeError(`Blueprint contains duplicate placement ID ${JSON.stringify(placement.id)}`);
         }
         placementIds.add(placement.id);
+        if (placement.kind === 'grid') {
+            requireNonBlank(placement.gridId, `Blueprint placement grid ID at index ${index}`);
+            requireSafeInteger(placement.anchor.x, `Blueprint placement anchor X at index ${index}`);
+            requireSafeInteger(placement.anchor.y, `Blueprint placement anchor Y at index ${index}`);
+            return {
+                ...placement,
+                anchor: { x: placement.anchor.x, y: placement.anchor.y },
+            };
+        }
+        requireNonBlank(placement.surfaceId, `Blueprint placement surface ID at index ${index}`);
+        requireNonBlank(
+            placement.surfaceColliderPath,
+            `Blueprint placement surface collider path at index ${index}`
+        );
+        requireFiniteVector(
+            placement.relativeHitPoint,
+            `Blueprint placement relative hit point at index ${index}`
+        );
+        requireFiniteVector(placement.relativePosition, `Blueprint placement position at index ${index}`);
+        requireFiniteQuaternion(placement.relativeRotation, index);
         return {
-            id: placement.id,
-            kind: placement.kind,
-            itemId: placement.itemId,
-            gridId: placement.gridId,
-            anchor: { x: placement.anchor.x, y: placement.anchor.y },
-            rotation: placement.rotation,
+            ...placement,
+            relativeHitPoint: { ...placement.relativeHitPoint },
+            relativePosition: { ...placement.relativePosition },
+            relativeRotation: { ...placement.relativeRotation },
         };
     });
-    return {
-        schema: document.schema,
-        gameVersion: document.gameVersion,
-        datasetSha256: document.datasetSha256,
-        propertyCode: document.propertyCode,
-        placements,
-    };
+    return { ...document, placements };
 }
 
-function indexPropertyGrids(layout: PropertyLayout): ReadonlyMap<string, IndexedGrid> {
-    return indexUnique(
-        layout.grids.map((grid) => ({ grid, tileByCoordinate: indexGridTiles(grid) })),
-        ({ grid }) => grid.id,
-        `grid ID in property ${JSON.stringify(layout.propertyCode)}`
-    );
+function requireFiniteQuaternion(
+    quaternion: { readonly x: number; readonly y: number; readonly z: number; readonly w: number },
+    index: number
+): void {
+    const values = [quaternion.x, quaternion.y, quaternion.z, quaternion.w];
+    if (!values.every(Number.isFinite)) {
+        throw new RangeError(`Blueprint placement rotation at index ${index} must be finite`);
+    }
+    const length = Math.hypot(...values);
+    if (Math.abs(length - 1) > quaternionLengthTolerance) {
+        throw new RangeError(`Blueprint placement rotation at index ${index} must be normalized`);
+    }
 }
 
-function indexGridTiles(
-    grid: PropertyGrid
-): ReadonlyMap<string, PropertyGrid['tiles'][number]> {
-    requirePositiveSafeInteger(grid.width, `Grid ${JSON.stringify(grid.id)} width`);
-    requirePositiveSafeInteger(grid.height, `Grid ${JSON.stringify(grid.id)} height`);
-    return indexUnique(
-        grid.tiles,
-        (tile) => {
-            requireSafeInteger(tile.x, `Grid ${JSON.stringify(grid.id)} tile X`);
-            requireSafeInteger(tile.y, `Grid ${JSON.stringify(grid.id)} tile Y`);
-            if (tile.x < 0 || tile.y < 0 || tile.x >= grid.width || tile.y >= grid.height) {
-                throw new RangeError(`Grid ${JSON.stringify(grid.id)} contains an out-of-bounds tile`);
-            }
-            requireFinite(tile.availableOffset, `Grid ${JSON.stringify(grid.id)} tile available offset`);
-            return coordinateKey(tile);
-        },
-        `tile coordinate in grid ${JSON.stringify(grid.id)}`
-    );
-}
-
-function validatedFootprint(buildable: Buildable): readonly Buildable['placement']['footprintTiles'][number][] {
-    const width = buildable.placement.footprintWidth;
-    const height = buildable.placement.footprintHeight;
-    if (width === null || height === null) {
-        throw new Error(`Grid buildable ${JSON.stringify(buildable.itemId)} has no footprint dimensions`);
+function requireFiniteVector(
+    vector: { readonly x: number; readonly y: number; readonly z: number },
+    label: string
+): void {
+    if (![vector.x, vector.y, vector.z].every(Number.isFinite)) {
+        throw new RangeError(`${label} must be finite`);
     }
-    requirePositiveSafeInteger(width, `Buildable ${JSON.stringify(buildable.itemId)} footprint width`);
-    requirePositiveSafeInteger(height, `Buildable ${JSON.stringify(buildable.itemId)} footprint height`);
-    const coordinates = new Set<string>();
-    for (const tile of buildable.placement.footprintTiles) {
-        requireSafeInteger(tile.x, `Buildable ${JSON.stringify(buildable.itemId)} footprint X`);
-        requireSafeInteger(tile.y, `Buildable ${JSON.stringify(buildable.itemId)} footprint Y`);
-        if (tile.x < 0 || tile.y < 0 || tile.x >= width || tile.y >= height) {
-            throw new RangeError(
-                `Buildable ${JSON.stringify(buildable.itemId)} contains an out-of-bounds footprint tile`
-            );
-        }
-        requireFinite(
-            tile.requiredOffset,
-            `Buildable ${JSON.stringify(buildable.itemId)} footprint required offset`
-        );
-        const key = coordinateKey(tile);
-        if (coordinates.has(key)) {
-            throw new Error(`Buildable ${JSON.stringify(buildable.itemId)} has duplicate footprint tiles`);
-        }
-        coordinates.add(key);
-    }
-    if (coordinates.size !== width * height) {
-        throw new Error(`Buildable ${JSON.stringify(buildable.itemId)} footprint is incomplete`);
-    }
-    return buildable.placement.footprintTiles;
-}
-
-function resolvedCornerObstacles(
-    footprint: ReturnType<typeof rotateFootprint>,
-    anchor: BlueprintGridCoordinate,
-    grid: IndexedGrid
-): ResolvedBlueprintCornerObstacle[] {
-    const obstacles: ResolvedBlueprintCornerObstacle[] = [];
-    for (const tile of footprint) {
-        const sourceTile = { x: anchor.x + tile.x, y: anchor.y + tile.y };
-        for (const direction of tile.cornerDirections) {
-            const neighbouringTiles = sortedCoordinates([
-                sourceTile,
-                { x: sourceTile.x + direction.x, y: sourceTile.y },
-                { x: sourceTile.x, y: sourceTile.y + direction.y },
-                { x: sourceTile.x + direction.x, y: sourceTile.y + direction.y },
-            ]);
-            if (neighbouringTiles.every((entry) => grid.tileByCoordinate.has(coordinateKey(entry)))) {
-                obstacles.push({ sourceTile, neighbouringTiles });
-            }
-        }
-    }
-    return obstacles.sort((left, right) =>
-        compareCoordinates(left.sourceTile, right.sourceTile) ||
-        compareCoordinates(left.neighbouringTiles[0]!, right.neighbouringTiles[0]!)
-    );
-}
-
-function tileSharingIssues(
-    placements: readonly ResolvedBlueprintGridPlacement[]
-): BlueprintValidationIssue[] {
-    const occupantsByTile = new Map<
-        string,
-        {
-            readonly gridId: string;
-            readonly tile: BlueprintGridCoordinate;
-            readonly occupants: ResolvedBlueprintGridPlacement[];
-        }
-    >();
-    for (const placement of placements) {
-        for (const tile of placement.occupiedTiles) {
-            const key = `${placement.gridId}:${coordinateKey(tile)}`;
-            const entry = occupantsByTile.get(key);
-            if (entry === undefined) {
-                occupantsByTile.set(key, {
-                    gridId: placement.gridId,
-                    tile: { x: tile.x, y: tile.y },
-                    occupants: [placement],
-                });
-            } else {
-                entry.occupants.push(placement);
-            }
-        }
-    }
-    const incompatibilities: BlueprintValidationIssue[] = [];
-    for (const entry of occupantsByTile.values()) {
-        if (entry.occupants.length < 2) continue;
-        const sharingAllowed =
-            entry.occupants.length === 2 &&
-            entry.occupants[0]!.tileSharingRule !== entry.occupants[1]!.tileSharingRule;
-        if (sharingAllowed) continue;
-        const placementIds = entry.occupants.map((placement) => placement.id).sort();
-        incompatibilities.push(issue(
-            'tile-sharing-incompatible',
-            `Placements ${placementIds.map((id) => JSON.stringify(id)).join(', ')} ` +
-                'cannot share a grid tile',
-            placementIds,
-            entry.gridId,
-            [entry.tile]
-        ));
-    }
-    return incompatibilities.sort((left, right) =>
-        (left.gridId ?? '').localeCompare(right.gridId ?? '') ||
-        compareCoordinates(left.tiles[0]!, right.tiles[0]!)
-    );
 }
 
 function result(
     document: BlueprintDocument,
-    resolvedPlacements: readonly ResolvedBlueprintGridPlacement[],
+    resolvedPlacements: readonly ResolvedBlueprintPlacement[],
     issues: readonly BlueprintValidationIssue[]
 ): BlueprintValidationResult {
     return { document, valid: issues.length === 0, resolvedPlacements, issues };
 }
 
-function failedPlacement(
-    code: BlueprintValidationIssueCode,
-    message: string,
-    placement: BlueprintGridPlacement,
-    tiles: readonly BlueprintGridCoordinate[] = []
-): { readonly placement: null; readonly issues: readonly BlueprintValidationIssue[] } {
-    return {
-        placement: null,
-        issues: [issue(code, message, [placement.id], placement.gridId, tiles)],
-    };
-}
-
-function issue(
-    code: BlueprintValidationIssueCode,
-    message: string,
-    placementIds: readonly string[],
-    gridId: string | null,
-    tiles: readonly BlueprintGridCoordinate[]
-): BlueprintValidationIssue {
-    return { code, message, placementIds, gridId, tiles };
+function issue(code: BlueprintValidationIssueCode, message: string): BlueprintValidationIssue {
+    return { code, message, placementIds: [], gridId: null, tiles: [] };
 }
 
 function indexUnique<T>(
@@ -512,33 +269,12 @@ function indexUnique<T>(
     return index;
 }
 
-function sortedCoordinates(coordinates: readonly BlueprintGridCoordinate[]): BlueprintGridCoordinate[] {
-    return [...coordinates].sort(compareCoordinates);
-}
-
-function compareCoordinates(left: BlueprintGridCoordinate, right: BlueprintGridCoordinate): number {
-    return left.x - right.x || left.y - right.y;
-}
-
-function coordinateKey(coordinate: BlueprintGridCoordinate): string {
-    return `${coordinate.x},${coordinate.y}`;
-}
-
 function requireNonBlank(value: string, label: string): void {
     if (value.trim().length === 0) throw new TypeError(`${label} must not be blank`);
 }
 
 function requireSha256(value: string, label: string): void {
     if (!sha256Pattern.test(value)) throw new TypeError(`${label} must be a lowercase SHA-256`);
-}
-
-function requirePositiveSafeInteger(value: number, label: string): void {
-    requireSafeInteger(value, label);
-    if (value < 1) throw new RangeError(`${label} must be positive`);
-}
-
-function requireFinite(value: number, label: string): void {
-    if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
 }
 
 function requireSafeInteger(value: number, label: string): void {
