@@ -1,4 +1,5 @@
 export * from '#core/data/canonical-json';
+export * from '#core/data/blueprint';
 export * from '#core/data/common';
 export * from '#core/data/buildable';
 export * from '#core/data/customer';
@@ -38,3 +39,4 @@ export * from '#core/relationship/graph';
 export * from '#core/world/projection';
 export * from '#core/world/navigation';
 export * from '#core/world/shop-routing';
+export * from '#core/blueprint/validation';

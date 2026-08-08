@@ -17,6 +17,7 @@ The repository currently supports:
 - Generate and query verified precomputed recipe data
 - Allocate customers and dealers under shared resource limits
 - Normalize world, property, shop, and navigation evidence
+- Validate and plan property blueprints
 
 ## Planned player features
 
