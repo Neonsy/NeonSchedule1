@@ -13,7 +13,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.config.mts --project solver",
     "benchmark": "node dist/cli.js",
     "benchmark:allocation": "node dist/allocation-benchmark-cli.js",
     "verify": "node dist/verify-cli.js",
