@@ -41,6 +41,8 @@ describe('blueprint world projection', () => {
         expect(projected.boundingCollider).not.toHaveProperty('worldBounds');
         expect(projected.interactionPoints[0]?.transform.worldPosition)
             .toEqual(vector(9.5, 2.5, 18));
+        expect(projected.transitAccessPoints[0]?.worldPosition)
+            .toEqual(vector(11.5, 2.5, 20));
         const interactionRotation = projected.interactionPoints[0]!.transform.worldRotation;
         expect(interactionRotation).toMatchObject({ x: 0, z: 0 });
         expect(interactionRotation.y).toBeCloseTo(-0.9238795325112867);
@@ -144,7 +146,7 @@ function blueprint(): BlueprintDocument {
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-3',
+        schema: 'neonschedule1-buildable-4',
         itemId: 'bench',
         runtimeType: 'Game.Buildable',
         placement: {
@@ -176,6 +178,9 @@ function buildable(): Buildable {
             role: 'access',
             transform: transform('AccessPoint', vector(1, 0, 2), vector(0, 45, 0)),
         }],
+        isTransitEntity: true,
+        transitAccessPoints: [transform('TransitAccess', vector(-1, 0, 0))],
+        proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };
 }
@@ -195,7 +200,7 @@ function footprintTile(
 
 function propertyLayout(): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-2',
+        schema: 'neonschedule1-property-layout-3',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -207,6 +212,7 @@ function propertyLayout(): PropertyLayout {
         boundaryColliders: [],
         fixedColliders: [],
         surfaces: [],
+        proceduralTiles: [],
         loadingDocks: [],
         grids: [propertyGrid()],
         visuals: { renderers: [], meshes: [] },

@@ -88,7 +88,7 @@ function normalizeBuildable(
     validateFootprint(itemId, width, height, footprintTiles, integrity);
     const storageRaw = raw.storage;
     const buildable: Buildable = {
-        schema: 'neonschedule1-buildable-3',
+        schema: 'neonschedule1-buildable-4',
         itemId,
         runtimeType: stringField(raw, 'runtimeType', path),
         placement: {
@@ -124,6 +124,20 @@ function normalizeBuildable(
         interactionPoints: objectArray(raw.interactionPoints, `${path}.interactionPoints`).map(
             (point, index) => normalizeInteractionPoint(point, `${path}.interactionPoints[${index}]`)
         ),
+        isTransitEntity: booleanField(raw, 'isTransitEntity', path),
+        transitAccessPoints: objectArray(raw.transitAccessPoints, `${path}.transitAccessPoints`)
+            .map((point, index) =>
+                normalizeTransform(point, `${path}.transitAccessPoints[${index}]`)
+            ),
+        proceduralTiles: objectArray(raw.proceduralTiles, `${path}.proceduralTiles`)
+            .map((tile, index) => {
+                const tilePath = `${path}.proceduralTiles[${index}]`;
+                return {
+                    id: stringField(tile, 'id', tilePath),
+                    type: stringField(tile, 'tileType', tilePath),
+                    transform: normalizeTransform(tile.transform, `${tilePath}.transform`),
+                };
+            }),
         visuals: normalizeSceneVisuals(raw.visuals, `${path}.visuals`, assets, integrity),
     };
     return BuildableSchema.assert(buildable);

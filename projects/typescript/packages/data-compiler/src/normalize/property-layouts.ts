@@ -79,8 +79,23 @@ function normalizePropertyLayout(
             transform,
             container: normalizeTransform(surface.container, `${surfacePath}.container`),
             validFaces: stringArrayField(surface, 'validFaces', surfacePath),
+            colliders: objectArray(surface.colliders, `${surfacePath}.colliders`).map(
+                (collider, colliderIndex) => normalizeCollider(
+                    collider,
+                    `${surfacePath}.colliders[${colliderIndex}]`
+                )
+            ),
         };
     });
+    const proceduralTiles = objectArray(raw.proceduralTiles, `${path}.proceduralTiles`)
+        .map((tile, index) => {
+            const tilePath = `${path}.proceduralTiles[${index}]`;
+            return {
+                id: stringField(tile, 'id', tilePath),
+                type: stringField(tile, 'tileType', tilePath),
+                transform: normalizeTransform(tile.transform, `${tilePath}.transform`),
+            };
+        });
     const loadingDocks = objectArray(raw.loadingDocks, `${path}.loadingDocks`).map((dock, index) => {
         const dockPath = `${path}.loadingDocks[${index}]`;
         const parentCode = stringField(dock, 'parentPropertyCode', dockPath);
@@ -105,12 +120,13 @@ function normalizePropertyLayout(
         normalizeGrid(grid, `${path}.grids[${index}]`, integrity)
     );
     validateUniqueIds(propertyCode, 'surface', surfaces, integrity);
+    validateUniqueIds(propertyCode, 'procedural tile', proceduralTiles, integrity);
     validateUniqueIds(propertyCode, 'loading dock', loadingDocks, integrity);
     validateUniqueIds(propertyCode, 'grid', grids, integrity);
     validatePropertySummary(propertyCode, raw, property, loadingDocks.length, grids.length, integrity);
 
     return PropertyLayoutSchema.assert({
-        schema: 'neonschedule1-property-layout-2',
+        schema: 'neonschedule1-property-layout-3',
         propertyCode,
         propertyName: stringField(raw, 'propertyName', path),
         worldPosition: vector3(raw.position, `${path}.position`),
@@ -125,6 +141,7 @@ function normalizePropertyLayout(
         boundaryColliders,
         fixedColliders,
         surfaces,
+        proceduralTiles,
         loadingDocks,
         grids,
         visuals: normalizeSceneVisuals(raw.visuals, `${path}.visuals`, assets, integrity),

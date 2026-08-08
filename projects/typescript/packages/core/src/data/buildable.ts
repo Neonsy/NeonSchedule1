@@ -19,6 +19,13 @@ export const BuildableFootprintTileSchema = type({
 });
 export type BuildableFootprintTile = typeof BuildableFootprintTileSchema.infer;
 
+export const ProceduralTileSchema = type({
+    id: 'string',
+    type: 'string',
+    transform: TransformSchema,
+});
+export type ProceduralTile = typeof ProceduralTileSchema.infer;
+
 export const BuildablePlacementSchema = type({
     kind: 'string',
     holdDistance: 'number',
@@ -64,7 +71,7 @@ export const InteractionPointSchema = type({
 export type InteractionPoint = typeof InteractionPointSchema.infer;
 
 export const BuildableSchema = type({
-    schema: "'neonschedule1-buildable-3'",
+    schema: "'neonschedule1-buildable-4'",
     itemId: 'string',
     runtimeType: 'string',
     placement: BuildablePlacementSchema,
@@ -73,6 +80,9 @@ export const BuildableSchema = type({
     storage: BuildableStorageSchema.or('null'),
     temperatureEmitters: TemperatureEmitterSchema.array(),
     interactionPoints: InteractionPointSchema.array(),
+    isTransitEntity: 'boolean',
+    transitAccessPoints: TransformSchema.array(),
+    proceduralTiles: ProceduralTileSchema.array(),
     visuals: SceneVisualsSchema,
 });
 export type Buildable = typeof BuildableSchema.infer;

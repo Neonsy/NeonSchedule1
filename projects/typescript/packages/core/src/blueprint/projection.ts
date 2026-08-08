@@ -54,6 +54,8 @@ export interface ProjectedBlueprintPlacement {
     readonly boundingCollider: ProjectedCollider;
     readonly colliders: readonly ProjectedCollider[];
     readonly interactionPoints: readonly ProjectedInteractionPoint[];
+    readonly isTransitEntity: boolean;
+    readonly transitAccessPoints: readonly ProjectedBuildableTransform[];
 }
 
 export type BlueprintProjectionIssueCode =
@@ -208,6 +210,10 @@ function projectPlacement(context: ProjectionContext): ProjectedBlueprintPlaceme
             ...point,
             transform: projectTransform(point.transform, frame),
         })),
+        isTransitEntity: buildable.isTransitEntity,
+        transitAccessPoints: buildable.transitAccessPoints.map((point) =>
+            projectTransform(point, frame)
+        ),
     };
 }
 

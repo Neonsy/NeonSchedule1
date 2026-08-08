@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.6";
+    public const string ExporterVersion = "0.0.7";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();
@@ -108,9 +108,12 @@ public sealed class ExporterMod : MelonMod
                 $"{report.Discovery.ShopDetails.Count(x => x.Position is not null)} physical shop locations, " +
                 $"{report.Discovery.Buildables.Count} buildables, " +
                 $"{report.Discovery.Buildables.Sum(x => x.InteractionPoints.Count)} buildable interaction points, " +
+                $"{report.Discovery.Buildables.Sum(x => x.TransitAccessPoints.Count)} transit access points, " +
+                $"{report.Discovery.Buildables.Sum(x => x.ProceduralTiles.Count)} buildable procedural tiles, " +
                 $"{report.Discovery.PropertyLayouts.Count} property layouts, " +
                 $"{report.Discovery.PropertyLayouts.Sum(x => x.Colliders.Count)} property colliders, " +
                 $"{report.Discovery.PropertyLayouts.Sum(x => x.Surfaces.Count)} surfaces, " +
+                $"{report.Discovery.PropertyLayouts.Sum(x => x.ProceduralTiles.Count)} property procedural tiles, " +
                 $"{report.Discovery.PropertyLayouts.Sum(x => x.LoadingDocks.Count)} loading docks, " +
                 $"{report.Discovery.NpcSchedules.Count} NPC schedules with " +
                 $"{report.Discovery.ScheduleActionCount} actions, " +

@@ -194,7 +194,7 @@ function placement(id: string, x: number): BlueprintDocument['placements'][numbe
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-3',
+        schema: 'neonschedule1-buildable-4',
         itemId: 'bench',
         runtimeType: 'Game.GridItem',
         placement: {
@@ -224,13 +224,16 @@ function buildable(): Buildable {
         storage: null,
         temperatureEmitters: [],
         interactionPoints: [],
+        isTransitEntity: false,
+        transitAccessPoints: [],
+        proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };
 }
 
 function propertyLayout(fixedColliders: readonly Collider[]): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-2',
+        schema: 'neonschedule1-property-layout-3',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -242,6 +245,7 @@ function propertyLayout(fixedColliders: readonly Collider[]): PropertyLayout {
         boundaryColliders: [],
         fixedColliders: [...fixedColliders],
         surfaces: [],
+        proceduralTiles: [],
         loadingDocks: [],
         grids: [{
             id: 'main',

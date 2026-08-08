@@ -115,6 +115,9 @@ internal sealed class DiscoveryBuildableSnapshot
     public DiscoveryStorageSnapshot? Storage { get; set; }
     public List<DiscoveryTemperatureEmitterSnapshot> TemperatureEmitters { get; set; } = new();
     public List<DiscoveryInteractionPointSnapshot> InteractionPoints { get; set; } = new();
+    public bool IsTransitEntity { get; set; }
+    public List<TransformSnapshot?> TransitAccessPoints { get; set; } = new();
+    public List<DiscoveryProceduralTileSnapshot> ProceduralTiles { get; set; } = new();
     public DiscoveryVisualCollectionSnapshot Visuals { get; set; } = new();
 }
 
@@ -268,6 +271,7 @@ internal sealed class DiscoveryPropertyLayoutSnapshot
     public List<ColliderSnapshot> BoundaryColliders { get; set; } = new();
     public List<ColliderSnapshot> Colliders { get; set; } = new();
     public List<DiscoverySurfaceSnapshot> Surfaces { get; set; } = new();
+    public List<DiscoveryProceduralTileSnapshot> ProceduralTiles { get; set; } = new();
     public List<DiscoveryLoadingDockSnapshot> LoadingDocks { get; set; } = new();
     public List<DiscoveryGridSnapshot> Grids { get; set; } = new();
     public List<DiscoveryPlacedItemSnapshot> ItemsInLoadedSave { get; set; } = new();
@@ -281,6 +285,14 @@ internal sealed class DiscoverySurfaceSnapshot
     public TransformSnapshot? Transform { get; init; }
     public TransformSnapshot? Container { get; init; }
     public List<string> ValidFaces { get; set; } = new();
+    public List<ColliderSnapshot> Colliders { get; set; } = new();
+}
+
+internal sealed class DiscoveryProceduralTileSnapshot
+{
+    public string Id { get; init; } = string.Empty;
+    public string TileType { get; init; } = string.Empty;
+    public TransformSnapshot? Transform { get; init; }
 }
 
 internal sealed class DiscoveryLoadingDockSnapshot

@@ -82,6 +82,13 @@ describe('buildable and property-layout normalization', () => {
                                     transform: transform('Button'),
                                 },
                             ],
+                            transitAccessPoints: [transform('AccessPoint')],
+                            isTransitEntity: true,
+                            proceduralTiles: [{
+                                id: 'RackTile',
+                                tileType: 'Rack',
+                                transform: transform('RackTile'),
+                            }],
                             visuals: {
                                 renderers: [
                                     {
@@ -111,7 +118,7 @@ describe('buildable and property-layout normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(buildables[0]).toMatchObject({
-            schema: 'neonschedule1-buildable-3',
+            schema: 'neonschedule1-buildable-4',
             itemId: 'workstation',
             placement: {
                 kind: 'grid',
@@ -136,6 +143,9 @@ describe('buildable and property-layout normalization', () => {
                 { shape: 'sphere' },
             ],
             storage: { slotCount: 4 },
+            transitAccessPoints: [{ path: 'AccessPoint' }],
+            isTransitEntity: true,
+            proceduralTiles: [{ id: 'RackTile', type: 'Rack' }],
             visuals: {
                 renderers: [
                     {
@@ -193,6 +203,7 @@ describe('buildable and property-layout normalization', () => {
                                 collider('placed-buildable', 'LoadedSaveItem'),
                             ],
                             surfaces: [],
+                            proceduralTiles: [],
                             loadingDocks: [],
                             grids: [
                                 {

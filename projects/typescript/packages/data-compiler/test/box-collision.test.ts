@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    distanceFromPointToWorldBox,
     worldBoxFromCollider,
     worldBoxesOverlap,
     type Collider,
@@ -56,6 +57,29 @@ describe('world box collision', () => {
         expect(worldBoxesOverlap(skewed, { ...rotated, center: vector(4, 0, 0) })).toBe(false);
     });
 
+    it('measures exact point clearance from axis-aligned, rotated, and skewed boxes', () => {
+        const axisAligned = axisAlignedBox(vector(0, 0, 0), vector(1, 1, 1));
+        expect(distanceFromPointToWorldBox(vector(0, 0, 0), axisAligned)).toBe(0);
+        expect(distanceFromPointToWorldBox(vector(2, 3, 1), axisAligned)).toBeCloseTo(Math.sqrt(5));
+
+        const rotated: WorldBox = {
+            center: vector(0, 0, 0),
+            halfAxes: [
+                vector(Math.SQRT1_2, 0, -Math.SQRT1_2),
+                vector(0, 1, 0),
+                vector(Math.SQRT1_2, 0, Math.SQRT1_2),
+            ],
+        };
+        expect(distanceFromPointToWorldBox(vector(Math.SQRT2 + 1, 0, 0), rotated))
+            .toBeCloseTo(1);
+
+        const skewed: WorldBox = {
+            center: vector(0, 0, 0),
+            halfAxes: [vector(1, 0, 0), vector(0.5, 1, 0), vector(0, 0, 1)],
+        };
+        expect(distanceFromPointToWorldBox(vector(2.5, 1, 0), skewed)).toBeCloseTo(1);
+    });
+
     it('rejects unsupported, degenerate, and invalid-clearance inputs', () => {
         expect(() => worldBoxFromCollider({ ...collider({}), shape: 'sphere' }))
             .toThrow('requires box-collider geometry');
@@ -69,6 +93,10 @@ describe('world box collision', () => {
             axisAlignedBox(vector(0, 0, 0), vector(1, 1, 1)),
             -1
         )).toThrow('finite non-negative');
+        expect(() => distanceFromPointToWorldBox(
+            vector(Number.NaN, 0, 0),
+            axisAlignedBox(vector(0, 0, 0), vector(1, 1, 1))
+        )).toThrow('finite coordinates');
     });
 });
 

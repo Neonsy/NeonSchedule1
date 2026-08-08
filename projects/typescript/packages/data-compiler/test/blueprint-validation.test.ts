@@ -391,7 +391,7 @@ function buildable(
     tileSharingRule: Buildable['placement']['tileSharingRule'] = kind === 'grid' ? 'standard' : null
 ): Buildable {
     return {
-        schema: 'neonschedule1-buildable-3',
+        schema: 'neonschedule1-buildable-4',
         itemId,
         runtimeType: 'Game.Buildable',
         placement: {
@@ -416,6 +416,9 @@ function buildable(
         storage: null,
         temperatureEmitters: [],
         interactionPoints: [],
+        isTransitEntity: false,
+        transitAccessPoints: [],
+        proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };
 }
@@ -437,7 +440,7 @@ function footprintTile(
 
 function propertyLayout(): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-2',
+        schema: 'neonschedule1-property-layout-3',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -449,6 +452,7 @@ function propertyLayout(): PropertyLayout {
         boundaryColliders: [],
         fixedColliders: [],
         surfaces: [],
+        proceduralTiles: [],
         loadingDocks: [],
         grids: [propertyGrid()],
         visuals: { renderers: [], meshes: [] },

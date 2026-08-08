@@ -101,8 +101,55 @@ internal static partial class DiscoveryCollector
                     }
                 }
 
+                if (surface.Container is not null)
+                {
+                    var surfaceColliders = surface.Container.GetComponentsInChildren<Collider>(true);
+                    for (var colliderIndex = 0;
+                         colliderIndex < surfaceColliders.Length;
+                         colliderIndex++)
+                    {
+                        var nativeCollider = surfaceColliders[colliderIndex];
+                        var collider = ColliderSnapshot.FromCollider(nativeCollider);
+                        if (collider is null)
+                        {
+                            continue;
+                        }
+                        collider.Source = "property-surface";
+                        var meshCollider = nativeCollider.TryCast<MeshCollider>();
+                        if (meshCollider?.sharedMesh is not null)
+                        {
+                            visualAssets.RegisterMesh(meshCollider.sharedMesh);
+                        }
+                        surfaceSnapshot.Colliders.Add(collider);
+                    }
+                }
+                surfaceSnapshot.Colliders = surfaceSnapshot.Colliders
+                    .OrderBy(x => x.Transform?.Path, StringComparer.Ordinal)
+                    .ToList();
+
                 layout.Surfaces.Add(surfaceSnapshot);
             }
+
+            var proceduralTiles = property.GetComponentsInChildren<
+                Il2CppScheduleOne.Tiles.ProceduralTile>(true);
+            for (var tileIndex = 0; tileIndex < proceduralTiles.Length; tileIndex++)
+            {
+                var tile = proceduralTiles[tileIndex];
+                if (tile is null || tile.ParentBuildableItem is not null)
+                {
+                    continue;
+                }
+                var transform = TransformSnapshot.FromTransform(tile.transform);
+                layout.ProceduralTiles.Add(new DiscoveryProceduralTileSnapshot
+                {
+                    Id = transform?.Path ?? string.Empty,
+                    TileType = tile.TileType.ToString(),
+                    Transform = transform,
+                });
+            }
+            layout.ProceduralTiles = layout.ProceduralTiles
+                .OrderBy(x => x.Id, StringComparer.Ordinal)
+                .ToList();
 
             for (var dockIndex = 0; dockIndex < allLoadingDocks.Length; dockIndex++)
             {

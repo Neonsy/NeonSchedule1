@@ -280,6 +280,10 @@ internal static partial class DiscoveryCollector
             assets,
             visualAssets);
         snapshot.InteractionPoints = CollectInteractionPoints(builtItem.gameObject);
+        var transitEntity = builtItem.TryCast<Il2CppScheduleOne.Management.ITransitEntity>();
+        snapshot.IsTransitEntity = transitEntity is not null;
+        snapshot.TransitAccessPoints = CollectTransitAccessPoints(transitEntity);
+        snapshot.ProceduralTiles = CollectProceduralTiles(builtItem.gameObject);
         if (builtItem.BuildHandler is not null)
         {
             AddComponentsAndColliders(
@@ -338,7 +342,51 @@ internal static partial class DiscoveryCollector
             .ThenBy(x => x.Member, StringComparer.Ordinal)
             .ThenBy(x => x.Transform?.Path, StringComparer.Ordinal)
             .ToList();
+        snapshot.TransitAccessPoints = snapshot.TransitAccessPoints
+            .OrderBy(x => x?.Path, StringComparer.Ordinal)
+            .ToList();
+        snapshot.ProceduralTiles = snapshot.ProceduralTiles
+            .OrderBy(x => x.Id, StringComparer.Ordinal)
+            .ToList();
         return snapshot;
+    }
+
+    private static List<TransformSnapshot?> CollectTransitAccessPoints(
+        Il2CppScheduleOne.Management.ITransitEntity? entity)
+    {
+        if (entity?.AccessPoints is null)
+        {
+            return new List<TransformSnapshot?>();
+        }
+
+        var points = new List<TransformSnapshot?>();
+        for (var index = 0; index < entity.AccessPoints.Length; index++)
+        {
+            points.Add(TransformSnapshot.FromTransform(entity.AccessPoints[index]));
+        }
+        return points;
+    }
+
+    private static List<DiscoveryProceduralTileSnapshot> CollectProceduralTiles(GameObject root)
+    {
+        var result = new List<DiscoveryProceduralTileSnapshot>();
+        var tiles = root.GetComponentsInChildren<Il2CppScheduleOne.Tiles.ProceduralTile>(true);
+        for (var index = 0; index < tiles.Length; index++)
+        {
+            var tile = tiles[index];
+            if (tile is null)
+            {
+                continue;
+            }
+            var transform = TransformSnapshot.FromTransform(tile.transform);
+            result.Add(new DiscoveryProceduralTileSnapshot
+            {
+                Id = transform?.Path ?? string.Empty,
+                TileType = tile.TileType.ToString(),
+                Transform = transform,
+            });
+        }
+        return result;
     }
 
     private static (string Rule, string Implementation) TileSharingBehavior(
