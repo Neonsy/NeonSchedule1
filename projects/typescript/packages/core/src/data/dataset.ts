@@ -50,3 +50,19 @@ export const DatasetManifestSchema = type({
     deferredDomains: 'string[]',
 });
 export type DatasetManifest = typeof DatasetManifestSchema.infer;
+export type NormalizedDatasetIdentityInput = Omit<DatasetManifest, 'datasetSha256'>;
+
+export function normalizedDatasetIdentityInput(
+    manifest: NormalizedDatasetIdentityInput
+): NormalizedDatasetIdentityInput {
+    return {
+        schema: manifest.schema,
+        normalizerVersion: manifest.normalizerVersion,
+        gameVersion: manifest.gameVersion,
+        sourceReportSha256: manifest.sourceReportSha256,
+        sourceManifestSha256: manifest.sourceManifestSha256,
+        files: manifest.files,
+        counts: manifest.counts,
+        deferredDomains: manifest.deferredDomains,
+    };
+}

@@ -1,6 +1,6 @@
 import type { MonotonicClock } from '@neonschedule1/core';
 
-import type { SolverDataset } from '#solver/dataset';
+import { assertDatasetManifestIdentity, type SolverDataset } from '#solver/dataset';
 import { LiveFallbackRunner } from '#solver/live-fallback';
 import {
     loadPackagedRecipeCorpusProduction,
@@ -23,6 +23,7 @@ export async function loadProductionRuntime(
     dataset: SolverDataset,
     options: ProductionRuntimeOptions
 ): Promise<LoadedProductionRuntime> {
+    assertDatasetManifestIdentity(dataset.manifest);
     const production = await loadPackagedRecipeCorpusProduction(
         dataset,
         options.packageDirectory,

@@ -1,14 +1,18 @@
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type {
-    CustomerCatalog,
-    CustomerOfferProfile,
-    Customer,
-    Effect,
-    Item,
-    MixingRules,
+import {
+    canonicalJson,
+    normalizedDatasetIdentityInput,
+    type CustomerCatalog,
+    type CustomerOfferProfile,
+    type Customer,
+    type DatasetManifest,
+    type Effect,
+    type Item,
+    type MixingRules,
 } from '@neonschedule1/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -628,10 +632,43 @@ function partition(depth: number, mode: RecipeCorpusMode): RecipeCorpusPartition
     };
 }
 
-const dataset: RecipeCorpusDatasetIdentity = {
-    gameVersion: 'test-game',
-    datasetSha256: 'a'.repeat(64),
+const datasetManifestInput = normalizedDatasetIdentityInput({
+    schema: 'neonschedule1-normalized-data-1',
     normalizerVersion: 'test-normalizer',
+    gameVersion: 'test-game',
+    sourceReportSha256: 'a'.repeat(64),
+    sourceManifestSha256: 'b'.repeat(64),
+    files: [],
+    counts: {
+        items: 3,
+        effects: 2,
+        mixingMaps: 1,
+        mixingOracleCases: 0,
+        shops: 0,
+        properties: 0,
+        customers: 1,
+        seeds: 0,
+        shroomSpawns: 0,
+        stationRecipes: 0,
+        ovenTransforms: 0,
+        productionStations: 0,
+        directAssetFiles: 0,
+        offlineAssetFiles: 0,
+        meshAssets: 0,
+        materialAssets: 0,
+    },
+    deferredDomains: [],
+});
+const datasetManifest: DatasetManifest = {
+    ...datasetManifestInput,
+    datasetSha256: createHash('sha256')
+        .update(canonicalJson(datasetManifestInput), 'utf8')
+        .digest('hex'),
+};
+const dataset: RecipeCorpusDatasetIdentity = {
+    gameVersion: datasetManifest.gameVersion,
+    datasetSha256: datasetManifest.datasetSha256,
+    normalizerVersion: datasetManifest.normalizerVersion,
 };
 
 const configuration: RecipeCorpusConfiguration = {
@@ -725,11 +762,7 @@ function solverDataset(): SolverDataset {
     } satisfies MixingRules;
     return {
         directory: 'test-dataset',
-        manifest: {
-            gameVersion: dataset.gameVersion,
-            datasetSha256: dataset.datasetSha256,
-            normalizerVersion: dataset.normalizerVersion,
-        } as SolverDataset['manifest'],
+        manifest: datasetManifest,
         items: [product('product-a'), product('product-b'), ingredient],
         effects: [effect('base-effect', 0), effect('mixed-effect', 1)],
         mixingRules,

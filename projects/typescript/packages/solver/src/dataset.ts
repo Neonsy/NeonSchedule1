@@ -3,12 +3,14 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+    canonicalJson,
     CustomerCatalogSchema,
     CustomerSchema,
     DatasetManifestSchema,
     EffectSchema,
     ItemSchema,
     MixingRulesSchema,
+    normalizedDatasetIdentityInput,
     type Customer,
     type CustomerCatalog,
     type DatasetFile,
@@ -66,6 +68,7 @@ export async function loadSolverDataset(directory: string): Promise<SolverDatase
         await readFile(path.join(resolvedDirectory, 'manifest.json'), 'utf8')
     );
     const manifest = DatasetManifestSchema.assert(manifestDocument);
+    assertDatasetManifestIdentity(manifest);
     const files = new Map(manifest.files.map((file) => [file.path, file]));
     const itemPaths = matchingPaths(manifest.files, /^items\/[^/]+\.json$/u);
     const effectPaths = matchingPaths(manifest.files, /^effects\/[^/]+\.json$/u);
@@ -101,6 +104,17 @@ export async function loadSolverDataset(directory: string): Promise<SolverDatase
         customers,
         customerCatalog,
     };
+}
+
+export function assertDatasetManifestIdentity(manifest: DatasetManifest): void {
+    const actual = createHash('sha256')
+        .update(canonicalJson(normalizedDatasetIdentityInput(manifest)), 'utf8')
+        .digest('hex');
+    if (actual !== manifest.datasetSha256) {
+        throw new Error(
+            `Normalized dataset identity mismatch: expected ${manifest.datasetSha256}, computed ${actual}`
+        );
+    }
 }
 
 interface Assertable<Output> {

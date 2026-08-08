@@ -1,3 +1,4 @@
+export * from '#core/data/canonical-json';
 export * from '#core/data/common';
 export * from '#core/data/customer';
 export * from '#core/data/dataset';

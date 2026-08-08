@@ -2,10 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { DatasetManifestSchema, type DatasetManifest, type IntegrityCounts } from '@neonschedule1/core';
+import {
+    canonicalJson,
+    DatasetManifestSchema,
+    normalizedDatasetIdentityInput,
+    type DatasetManifest,
+    type IntegrityCounts,
+} from '@neonschedule1/core';
 
 import { sha256File } from '#data-compiler/acquisition/load';
-import { canonicalJson, sha256Text } from '#data-compiler/json';
+import { sha256Text } from '#data-compiler/json';
 
 export interface WriteDatasetOptions {
     readonly outputRoot: string;
@@ -46,28 +52,20 @@ export async function writeDataset(options: WriteDatasetOptions): Promise<Writte
             });
         }
 
-        const datasetSha256 = sha256Text(
-            canonicalJson({
-                schema: 'neonschedule1-normalized-data-1',
-                normalizerVersion: options.normalizerVersion,
-                gameVersion: options.gameVersion,
-                sourceReportSha256: options.sourceReportSha256,
-                sourceManifestSha256: options.sourceManifestSha256,
-                files,
-                counts: options.counts,
-                deferredDomains: options.deferredDomains,
-            })
-        );
-        const manifest = DatasetManifestSchema.assert({
+        const identityInput = normalizedDatasetIdentityInput({
             schema: 'neonschedule1-normalized-data-1',
             normalizerVersion: options.normalizerVersion,
             gameVersion: options.gameVersion,
             sourceReportSha256: options.sourceReportSha256,
             sourceManifestSha256: options.sourceManifestSha256,
-            datasetSha256,
             files,
             counts: options.counts,
             deferredDomains: [...options.deferredDomains],
+        });
+        const datasetSha256 = sha256Text(canonicalJson(identityInput));
+        const manifest = DatasetManifestSchema.assert({
+            ...identityInput,
+            datasetSha256,
         });
         await writeFile(path.join(staging, 'manifest.json'), canonicalJson(manifest), {
             encoding: 'utf8',
