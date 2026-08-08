@@ -14,19 +14,18 @@ import { validateCustomerOfferOracles } from '#data-compiler/normalize/customer-
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
+import { normalizePeople } from '#data-compiler/normalize/people';
 import { normalizeProduction } from '#data-compiler/normalize/production';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.17';
+export const NORMALIZER_VERSION = '0.0.18';
 
 const deferredDomains = [
     'buildable-geometry',
-    'non-customer-people',
     'property-layouts',
-    'relationships',
     'world-and-navigation',
 ] as const;
 
@@ -55,6 +54,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
+    const people = normalizePeople(acquisition.report, assets, integrity);
 
     const buildables = indexUnique(
         acquisition.report.discovery.buildables,
@@ -103,7 +103,11 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     for (const customer of customers.customers) {
         documents.set(`customers/${entityFileName(customer.id)}`, customer);
     }
+    for (const person of people.people) {
+        documents.set(`people/${entityFileName(person.id)}`, person);
+    }
     documents.set('customers/catalog.json', customers.catalog);
+    documents.set('people/relationships.json', people.relationships);
     documents.set('mixing/rules.json', mixing);
     documents.set('production/catalog.json', production);
     documents.set('visuals/assets.json', visuals);

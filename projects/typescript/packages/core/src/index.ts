@@ -5,6 +5,7 @@ export * from '#core/data/dataset';
 export * from '#core/data/effect';
 export * from '#core/data/item';
 export * from '#core/data/mixing';
+export * from '#core/data/person';
 export * from '#core/data/property';
 export * from '#core/data/production';
 export * from '#core/data/shop';

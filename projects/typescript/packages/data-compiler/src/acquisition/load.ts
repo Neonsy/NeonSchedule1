@@ -35,6 +35,7 @@ const reportShape = type({
     shops: 'unknown[]',
     peopleSources: 'object',
     people: 'unknown[]',
+    relationshipEdges: 'unknown[]',
     customers: 'unknown[]',
     customerConstants: 'object',
     mixing: 'object',
@@ -171,13 +172,44 @@ function parseReport(document: JsonObject): RawReport {
         },
         shops: objectArray(document.shops, 'report.shops'),
         peopleSources: {
+            npcRegistryCount: numberField(
+                peopleSources,
+                'npcRegistryCount',
+                'report.peopleSources'
+            ),
+            lockedCustomerCount: numberField(
+                peopleSources,
+                'lockedCustomerCount',
+                'report.peopleSources'
+            ),
+            unlockedCustomerCount: numberField(
+                peopleSources,
+                'unlockedCustomerCount',
+                'report.peopleSources'
+            ),
+            uniquePersonCount: numberField(
+                peopleSources,
+                'uniquePersonCount',
+                'report.peopleSources'
+            ),
             uniqueCustomerCount: numberField(
                 peopleSources,
                 'uniqueCustomerCount',
                 'report.peopleSources'
             ),
+            directedConnectionCount: numberField(
+                peopleSources,
+                'directedConnectionCount',
+                'report.peopleSources'
+            ),
+            uniqueRelationshipEdgeCount: numberField(
+                peopleSources,
+                'uniqueRelationshipEdgeCount',
+                'report.peopleSources'
+            ),
         },
         people: objectArray(document.people, 'report.people'),
+        relationshipEdges: objectArray(document.relationshipEdges, 'report.relationshipEdges'),
         customers: objectArray(document.customers, 'report.customers'),
         customerConstants: asObject(document.customerConstants, 'report.customerConstants'),
         mixing: {
@@ -215,6 +247,23 @@ function parseReport(document: JsonObject): RawReport {
             buildables: objectArray(discovery.buildables, 'report.discovery.buildables'),
             propertyLayouts: objectArray(discovery.propertyLayouts, 'report.discovery.propertyLayouts'),
             shopDetails: objectArray(discovery.shopDetails, 'report.discovery.shopDetails'),
+            people: objectArray(discovery.people, 'report.discovery.people'),
+            npcSchedules: objectArray(discovery.npcSchedules, 'report.discovery.npcSchedules'),
+            uniquePersonArchetypeCount: numberField(
+                discovery,
+                'uniquePersonArchetypeCount',
+                'report.discovery'
+            ),
+            scheduleManagerCount: numberField(
+                discovery,
+                'scheduleManagerCount',
+                'report.discovery'
+            ),
+            scheduleActionCount: numberField(
+                discovery,
+                'scheduleActionCount',
+                'report.discovery'
+            ),
             visualMeshes: objectArray(visualAssets.meshes, 'report.discovery.visualAssets.meshes'),
             visualMaterials: objectArray(visualAssets.materials, 'report.discovery.visualAssets.materials'),
         },

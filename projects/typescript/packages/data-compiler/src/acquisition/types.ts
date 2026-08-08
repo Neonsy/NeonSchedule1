@@ -23,9 +23,16 @@ export interface RawReport {
     };
     readonly shops: JsonObject[];
     readonly peopleSources: {
+        readonly npcRegistryCount: number;
+        readonly lockedCustomerCount: number;
+        readonly unlockedCustomerCount: number;
+        readonly uniquePersonCount: number;
         readonly uniqueCustomerCount: number;
+        readonly directedConnectionCount: number;
+        readonly uniqueRelationshipEdgeCount: number;
     };
     readonly people: JsonObject[];
+    readonly relationshipEdges: JsonObject[];
     readonly customers: JsonObject[];
     readonly customerConstants: JsonObject;
     readonly mixing: {
@@ -54,6 +61,11 @@ export interface RawReport {
         readonly buildables: JsonObject[];
         readonly propertyLayouts: JsonObject[];
         readonly shopDetails: JsonObject[];
+        readonly people: JsonObject[];
+        readonly npcSchedules: JsonObject[];
+        readonly uniquePersonArchetypeCount: number;
+        readonly scheduleManagerCount: number;
+        readonly scheduleActionCount: number;
         readonly visualMeshes: JsonObject[];
         readonly visualMaterials: JsonObject[];
     };
