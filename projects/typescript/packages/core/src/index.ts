@@ -19,6 +19,7 @@ export * from '#core/mixing/recipe';
 export * from '#core/mixing/recipe-ranking';
 export * from '#core/mixing/reverse-search';
 export * from '#core/mixing/search';
+export * from '#core/mixing/seed';
 export * from '#core/production/cost';
 export * from '#core/production/growing';
 export * from '#core/production/plan';
