@@ -85,6 +85,78 @@ describe('customer recommendation dealer allocation', () => {
         ]);
     });
 
+    it('reduces equivalent dealers by count and selects the cheapest concrete fees', () => {
+        const offer = recommendation('offer', 0, 100, 1);
+        const allocation = new CustomerRecommendationDealerAllocator(tradeCatalog(1, [
+            dealer('d1', 0.2, 10),
+            dealer('d2', 0.2, 0),
+            dealer('d3', 0.2, 5),
+        ])).allocate({
+            datasetSha256,
+            dealers: [
+                { personId: 'd1', signingFeePaid: false },
+                { personId: 'd2', signingFeePaid: false },
+                { personId: 'd3', signingFeePaid: false },
+            ],
+            recommendationSets: [
+                { customerId: 'alice', recommendations: [offer] },
+                { customerId: 'bob', recommendations: [offer] },
+            ],
+            maximumProductionCost: 2,
+            maximumDealerSubsets: 4,
+            maximumStatesPerDealerSubset: 100,
+        });
+
+        expect(allocation.result).toMatchObject({
+            status: 'exact',
+            signingFees: 5,
+            expectedProfit: 195,
+            evidence: {
+                possibleDealerSubsets: 8,
+                equivalentDealerClassCount: 1,
+                possibleDealerClassSelections: 4,
+                skippedEquivalentDealerSubsets: 4,
+                evaluatedDealerSubsets: 4,
+            },
+        });
+        expect(allocation.result.allocations.map(({ dealerId }) => dealerId).sort()).toEqual([
+            'd2',
+            'd3',
+        ]);
+        expect(allocation.result.allocations[0]).not.toHaveProperty('dealerClassId');
+    });
+
+    it('keeps dealers separate when customer eligibility distinguishes them', () => {
+        const allocation = new CustomerRecommendationDealerAllocator(tradeCatalog(1, [
+            dealer('d1', 0.2, 0),
+            dealer('d2', 0.2, 0),
+        ])).allocate({
+            datasetSha256,
+            dealers: [
+                { personId: 'd1', signingFeePaid: true },
+                { personId: 'd2', signingFeePaid: true },
+            ],
+            recommendationSets: [{
+                customerId: 'customer',
+                recommendations: [recommendation('offer', 10, 10, 1)],
+                eligibleDealerIds: ['d1'],
+            }],
+            maximumProductionCost: 1,
+            maximumDealerSubsets: 4,
+            maximumStatesPerDealerSubset: 100,
+        });
+
+        expect(allocation.result).toMatchObject({
+            status: 'exact',
+            evidence: {
+                equivalentDealerClassCount: 2,
+                possibleDealerClassSelections: 4,
+                skippedEquivalentDealerSubsets: 0,
+            },
+        });
+        expect(allocation.result.allocations[0]).toMatchObject({ dealerId: 'd1' });
+    });
+
     it('reports dealer-subset and allocation-state limits separately', () => {
         const allocator = new CustomerRecommendationDealerAllocator(tradeCatalog(10, [
             dealer('dealer', 0, 0),

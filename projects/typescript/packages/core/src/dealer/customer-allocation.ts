@@ -3,6 +3,13 @@ import {
     type CustomerAllocationResourceLimit,
     type CustomerAllocationResourceUsage,
 } from '#core/customer/allocation';
+import {
+    activeDealerClasses,
+    advanceDealerClassCounts,
+    equivalentDealerClasses,
+    possibleDealerClassSelections,
+    type ActiveDealerClass,
+} from '#core/dealer/symmetry';
 
 export interface DealerCustomerAllocationDealer {
     readonly dealerId: string;
@@ -49,6 +56,9 @@ export type DealerCustomerAllocationStopReason =
 
 export interface DealerCustomerAllocationEvidence {
     readonly possibleDealerSubsets: number | null;
+    readonly equivalentDealerClassCount: number;
+    readonly possibleDealerClassSelections: number | null;
+    readonly skippedEquivalentDealerSubsets: number | null;
     readonly evaluatedDealerSubsets: number;
     readonly maximumDealerSubsets: number;
     readonly allocationVisitedStates: number;
@@ -79,9 +89,13 @@ interface NormalizedInput extends Omit<DealerCustomerAllocationInput, 'customerI
 interface IndexedChoice {
     readonly internalOptionId: string;
     readonly option: DealerCustomerAllocationOption;
-    readonly dealer: DealerCustomerAllocationDealer;
+    readonly dealerClass: ActiveDealerClass;
     readonly dealerCut: number;
     readonly expectedProfitAfterDealerCut: number;
+}
+
+interface DealerClassAllocation extends Omit<DealerCustomerAllocation, 'dealerId'> {
+    readonly dealerClassId: string;
 }
 
 interface Candidate {
@@ -103,14 +117,16 @@ export class DealerCustomerAllocationOptimizer {
         const possibleDealerSubsets = normalized.dealers.length < 53
             ? 2 ** normalized.dealers.length
             : null;
-        const selected = Array<boolean>(normalized.dealers.length).fill(false);
+        const dealerClasses = equivalentDealerClasses(normalized.dealers, normalized.options);
+        const possibleClassSelections = possibleDealerClassSelections(dealerClasses);
+        const selectedCounts = Array<number>(dealerClasses.length).fill(0);
         let best = emptyCandidate();
         let evaluatedDealerSubsets = 0;
         let allocationVisitedStates = 0;
         let stateLimitedDealerSubsets = 0;
         let dealerSubsetLimitReached = false;
 
-        const evaluate = (active: readonly DealerCustomerAllocationDealer[]): void => {
+        const evaluate = (active: readonly ActiveDealerClass[]): void => {
             if (evaluatedDealerSubsets >= normalized.maximumDealerSubsets) {
                 dealerSubsetLimitReached = true;
                 return;
@@ -132,35 +148,41 @@ export class DealerCustomerAllocationOptimizer {
                     expectedProfit: choice.expectedProfitAfterDealerCut,
                     resourceUsage: [
                         ...choice.option.resourceUsage,
-                        { resourceId: `${capacityPrefix}${choice.dealer.dealerId}`, quantity: 1 },
+                        {
+                            resourceId: `${capacityPrefix}${choice.dealerClass.classId}`,
+                            quantity: 1,
+                        },
                     ],
                 })),
                 maximumProductionCost: normalized.maximumProductionCost,
                 resourceLimits: [
                     ...normalized.resourceLimits,
-                    ...active.map((dealer) => ({
-                        resourceId: `${capacityPrefix}${dealer.dealerId}`,
-                        quantity: dealer.maximumCustomers,
+                    ...active.map((dealerClass) => ({
+                        resourceId: `${capacityPrefix}${dealerClass.classId}`,
+                        quantity: dealerClass.totalCapacity,
                     })),
                 ],
                 maximumStates: normalized.maximumStatesPerDealerSubset,
             });
             allocationVisitedStates += result.evidence.visitedStates;
             if (result.status === 'state-limit') stateLimitedDealerSubsets++;
-            const allocations = result.allocations.map(({ optionId }) => {
+            const classAllocations = result.allocations.map(({ optionId }) => {
                 const choice = byInternalOptionId.get(optionId);
                 if (choice === undefined) throw new Error('Joint allocation choice cannot be resolved');
-                return resolvedAllocation(choice);
-            }).sort(compareAllocations);
-            const usedDealerIds = new Set(allocations.map(({ dealerId }) => dealerId));
-            if (active.some(({ dealerId }) => !usedDealerIds.has(dealerId))) return;
+                return resolvedClassAllocation(choice);
+            });
+            const allocations = materializeDealerAssignments(classAllocations, active);
+            if (allocations === null) return;
             const candidate = summarizeCandidate(allocations, active, normalized.resourceIds);
             if (betterCandidate(candidate, best)) best = candidate;
         };
 
         do {
-            evaluate(normalized.dealers.filter((_, index) => selected[index]));
-        } while (!dealerSubsetLimitReached && advanceSubset(selected));
+            evaluate(activeDealerClasses(dealerClasses, selectedCounts));
+        } while (
+            !dealerSubsetLimitReached &&
+            advanceDealerClassCounts(selectedCounts, dealerClasses)
+        );
 
         const stopReasons: DealerCustomerAllocationStopReason[] = [];
         if (dealerSubsetLimitReached) stopReasons.push('dealer-subset-limit');
@@ -174,6 +196,12 @@ export class DealerCustomerAllocationOptimizer {
             ),
             evidence: {
                 possibleDealerSubsets,
+                equivalentDealerClassCount: dealerClasses.length,
+                possibleDealerClassSelections: possibleClassSelections,
+                skippedEquivalentDealerSubsets: possibleDealerSubsets === null ||
+                    possibleClassSelections === null
+                    ? null
+                    : possibleDealerSubsets - possibleClassSelections,
                 evaluatedDealerSubsets,
                 maximumDealerSubsets: normalized.maximumDealerSubsets,
                 allocationVisitedStates,
@@ -270,24 +298,25 @@ function normalizeOption(
 
 function allocationChoices(
     options: readonly DealerCustomerAllocationOption[],
-    dealers: readonly DealerCustomerAllocationDealer[]
+    dealerClasses: readonly ActiveDealerClass[]
 ): IndexedChoice[] {
     const choices: IndexedChoice[] = [];
     for (const option of options) {
         const eligible = option.eligibleDealerIds === undefined
             ? undefined
             : new Set(option.eligibleDealerIds);
-        for (const dealer of dealers) {
-            if (eligible !== undefined && !eligible.has(dealer.dealerId)) continue;
-            const dealerCut = option.expectedRevenue * dealer.salesCutPercentage;
+        for (const dealerClass of dealerClasses) {
+            const representative = dealerClass.selectedDealers[0]!;
+            if (eligible !== undefined && !eligible.has(representative.dealerId)) continue;
+            const dealerCut = option.expectedRevenue * dealerClass.salesCutPercentage;
             const expectedProfitAfterDealerCut = option.expectedProfitBeforeDealerCut - dealerCut;
             choices.push({
                 internalOptionId: `choice:${JSON.stringify([
                     option.optionId,
-                    dealer.dealerId,
+                    dealerClass.classId,
                 ])}`,
                 option,
-                dealer,
+                dealerClass,
                 dealerCut,
                 expectedProfitAfterDealerCut,
             });
@@ -296,11 +325,11 @@ function allocationChoices(
     return choices;
 }
 
-function resolvedAllocation(choice: IndexedChoice): DealerCustomerAllocation {
+function resolvedClassAllocation(choice: IndexedChoice): DealerClassAllocation {
     return {
         customerId: choice.option.customerId,
         optionId: choice.option.optionId,
-        dealerId: choice.dealer.dealerId,
+        dealerClassId: choice.dealerClass.classId,
         productionCost: choice.option.productionCost,
         expectedRevenue: choice.option.expectedRevenue,
         expectedProfitBeforeDealerCut: choice.option.expectedProfitBeforeDealerCut,
@@ -310,9 +339,50 @@ function resolvedAllocation(choice: IndexedChoice): DealerCustomerAllocation {
     };
 }
 
+function materializeDealerAssignments(
+    allocations: readonly DealerClassAllocation[],
+    active: readonly ActiveDealerClass[]
+): DealerCustomerAllocation[] | null {
+    const result: DealerCustomerAllocation[] = [];
+    for (const dealerClass of active) {
+        const classAllocations = allocations
+            .filter(({ dealerClassId }) => dealerClassId === dealerClass.classId)
+            .sort(compareClassAllocations);
+        if (classAllocations.length < dealerClass.selectedDealers.length) return null;
+        const dealers = [...dealerClass.selectedDealers]
+            .sort((left, right) => compareString(left.dealerId, right.dealerId));
+        let dealerIndex = 0;
+        let assignedToDealer = 0;
+        classAllocations.forEach((allocation, allocationIndex) => {
+            const allocationsRemaining = classAllocations.length - allocationIndex;
+            const dealersRemaining = dealers.length - dealerIndex - 1;
+            if (
+                assignedToDealer === dealerClass.maximumCustomers ||
+                allocationsRemaining === dealersRemaining
+            ) {
+                dealerIndex++;
+                assignedToDealer = 0;
+            }
+            const { dealerClassId: _, ...resolved } = allocation;
+            result.push({ ...resolved, dealerId: dealers[dealerIndex]!.dealerId });
+            assignedToDealer++;
+        });
+    }
+    return result.sort(compareAllocations);
+}
+
+function compareClassAllocations(
+    left: DealerClassAllocation,
+    right: DealerClassAllocation
+): number {
+    return compareString(left.customerId, right.customerId) ||
+        compareString(left.optionId, right.optionId) ||
+        compareString(left.dealerClassId, right.dealerClassId);
+}
+
 function summarizeCandidate(
     allocations: readonly DealerCustomerAllocation[],
-    active: readonly DealerCustomerAllocationDealer[],
+    active: readonly ActiveDealerClass[],
     resourceIds: ReadonlySet<string>
 ): Candidate {
     const productionCost = sum(allocations, ({ productionCost: value }) => value);
@@ -322,7 +392,9 @@ function summarizeCandidate(
         ({ expectedProfitBeforeDealerCut: value }) => value
     );
     const dealerCut = sum(allocations, ({ dealerCut: value }) => value);
-    const signingFees = sum(active, ({ signingFeeCharged: value }) => value);
+    const signingFees = sum(active, ({ selectedDealers }) =>
+        sum(selectedDealers, ({ signingFeeCharged: value }) => value)
+    );
     return {
         allocations,
         productionCost,
@@ -382,17 +454,6 @@ function unusedResourcePrefix(resourceIds: ReadonlySet<string>): string {
     let prefix = '#dealer-capacity:';
     while ([...resourceIds].some((resourceId) => resourceId.startsWith(prefix))) prefix = `#${prefix}`;
     return prefix;
-}
-
-function advanceSubset(selected: boolean[]): boolean {
-    for (let index = selected.length - 1; index >= 0; index--) {
-        if (!selected[index]) {
-            selected[index] = true;
-            return true;
-        }
-        selected[index] = false;
-    }
-    return false;
 }
 
 function uniqueIds(ids: readonly string[], label: string): string[] {

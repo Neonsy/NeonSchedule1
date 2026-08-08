@@ -65,7 +65,7 @@ export interface JointAllocationBenchmarkCase extends JointAllocationBenchmarkSc
 }
 
 export interface JointAllocationBenchmarkReport {
-    readonly schema: 'neonschedule1-joint-allocation-benchmark-1';
+    readonly schema: 'neonschedule1-joint-allocation-benchmark-2';
     readonly createdAt: string;
     readonly dataset: {
         readonly gameVersion: string;
@@ -206,7 +206,7 @@ export function runJointAllocationBenchmark(
     });
 
     return {
-        schema: 'neonschedule1-joint-allocation-benchmark-1',
+        schema: 'neonschedule1-joint-allocation-benchmark-2',
         createdAt: new Date().toISOString(),
         dataset: {
             gameVersion: dataset.manifest.gameVersion,
