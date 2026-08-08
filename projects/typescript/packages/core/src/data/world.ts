@@ -106,9 +106,22 @@ export type NavigationSample = typeof NavigationSampleSchema.infer;
 export const NavigationEdgeSchema = type({ sampleA: 'number', sampleB: 'number' });
 export type NavigationEdge = typeof NavigationEdgeSchema.infer;
 
+export const NavigationAgentSchema = type({
+    source: "'employee-prefabs'",
+    typeId: 'number',
+    name: 'string',
+    radius: 'number',
+    height: 'number',
+    maximumSlope: 'number',
+    stepHeight: 'number',
+    employeeTypes: 'string[]',
+});
+export type NavigationAgent = typeof NavigationAgentSchema.infer;
+
 export const NavigationGraphSchema = type({
-    schema: "'neonschedule1-navigation-graph-1'",
+    schema: "'neonschedule1-navigation-graph-2'",
     method: 'string',
+    agent: NavigationAgentSchema,
     sampleSpacing: 'number',
     queryHeight: 'number',
     maxSampleDistance: 'number',

@@ -2,6 +2,7 @@ import {
     NavigationGraphSchema,
     WorldLocationCatalogSchema,
     WorldMapSchema,
+    isNavigationSegmentLocallyTraversable,
     type MapImage,
     type MapService,
     type NavigationEdge,
@@ -285,6 +286,45 @@ function normalizeNavigation(raw: JsonObject, integrity: Integrity): NavigationG
     const path = 'report.discovery.navigation';
     integrity.check('navigation sampling completed', stringField(raw, 'error', path) === '', 'Navigation sampling failed');
     integrity.check('navigation edge validation completed', stringField(raw, 'edgeError', path) === '', 'Navigation edge validation failed');
+    const rawAgent = asObject(raw.agent, `${path}.agent`);
+    const agentPath = `${path}.agent`;
+    const employeeTypes = stringArrayField(rawAgent, 'employeeTypes', agentPath).sort();
+    const agentName = stringField(rawAgent, 'name', agentPath);
+    const radius = numberField(rawAgent, 'radius', agentPath);
+    const height = numberField(rawAgent, 'height', agentPath);
+    const maximumSlope = numberField(rawAgent, 'maximumSlope', agentPath);
+    const stepHeight = numberField(rawAgent, 'stepHeight', agentPath);
+    integrity.check(
+        'navigation agent is derived from employee prefabs',
+        stringField(rawAgent, 'source', agentPath) === 'employee-prefabs',
+        'Navigation agent source is not employee-prefabs'
+    );
+    integrity.check(
+        'navigation agent has employee types',
+        employeeTypes.length > 0 && employeeTypes.every((value) => value.trim().length > 0) &&
+            new Set(employeeTypes).size === employeeTypes.length,
+        'Navigation agent employee types are missing, blank, or duplicated'
+    );
+    integrity.check(
+        'navigation agent has a name',
+        agentName.trim().length > 0,
+        'Navigation agent name is blank'
+    );
+    integrity.check(
+        'navigation agent dimensions are valid',
+        radius > 0 && height > 0 && maximumSlope >= 0 && maximumSlope < 90 && stepHeight >= 0,
+        'Navigation agent dimensions are invalid'
+    );
+    const agent: NavigationGraph['agent'] = {
+        source: 'employee-prefabs',
+        typeId: integerField(rawAgent, 'typeId', agentPath),
+        name: agentName,
+        radius,
+        height,
+        maximumSlope,
+        stepHeight,
+        employeeTypes,
+    };
     const samples = objectArray(raw.samples, `${path}.samples`).map<NavigationSample>((sample, index) => ({
         gridX: integerField(sample, 'gridX', `${path}.samples[${index}]`),
         gridZ: integerField(sample, 'gridZ', `${path}.samples[${index}]`),
@@ -310,6 +350,12 @@ function normalizeNavigation(raw: JsonObject, integrity: Integrity): NavigationG
         const sampleB = integerValue(rawEdges[index + 1], `${path}.edges[${index + 1}]`);
         if (sampleA < 0 || sampleA >= samples.length || sampleB < 0 || sampleB >= samples.length) {
             integrity.addError(`Navigation edge ${index / 2} references a missing sample`);
+        } else if (!isNavigationSegmentLocallyTraversable(
+            agent,
+            samples[sampleA]!.position,
+            samples[sampleB]!.position
+        )) {
+            integrity.addError(`Navigation edge ${index / 2} exceeds employee movement limits`);
         }
         if (sampleA === sampleB) integrity.addError(`Navigation edge ${index / 2} is a self-edge`);
         const edgeKey = sampleA < sampleB ? `${sampleA}\0${sampleB}` : `${sampleB}\0${sampleA}`;
@@ -320,8 +366,9 @@ function normalizeNavigation(raw: JsonObject, integrity: Integrity): NavigationG
     integrity.check('navigation contains samples', samples.length > 0, 'Navigation contains no samples');
 
     return NavigationGraphSchema.assert({
-        schema: 'neonschedule1-navigation-graph-1',
+        schema: 'neonschedule1-navigation-graph-2',
         method: stringField(raw, 'method', path),
+        agent,
         sampleSpacing: numberField(raw, 'sampleSpacing', path),
         queryHeight: numberField(raw, 'queryHeight', path),
         maxSampleDistance: numberField(raw, 'maxSampleDistance', path),

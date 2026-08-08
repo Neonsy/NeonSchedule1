@@ -60,6 +60,16 @@ describe('world normalization', () => {
             nearestShops: [{ shopCode: 'hardware', distance: 2.5 }],
         });
         expect(world.navigation.edges).toEqual([{ sampleA: 0, sampleB: 1 }]);
+        expect(world.navigation.agent).toEqual({
+            source: 'employee-prefabs',
+            typeId: 7,
+            name: 'Employee',
+            radius: 0.35,
+            height: 1.8,
+            maximumSlope: 45,
+            stepHeight: 0.4,
+            employeeTypes: ['Botanist', 'Chemist', 'Cleaner', 'Handler'],
+        });
         const mapImage = world.map.mainMap;
         expect(mapImage).not.toBeNull();
         if (mapImage === null) throw new Error('Test map image is missing');
@@ -94,6 +104,19 @@ describe('world normalization', () => {
 
         expect(() => integrity.throwIfInvalid()).toThrow('Integrity validation failed with 1 issue(s)');
         expect(integrity.errors).toEqual(['Navigation edge 0 references a missing sample']);
+    });
+
+    it('reports navigation edges beyond employee movement limits', () => {
+        const raw = report();
+        const navigation = raw.discovery.navigation as {
+            samples: Array<{ position: { y: number } }>;
+        };
+        navigation.samples[1]!.position.y = 10;
+        const integrity = new Integrity();
+
+        normalizeWorld(raw, assets, new Set(['alice']), new Set(['hardware']), integrity);
+
+        expect(integrity.errors).toContain('Navigation edge 0 exceeds employee movement limits');
     });
 });
 
@@ -162,6 +185,16 @@ function report(): RawReport {
             }],
             navigation: {
                 method: 'sampled-navmesh-grid',
+                agent: {
+                    source: 'employee-prefabs',
+                    typeId: 7,
+                    name: 'Employee',
+                    radius: 0.35,
+                    height: 1.8,
+                    maximumSlope: 45,
+                    stepHeight: 0.4,
+                    employeeTypes: ['Botanist', 'Chemist', 'Cleaner', 'Handler'],
+                },
                 sampleSpacing: 2,
                 queryHeight: 0,
                 maxSampleDistance: 12,

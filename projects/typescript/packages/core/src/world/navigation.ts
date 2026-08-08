@@ -1,5 +1,6 @@
 import {
     NavigationGraphSchema,
+    type NavigationAgent,
     type NavigationGraph,
     type NavigationSample,
 } from '#core/data/world';
@@ -54,6 +55,29 @@ export interface UnreachableNavigationPath {
 
 export type NavigationPathResult = FoundNavigationPath | UnreachableNavigationPath;
 
+export function isNavigationSegmentLocallyTraversable(
+    agent: NavigationAgent,
+    start: Vector3,
+    end: Vector3
+): boolean {
+    if (
+        !Number.isFinite(agent.maximumSlope) ||
+        agent.maximumSlope < 0 ||
+        agent.maximumSlope >= 90 ||
+        !Number.isFinite(agent.stepHeight) ||
+        agent.stepHeight < 0
+    ) {
+        return false;
+    }
+    const horizontalDistance = Math.hypot(start.x - end.x, start.z - end.z);
+    const verticalDistance = Math.abs(start.y - end.y);
+    if (!Number.isFinite(horizontalDistance) || !Number.isFinite(verticalDistance)) return false;
+    const slopeRise = horizontalDistance * Math.tan(agent.maximumSlope * Math.PI / 180);
+    const maximumRise = slopeRise + agent.stepHeight;
+    const tolerance = 1e-5 * Math.max(1, maximumRise);
+    return verticalDistance <= maximumRise + tolerance;
+}
+
 interface Neighbor {
     readonly sampleIndex: number;
     readonly distance: number;
@@ -75,6 +99,26 @@ export class NavigationNetwork {
     constructor(input: NavigationGraph) {
         const graph = NavigationGraphSchema.assert(input);
         requirePositiveFinite(graph.sampleSpacing, 'Navigation sample spacing');
+        if (!Number.isSafeInteger(graph.agent.typeId)) {
+            throw new RangeError('Navigation agent type ID must be a safe integer');
+        }
+        if (graph.agent.name.trim().length === 0) {
+            throw new TypeError('Navigation agent name must not be blank');
+        }
+        requirePositiveFinite(graph.agent.radius, 'Navigation agent radius');
+        requirePositiveFinite(graph.agent.height, 'Navigation agent height');
+        requireNonNegativeFinite(graph.agent.maximumSlope, 'Navigation agent maximum slope');
+        if (graph.agent.maximumSlope >= 90) {
+            throw new RangeError('Navigation agent maximum slope must be less than 90 degrees');
+        }
+        requireNonNegativeFinite(graph.agent.stepHeight, 'Navigation agent step height');
+        if (
+            graph.agent.employeeTypes.length === 0 ||
+            graph.agent.employeeTypes.some((value) => value.trim().length === 0) ||
+            new Set(graph.agent.employeeTypes).size !== graph.agent.employeeTypes.length
+        ) {
+            throw new TypeError('Navigation agent employee types must be non-empty and unique');
+        }
         requirePositiveSafeInteger(graph.gridWidth, 'Navigation grid width');
         requirePositiveSafeInteger(graph.gridHeight, 'Navigation grid height');
         if (graph.samples.length === 0) throw new Error('Navigation graph contains no samples');
@@ -115,6 +159,13 @@ export class NavigationNetwork {
                 this.#samples[edge.sampleB]!.position
             );
             requirePositiveFinite(distance, `Navigation edge ${edgeIndex} distance`);
+            if (!isNavigationSegmentLocallyTraversable(
+                graph.agent,
+                this.#samples[edge.sampleA]!.position,
+                this.#samples[edge.sampleB]!.position
+            )) {
+                throw new Error(`Navigation edge ${edgeIndex} exceeds employee movement limits`);
+            }
             adjacency[edge.sampleA]!.push({ sampleIndex: edge.sampleB, distance });
             adjacency[edge.sampleB]!.push({ sampleIndex: edge.sampleA, distance });
         }

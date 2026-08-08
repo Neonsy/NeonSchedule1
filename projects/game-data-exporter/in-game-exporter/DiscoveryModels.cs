@@ -176,6 +176,7 @@ internal sealed class DiscoveryMapSnapshot
 internal sealed class DiscoveryNavigationSnapshot
 {
     public string Method { get; set; } = string.Empty;
+    public DiscoveryNavigationAgentSnapshot Agent { get; set; } = new();
     public float SampleSpacing { get; set; }
     public float QueryHeight { get; set; }
     public float MaxSampleDistance { get; set; }
@@ -193,6 +194,18 @@ internal sealed class DiscoveryNavigationSnapshot
     public List<int> Edges { get; set; } = new();
     public string Error { get; set; } = string.Empty;
     public string EdgeError { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryNavigationAgentSnapshot
+{
+    public string Source { get; init; } = string.Empty;
+    public int TypeId { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public float Radius { get; init; }
+    public float Height { get; init; }
+    public float MaximumSlope { get; init; }
+    public float StepHeight { get; init; }
+    public List<string> EmployeeTypes { get; init; } = new();
 }
 
 internal sealed class DiscoveryNavMeshSurfaceSnapshot

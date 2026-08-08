@@ -124,6 +124,18 @@ describe('navigation network', () => {
         expect(result.end.snapDistance).toBe(1);
         expect(result.points.map(({ sampleIndex }) => sampleIndex)).toEqual([0, 1]);
     });
+
+    it('rejects local edges beyond the exported employee movement limits', () => {
+        expect(() => new NavigationNetwork(graph(
+            [{ x: 0, y: 0, z: 0 }, { x: 2, y: 2.5, z: 0 }],
+            [[0, 1]]
+        ))).toThrow('Navigation edge 0 exceeds employee movement limits');
+
+        expect(() => new NavigationNetwork(graph(
+            [{ x: 0, y: 0, z: 0 }, { x: 2, y: 2.4, z: 0 }],
+            [[0, 1]]
+        ))).not.toThrow();
+    });
 });
 
 function graph(positions: readonly Vector3[], edges: readonly (readonly [number, number])[]): NavigationGraph {
@@ -134,8 +146,9 @@ function graph(positions: readonly Vector3[], edges: readonly (readonly [number,
         areaMask: 1,
     }));
     return {
-        schema: 'neonschedule1-navigation-graph-1',
+        schema: 'neonschedule1-navigation-graph-2',
         method: 'test',
+        agent: employeeAgent(),
         sampleSpacing: 2,
         queryHeight: 0,
         maxSampleDistance: 12,
@@ -145,6 +158,19 @@ function graph(positions: readonly Vector3[], edges: readonly (readonly [number,
         gridHeight: 1,
         samples,
         edges: edges.map(([sampleA, sampleB]) => ({ sampleA, sampleB })),
+    };
+}
+
+function employeeAgent(): NavigationGraph['agent'] {
+    return {
+        source: 'employee-prefabs',
+        typeId: 7,
+        name: 'Employee',
+        radius: 0.35,
+        height: 1.8,
+        maximumSlope: 45,
+        stepHeight: 0.4,
+        employeeTypes: ['Botanist', 'Chemist', 'Cleaner', 'Handler'],
     };
 }
 

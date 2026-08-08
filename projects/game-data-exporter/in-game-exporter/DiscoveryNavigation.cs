@@ -69,6 +69,11 @@ internal static partial class DiscoveryCollector
             result.Navigation.Surfaces.Add(snapshot);
         }
 
+        if (EmployeeNavigationAgentTypeId(result.Navigation) is not int employeeAgentTypeId)
+        {
+            return;
+        }
+
         var horizontalPoints = new List<Vector3>();
         for (var regionIndex = 0; regionIndex < result.Map.Regions.Count; regionIndex++)
         {
@@ -116,10 +121,11 @@ internal static partial class DiscoveryCollector
                 {
                     var x = minX + (xIndex * spacing);
                     var query = new Vector3(x, result.Navigation.QueryHeight, z);
-                    if (!NavMesh.SamplePosition(
+                    if (!NavMesh.SamplePositionFilter(
                             query,
                             out var hit,
                             result.Navigation.MaxSampleDistance,
+                            employeeAgentTypeId,
                             NavMesh.AllAreas) ||
                         MathF.Abs(hit.position.x - x) > spacing * 0.5f ||
                         MathF.Abs(hit.position.z - z) > spacing * 0.5f)
@@ -156,8 +162,20 @@ internal static partial class DiscoveryCollector
             for (var index = 0; index < result.Navigation.Samples.Count; index++)
             {
                 var sample = result.Navigation.Samples[index];
-                AddNavigationEdge(result.Navigation, sampleIndices, index, sample.GridX + 1, sample.GridZ);
-                AddNavigationEdge(result.Navigation, sampleIndices, index, sample.GridX, sample.GridZ + 1);
+                AddNavigationEdge(
+                    result.Navigation,
+                    sampleIndices,
+                    index,
+                    sample.GridX + 1,
+                    sample.GridZ,
+                    result.Navigation.Agent);
+                AddNavigationEdge(
+                    result.Navigation,
+                    sampleIndices,
+                    index,
+                    sample.GridX,
+                    sample.GridZ + 1,
+                    result.Navigation.Agent);
             }
         }
         catch (Exception exception)
@@ -167,6 +185,84 @@ internal static partial class DiscoveryCollector
         }
     }
 
+    private static int? EmployeeNavigationAgentTypeId(
+        DiscoveryNavigationSnapshot navigation)
+    {
+        var manager = Il2CppScheduleOne.Employees.EmployeeManager.Instance;
+        if (manager is null)
+        {
+            navigation.Error = "EmployeeManager.Instance is unavailable.";
+            return null;
+        }
+
+        var employeeTypesByAgentType = new Dictionary<int, List<string>>();
+        foreach (var employeeType in Enum.GetValues<Il2CppScheduleOne.Employees.EEmployeeType>())
+        {
+            var prefab = manager.GetEmployeePrefab(employeeType);
+            if (prefab is null)
+            {
+                continue;
+            }
+            var agent = prefab.GetComponentInChildren<NavMeshAgent>(true);
+            if (agent is null)
+            {
+                navigation.Error = $"Employee prefab {employeeType} has no NavMeshAgent.";
+                return null;
+            }
+
+            if (!employeeTypesByAgentType.TryGetValue(agent.agentTypeID, out var employeeTypes))
+            {
+                employeeTypes = new List<string>();
+                employeeTypesByAgentType.Add(agent.agentTypeID, employeeTypes);
+            }
+            employeeTypes.Add(employeeType.ToString());
+        }
+
+        if (employeeTypesByAgentType.Count != 1)
+        {
+            navigation.Error =
+                $"Employee prefabs use {employeeTypesByAgentType.Count} navigation agent types.";
+            return null;
+        }
+
+        var entry = employeeTypesByAgentType.Single();
+        var agentTypeId = entry.Key;
+        if (!navigation.Surfaces.Any(surface => surface.AgentTypeId == agentTypeId))
+        {
+            navigation.Error = $"No loaded NavMeshSurface uses employee agent type {agentTypeId}.";
+            return null;
+        }
+
+        var settings = NavMesh.GetSettingsByID(agentTypeId);
+        var name = NavMesh.GetSettingsNameFromID(agentTypeId);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            navigation.Error = $"Employee navigation agent type {agentTypeId} has no settings name.";
+            return null;
+        }
+        if (!float.IsFinite(settings.agentRadius) || settings.agentRadius <= 0f ||
+            !float.IsFinite(settings.agentHeight) || settings.agentHeight <= 0f ||
+            !float.IsFinite(settings.agentSlope) || settings.agentSlope < 0f || settings.agentSlope >= 90f ||
+            !float.IsFinite(settings.agentClimb) || settings.agentClimb < 0f)
+        {
+            navigation.Error = $"Employee navigation agent type {agentTypeId} has invalid movement settings.";
+            return null;
+        }
+
+        navigation.Agent = new DiscoveryNavigationAgentSnapshot
+        {
+            Source = "employee-prefabs",
+            TypeId = agentTypeId,
+            Name = name,
+            Radius = settings.agentRadius,
+            Height = settings.agentHeight,
+            MaximumSlope = settings.agentSlope,
+            StepHeight = settings.agentClimb,
+            EmployeeTypes = entry.Value.OrderBy(value => value, StringComparer.Ordinal).ToList(),
+        };
+        return agentTypeId;
+    }
+
     private static long NavigationGridKey(int x, int z) => ((long)z << 32) | (uint)x;
 
     private static void AddNavigationEdge(
@@ -174,7 +270,8 @@ internal static partial class DiscoveryCollector
         IReadOnlyDictionary<long, int> sampleIndices,
         int fromIndex,
         int toX,
-        int toZ)
+        int toZ,
+        DiscoveryNavigationAgentSnapshot agent)
     {
         if (!sampleIndices.TryGetValue(NavigationGridKey(toX, toZ), out var toIndex))
         {
@@ -183,9 +280,20 @@ internal static partial class DiscoveryCollector
 
         var fromSnapshot = navigation.Samples[fromIndex].Position;
         var toSnapshot = navigation.Samples[toIndex].Position;
+        var deltaX = fromSnapshot.X - toSnapshot.X;
+        var deltaZ = fromSnapshot.Z - toSnapshot.Z;
+        var horizontalDistance = MathF.Sqrt(deltaX * deltaX + deltaZ * deltaZ);
+        var maximumRise =
+            horizontalDistance * MathF.Tan(agent.MaximumSlope * (MathF.PI / 180f)) +
+            agent.StepHeight;
+        var tolerance = 1e-5f * MathF.Max(1f, maximumRise);
+        if (MathF.Abs(fromSnapshot.Y - toSnapshot.Y) > maximumRise + tolerance)
+        {
+            return;
+        }
         var from = new Vector3(fromSnapshot.X, fromSnapshot.Y, fromSnapshot.Z);
         var to = new Vector3(toSnapshot.X, toSnapshot.Y, toSnapshot.Z);
-        if (!NavMesh.Raycast(from, to, out _, NavMesh.AllAreas))
+        if (!NavMesh.RaycastFilter(from, to, out _, agent.TypeId, NavMesh.AllAreas))
         {
             navigation.Edges.Add(fromIndex);
             navigation.Edges.Add(toIndex);

@@ -13,7 +13,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.10` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.13` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -52,7 +52,7 @@ Each run writes a report, SHA-256 sidecar, and matching direct-asset directory u
 - Recipes, stations, growing, packaging, additives, soils, quality, and production rules
 - Items, prices, shops, suppliers, unlocks, properties, businesses, and logistics
 - People, customers, preferences, relationships, schedules, and presentation references
-- Map regions, locations, services, access zones, and shop positions
+- Map regions, locations, services, access zones, and employee navigation evidence
 - Buildables, footprints, colliders, surfaces, storage, interactions, and placement data
 - Mesh, material, texture, sprite, icon, and other visual references
 
