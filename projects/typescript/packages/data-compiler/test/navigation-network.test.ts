@@ -104,6 +104,26 @@ describe('navigation network', () => {
             exploredSampleCount: 0,
         });
     });
+
+    it('can resolve an endpoint only within the start component', () => {
+        const network = new NavigationNetwork(graph(
+            [position(0, 0), position(5, 0), position(5, 1)],
+            [[0, 1]]
+        ));
+
+        const result = network.findPathToNearestReachable({
+            start: position(0, 0),
+            end: position(5, 1),
+            maximumStartSnapDistance: 0,
+            maximumEndSnapDistance: 2,
+        });
+
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found') throw new Error('Expected a reachable path');
+        expect(result.end.sampleIndex).toBe(1);
+        expect(result.end.snapDistance).toBe(1);
+        expect(result.points.map(({ sampleIndex }) => sampleIndex)).toEqual([0, 1]);
+    });
 });
 
 function graph(positions: readonly Vector3[], edges: readonly (readonly [number, number])[]): NavigationGraph {

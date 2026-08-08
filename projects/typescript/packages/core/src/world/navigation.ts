@@ -11,6 +11,13 @@ export interface NavigationPathInput {
     readonly maximumSnapDistance: number;
 }
 
+export interface ReachableNavigationPathInput {
+    readonly start: Vector3;
+    readonly end: Vector3;
+    readonly maximumStartSnapDistance: number;
+    readonly maximumEndSnapDistance: number;
+}
+
 export interface NavigationEndpoint {
     readonly requestedPosition: Vector3;
     readonly sampleIndex: number;
@@ -35,7 +42,11 @@ export interface FoundNavigationPath {
 
 export interface UnreachableNavigationPath {
     readonly kind: 'unreachable';
-    readonly reason: 'start-outside-network' | 'end-outside-network' | 'disconnected';
+    readonly reason:
+        | 'start-outside-network'
+        | 'end-outside-network'
+        | 'end-outside-reachable-network'
+        | 'disconnected';
     readonly start: NavigationEndpoint | null;
     readonly end: NavigationEndpoint | null;
     readonly exploredSampleCount: number;
@@ -122,23 +133,7 @@ export class NavigationNetwork {
     }
 
     nearestSample(position: Vector3, maximumDistance: number): NavigationEndpoint | null {
-        requireFinitePosition(position, 'Navigation endpoint');
-        requireNonNegativeFinite(maximumDistance, 'Maximum navigation snap distance');
-        const candidateIndices = this.#nearbySampleIndices(position, maximumDistance);
-        let nearestIndex = -1;
-        let nearestDistance = Number.POSITIVE_INFINITY;
-        for (const sampleIndex of candidateIndices) {
-            const distance = positionDistance(position, this.#samples[sampleIndex]!.position);
-            if (
-                distance <= maximumDistance &&
-                (distance < nearestDistance || (distance === nearestDistance && sampleIndex < nearestIndex))
-            ) {
-                nearestIndex = sampleIndex;
-                nearestDistance = distance;
-            }
-        }
-        if (nearestIndex === -1) return null;
-        return this.#endpoint(position, nearestIndex, nearestDistance);
+        return this.#nearestSample(position, maximumDistance, null);
     }
 
     findPath(input: NavigationPathInput): NavigationPathResult {
@@ -157,6 +152,39 @@ export class NavigationNetwork {
             return {
                 kind: 'unreachable',
                 reason: 'end-outside-network',
+                start,
+                end,
+                exploredSampleCount: 0,
+            };
+        }
+        return this.#findSamplePath(start, end);
+    }
+
+    findPathToNearestReachable(input: ReachableNavigationPathInput): NavigationPathResult {
+        requireFinitePosition(input.end, 'Navigation endpoint');
+        requireNonNegativeFinite(
+            input.maximumEndSnapDistance,
+            'Maximum navigation snap distance'
+        );
+        const start = this.nearestSample(input.start, input.maximumStartSnapDistance);
+        if (start === null) {
+            return {
+                kind: 'unreachable',
+                reason: 'start-outside-network',
+                start,
+                end: null,
+                exploredSampleCount: 0,
+            };
+        }
+        const end = this.#nearestSample(
+            input.end,
+            input.maximumEndSnapDistance,
+            start.componentId
+        );
+        if (end === null) {
+            return {
+                kind: 'unreachable',
+                reason: 'end-outside-reachable-network',
                 start,
                 end,
                 exploredSampleCount: 0,
@@ -246,6 +274,31 @@ export class NavigationNetwork {
             }
         }
         return indices;
+    }
+
+    #nearestSample(
+        position: Vector3,
+        maximumDistance: number,
+        componentId: number | null
+    ): NavigationEndpoint | null {
+        requireFinitePosition(position, 'Navigation endpoint');
+        requireNonNegativeFinite(maximumDistance, 'Maximum navigation snap distance');
+        const candidateIndices = this.#nearbySampleIndices(position, maximumDistance);
+        let nearestIndex = -1;
+        let nearestDistance = Number.POSITIVE_INFINITY;
+        for (const sampleIndex of candidateIndices) {
+            if (componentId !== null && this.#componentBySample[sampleIndex] !== componentId) continue;
+            const distance = positionDistance(position, this.#samples[sampleIndex]!.position);
+            if (
+                distance <= maximumDistance &&
+                (distance < nearestDistance || (distance === nearestDistance && sampleIndex < nearestIndex))
+            ) {
+                nearestIndex = sampleIndex;
+                nearestDistance = distance;
+            }
+        }
+        if (nearestIndex === -1) return null;
+        return this.#endpoint(position, nearestIndex, nearestDistance);
     }
 
     #endpoint(position: Vector3, sampleIndex: number, snapDistance: number): NavigationEndpoint {
