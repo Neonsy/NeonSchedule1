@@ -82,6 +82,7 @@ interface MutableEvidence {
 interface MemoizedSelection {
     readonly expectedProfit: number;
     readonly options: readonly IndexedOption[];
+    readonly usage: readonly number[];
 }
 
 export class CustomerAllocationOptimizer {
@@ -89,6 +90,10 @@ export class CustomerAllocationOptimizer {
         const normalized = normalize(input);
         const groups = orderGroups(normalized.groups);
         const suffixProfit = maximumRemainingProfit(groups);
+        const memoizedResourceIndexes = remainingResourceIndexes(
+            groups,
+            normalized.resourceIds.length
+        );
         const evidence = normalized.evidence;
         const memo = new Map<string, MemoizedSelection>();
         let best = emptySelection(normalized.resourceIds.length);
@@ -107,18 +112,23 @@ export class CustomerAllocationOptimizer {
             }
             evidence.visitedStates++;
 
-            const stateKey = allocationStateKey(groupIndex, productionCost, usage);
+            const stateKey = allocationStateKey(
+                groupIndex,
+                productionCost,
+                usage,
+                memoizedResourceIndexes[groupIndex]!
+            );
             const previous = memo.get(stateKey);
-            if (
-                previous !== undefined &&
-                (previous.expectedProfit > expectedProfit ||
-                    previous.expectedProfit === expectedProfit &&
-                    compareAllocationKeys(previous.options, selected) <= 0)
-            ) {
+            if (previous !== undefined && memoizedSelectionIsBetter(
+                previous,
+                expectedProfit,
+                selected,
+                usage
+            )) {
                 evidence.prunedByEquivalentState++;
                 return;
             }
-            memo.set(stateKey, { expectedProfit, options: selected });
+            memo.set(stateKey, { expectedProfit, options: selected, usage });
 
             const candidate = { options: selected, productionCost, expectedProfit, usage };
             if (isBetter(candidate, best)) best = candidate;
@@ -330,6 +340,39 @@ function maximumRemainingProfit(groups: readonly OptionGroup[]): number[] {
     return result;
 }
 
+function remainingResourceIndexes(
+    groups: readonly OptionGroup[],
+    resourceCount: number
+): number[][] {
+    const lastUse = Array<number>(resourceCount).fill(-1);
+    groups.forEach((group, groupIndex) => {
+        for (const option of group.options) {
+            option.usage.forEach((quantity, resourceIndex) => {
+                if (quantity > 0) lastUse[resourceIndex] = groupIndex;
+            });
+        }
+    });
+    return Array.from({ length: groups.length + 1 }, (_, groupIndex) =>
+        lastUse.flatMap((lastGroupIndex, resourceIndex) =>
+            lastGroupIndex >= groupIndex ? [resourceIndex] : []
+        )
+    );
+}
+
+function memoizedSelectionIsBetter(
+    previous: MemoizedSelection,
+    expectedProfit: number,
+    selected: readonly IndexedOption[],
+    usage: readonly number[]
+): boolean {
+    if (previous.expectedProfit !== expectedProfit) {
+        return previous.expectedProfit > expectedProfit;
+    }
+    const usageComparison = compareNumbers(previous.usage, usage);
+    return usageComparison < 0 ||
+        usageComparison === 0 && compareAllocationKeys(previous.options, selected) <= 0;
+}
+
 function isBetter(candidate: Selection, incumbent: Selection): boolean {
     if (candidate.expectedProfit !== incumbent.expectedProfit) {
         return candidate.expectedProfit > incumbent.expectedProfit;
@@ -389,9 +432,10 @@ function safelyBelow(upperBound: number, incumbent: number, groupCount: number):
 function allocationStateKey(
     groupIndex: number,
     productionCost: number,
-    usage: readonly number[]
+    usage: readonly number[],
+    resourceIndexes: readonly number[]
 ): string {
-    return `${groupIndex}|${productionCost}|${usage.join(',')}`;
+    return `${groupIndex}|${productionCost}|${resourceIndexes.map((index) => usage[index]).join(',')}`;
 }
 
 function compareNumbers(left: readonly number[], right: readonly number[]): number {
