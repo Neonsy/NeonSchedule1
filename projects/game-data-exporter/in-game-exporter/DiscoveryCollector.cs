@@ -198,6 +198,8 @@ internal static partial class DiscoveryCollector
             snapshot.PlacementKind = "grid";
             snapshot.FootprintWidth = gridItem.FootprintX;
             snapshot.FootprintHeight = gridItem.FootprintY;
+            (snapshot.TileSharingRule, snapshot.TileSharingImplementation) =
+                TileSharingBehavior(gridItem);
         }
 
         var procedural = builtItem.TryCast<Il2CppScheduleOne.EntityFramework.ProceduralGridItem>();
@@ -233,13 +235,37 @@ internal static partial class DiscoveryCollector
                 continue;
             }
 
-            snapshot.FootprintTiles.Add(new DiscoveryFootprintTileSnapshot
+            var footprintTile = new DiscoveryFootprintTileSnapshot
             {
                 X = tile.X,
                 Y = tile.Y,
                 RequiredOffset = tile.RequiredOffset,
                 Transform = TransformSnapshot.FromTransform(tile.transform),
-            });
+            };
+            if (tile.Corners is not null)
+            {
+                for (var cornerIndex = 0; cornerIndex < tile.Corners.Count; cornerIndex++)
+                {
+                    var corner = tile.Corners[cornerIndex];
+                    if (corner is null)
+                    {
+                        continue;
+                    }
+
+                    footprintTile.Corners.Add(new DiscoveryCornerObstacleSnapshot
+                    {
+                        ObstacleEnabled = corner.obstacleEnabled,
+                        Coordinates = VectorSnapshot2.FromVector(corner.coordinates),
+                        Transform = TransformSnapshot.FromTransform(corner.transform),
+                    });
+                }
+            }
+            footprintTile.Corners = footprintTile.Corners
+                .OrderBy(x => x.Coordinates.X)
+                .ThenBy(x => x.Coordinates.Y)
+                .ThenBy(x => x.Transform?.Path, StringComparer.Ordinal)
+                .ToList();
+            snapshot.FootprintTiles.Add(footprintTile);
         }
 
         AddComponentsAndColliders(
@@ -313,6 +339,60 @@ internal static partial class DiscoveryCollector
             .ThenBy(x => x.Transform?.Path, StringComparer.Ordinal)
             .ToList();
         return snapshot;
+    }
+
+    private static (string Rule, string Implementation) TileSharingBehavior(
+        Il2CppScheduleOne.EntityFramework.GridItem gridItem)
+    {
+        var runtimeClass = IL2CPP.il2cpp_object_get_class(gridItem.Pointer);
+        var implementation = IL2CPP.il2cpp_class_get_method_from_name(
+            runtimeClass,
+            nameof(Il2CppScheduleOne.EntityFramework.GridItem.CanShareTileWith),
+            1);
+        if (implementation == IntPtr.Zero)
+        {
+            return ("unsupported", string.Empty);
+        }
+
+        var declaringClass = IL2CPP.il2cpp_method_get_class(implementation);
+        var implementationName = NativeClassName(declaringClass);
+        if (string.Equals(
+                implementationName,
+                NativeNameOf(typeof(Il2CppScheduleOne.EntityFramework.GridItem)),
+                StringComparison.Ordinal))
+        {
+            return ("standard", implementationName);
+        }
+        if (string.Equals(
+                implementationName,
+                NativeNameOf(typeof(Il2CppScheduleOne.ObjectScripts.FloorRack)),
+                StringComparison.Ordinal))
+        {
+            return ("floor-rack", implementationName);
+        }
+        return ("unsupported", implementationName);
+    }
+
+    private static string NativeClassName(IntPtr classPointer)
+    {
+        if (classPointer == IntPtr.Zero)
+        {
+            return string.Empty;
+        }
+        var typeNamespace = IL2CPP.il2cpp_class_get_namespace_(classPointer) ?? string.Empty;
+        var typeName = IL2CPP.il2cpp_class_get_name_(classPointer) ?? string.Empty;
+        return string.IsNullOrWhiteSpace(typeNamespace)
+            ? typeName
+            : $"{typeNamespace}.{typeName}";
+    }
+
+    private static string NativeNameOf(Type managedWrapper)
+    {
+        const string wrapperPrefix = "Il2Cpp";
+        var name = managedWrapper.FullName ?? string.Empty;
+        return name.StartsWith(wrapperPrefix, StringComparison.Ordinal)
+            ? name[wrapperPrefix.Length..]
+            : name;
     }
 
     private static void CollectEffectVisuals(DiscoverySnapshot result)

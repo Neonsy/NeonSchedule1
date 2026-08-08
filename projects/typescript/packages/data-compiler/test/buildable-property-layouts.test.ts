@@ -30,6 +30,8 @@ describe('buildable and property-layout normalization', () => {
                             footprintWidth: 1,
                             footprintHeight: 2,
                             proceduralTileType: '',
+                            tileSharingRule: 'standard',
+                            tileSharingImplementation: 'ScheduleOne.EntityFramework.GridItem',
                             validSurfaceTypes: [],
                             buildPoint: transform('BuildPoint'),
                             boundingCollider: collider('built-item', 'Bounds'),
@@ -39,12 +41,20 @@ describe('buildable and property-layout normalization', () => {
                                     y: 0,
                                     requiredOffset: 0,
                                     transform: transform('Footprint/[0,0]'),
+                                    corners: [
+                                        {
+                                            obstacleEnabled: true,
+                                            coordinates: { x: 0, y: 0 },
+                                            transform: transform('Footprint/[0,0]/CornerObstacle'),
+                                        },
+                                    ],
                                 },
                                 {
                                     x: 0,
                                     y: 0,
                                     requiredOffset: 0.5,
                                     transform: transform('Footprint/[0,1]'),
+                                    corners: [],
                                 },
                             ],
                             componentTypes: ['Game.GridItem'],
@@ -101,13 +111,15 @@ describe('buildable and property-layout normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(buildables[0]).toMatchObject({
-            schema: 'neonschedule1-buildable-2',
+            schema: 'neonschedule1-buildable-3',
             itemId: 'workstation',
             placement: {
                 kind: 'grid',
                 footprintWidth: 1,
                 footprintHeight: 2,
                 proceduralTileType: null,
+                tileSharingRule: 'standard',
+                tileSharingImplementation: 'ScheduleOne.EntityFramework.GridItem',
                 allowRotation: null,
                 rotationIncrement: null,
             },
@@ -138,6 +150,9 @@ describe('buildable and property-layout normalization', () => {
         expect(buildables[0]?.placement.footprintTiles.map((tile) => [tile.x, tile.y])).toEqual([
             [0, 0],
             [0, 1],
+        ]);
+        expect(buildables[0]?.placement.footprintTiles[0]?.cornerObstacles).toEqual([
+            expect.objectContaining({ enabled: true, coordinates: { x: 0, y: 0 } }),
         ]);
     });
 
@@ -193,6 +208,7 @@ describe('buildable and property-layout normalization', () => {
                                             availableOffset: 0,
                                             position: point(10, 0, 20),
                                             rotation: point(0, 90, 0),
+                                            canBeBuiltOnInLoadedSave: true,
                                             buildableOccupantCount: 2,
                                             tileTemperature: 5,
                                         },
@@ -223,6 +239,7 @@ describe('buildable and property-layout normalization', () => {
         expect(JSON.stringify(layouts[0])).not.toContain('itemsInLoadedSave');
         expect(JSON.stringify(layouts[0])).not.toContain('buildableOccupantCount');
         expect(JSON.stringify(layouts[0])).not.toContain('tileTemperature');
+        expect(JSON.stringify(layouts[0])).not.toContain('canBeBuiltOnInLoadedSave');
     });
 });
 

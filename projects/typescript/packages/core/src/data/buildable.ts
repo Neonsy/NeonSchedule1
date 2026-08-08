@@ -1,13 +1,21 @@
 import { type } from 'arktype';
 
-import { Vector3Schema } from '#core/data/common';
+import { Vector2Schema, Vector3Schema } from '#core/data/common';
 import { ColliderSchema, SceneVisualsSchema, TransformSchema } from '#core/data/geometry';
+
+export const BuildableCornerObstacleSchema = type({
+    enabled: 'boolean',
+    coordinates: Vector2Schema,
+    transform: TransformSchema,
+});
+export type BuildableCornerObstacle = typeof BuildableCornerObstacleSchema.infer;
 
 export const BuildableFootprintTileSchema = type({
     x: 'number',
     y: 'number',
     requiredOffset: 'number',
     transform: TransformSchema,
+    cornerObstacles: BuildableCornerObstacleSchema.array(),
 });
 export type BuildableFootprintTile = typeof BuildableFootprintTileSchema.infer;
 
@@ -17,6 +25,8 @@ export const BuildablePlacementSchema = type({
     footprintWidth: 'number | null',
     footprintHeight: 'number | null',
     proceduralTileType: 'string | null',
+    tileSharingRule: "'standard' | 'floor-rack' | 'unsupported' | null",
+    tileSharingImplementation: 'string | null',
     allowRotation: 'boolean | null',
     rotationIncrement: 'number | null',
     validSurfaceTypes: 'string[]',
@@ -54,7 +64,7 @@ export const InteractionPointSchema = type({
 export type InteractionPoint = typeof InteractionPointSchema.infer;
 
 export const BuildableSchema = type({
-    schema: "'neonschedule1-buildable-2'",
+    schema: "'neonschedule1-buildable-3'",
     itemId: 'string',
     runtimeType: 'string',
     placement: BuildablePlacementSchema,

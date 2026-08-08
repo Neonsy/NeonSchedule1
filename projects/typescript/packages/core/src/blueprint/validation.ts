@@ -30,7 +30,9 @@ export type BlueprintValidationIssueCode =
     | 'grid-unavailable'
     | 'tile-outside-grid'
     | 'tile-unavailable'
-    | 'tile-overlap';
+    | 'tile-offset-incompatible'
+    | 'tile-sharing-unsupported'
+    | 'tile-sharing-incompatible';
 
 export interface BlueprintValidationIssue {
     readonly code: BlueprintValidationIssueCode;
@@ -50,6 +52,7 @@ export interface ResolvedBlueprintGridPlacement {
     readonly itemId: string;
     readonly gridId: string;
     readonly rotation: BlueprintGridRotation;
+    readonly tileSharingRule: 'standard' | 'floor-rack';
     readonly occupiedTiles: readonly ResolvedBlueprintGridTile[];
 }
 
@@ -123,7 +126,7 @@ export class BlueprintValidator {
             if (placementResult.placement === null) issues.push(...placementResult.issues);
             else resolvedPlacements.push(placementResult.placement);
         }
-        issues.push(...overlapIssues(resolvedPlacements));
+        issues.push(...tileSharingIssues(resolvedPlacements));
         return result(document, resolvedPlacements, issues);
     }
 
@@ -171,6 +174,14 @@ export class BlueprintValidator {
                 'placement-kind-incompatible',
                 `Buildable ${JSON.stringify(placement.itemId)} uses ` +
                     `${JSON.stringify(buildable.placement.kind)} placement, not property-grid placement`,
+                placement
+            );
+        }
+        const tileSharingRule = buildable.placement.tileSharingRule;
+        if (tileSharingRule !== 'standard' && tileSharingRule !== 'floor-rack') {
+            return failedPlacement(
+                'tile-sharing-unsupported',
+                `Buildable ${JSON.stringify(placement.itemId)} has no supported tile-sharing rule`,
                 placement
             );
         }
@@ -250,12 +261,27 @@ export class BlueprintValidator {
                 )],
             };
         }
+        const incompatibleOffsets = occupiedTiles.filter((tile) =>
+            tile.availableOffset !== 0 &&
+            tile.requiredOffset !== 0 &&
+            tile.requiredOffset > tile.availableOffset
+        );
+        if (incompatibleOffsets.length > 0) {
+            return failedPlacement(
+                'tile-offset-incompatible',
+                `Placement ${JSON.stringify(placement.id)} requires more offset than grid ` +
+                    `${JSON.stringify(placement.gridId)} provides`,
+                placement,
+                sortedCoordinates(incompatibleOffsets.map(({ x, y }) => ({ x, y })))
+            );
+        }
         return {
             placement: {
                 id: placement.id,
                 itemId: placement.itemId,
                 gridId: placement.gridId,
                 rotation: placement.rotation,
+                tileSharingRule,
                 occupiedTiles: occupiedTiles.sort(compareCoordinates),
             },
             issues: [],
@@ -379,7 +405,7 @@ function rotateFootprint(
     });
 }
 
-function overlapIssues(
+function tileSharingIssues(
     placements: readonly ResolvedBlueprintGridPlacement[]
 ): BlueprintValidationIssue[] {
     const occupantsByTile = new Map<
@@ -405,19 +431,24 @@ function overlapIssues(
             }
         }
     }
-    const overlaps: BlueprintValidationIssue[] = [];
+    const incompatibilities: BlueprintValidationIssue[] = [];
     for (const entry of occupantsByTile.values()) {
         if (entry.occupants.length < 2) continue;
+        const sharingAllowed =
+            entry.occupants.length === 2 &&
+            entry.occupants[0]!.tileSharingRule !== entry.occupants[1]!.tileSharingRule;
+        if (sharingAllowed) continue;
         const placementIds = entry.occupants.map((placement) => placement.id).sort();
-        overlaps.push(issue(
-            'tile-overlap',
-            `Placements ${placementIds.map((id) => JSON.stringify(id)).join(', ')} overlap`,
+        incompatibilities.push(issue(
+            'tile-sharing-incompatible',
+            `Placements ${placementIds.map((id) => JSON.stringify(id)).join(', ')} ` +
+                'cannot share a grid tile',
             placementIds,
             entry.gridId,
             [entry.tile]
         ));
     }
-    return overlaps.sort((left, right) =>
+    return incompatibilities.sort((left, right) =>
         (left.gridId ?? '').localeCompare(right.gridId ?? '') ||
         compareCoordinates(left.tiles[0]!, right.tiles[0]!)
     );

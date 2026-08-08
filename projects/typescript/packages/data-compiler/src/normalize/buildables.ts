@@ -18,6 +18,7 @@ import {
     objectArray,
     stringArrayField,
     stringField,
+    vector2,
     vector3,
     type JsonObject,
 } from '#data-compiler/json';
@@ -66,6 +67,20 @@ function normalizeBuildable(
                 y: numberField(tile, 'y', tilePath),
                 requiredOffset: numberField(tile, 'requiredOffset', tilePath),
                 transform: normalizeTransform(tile.transform, `${tilePath}.transform`),
+                cornerObstacles: objectArray(tile.corners, `${tilePath}.corners`)
+                    .map((corner, cornerIndex) => {
+                        const cornerPath = `${tilePath}.corners[${cornerIndex}]`;
+                        return {
+                            enabled: booleanField(corner, 'obstacleEnabled', cornerPath),
+                            coordinates: vector2(corner.coordinates, `${cornerPath}.coordinates`),
+                            transform: normalizeTransform(corner.transform, `${cornerPath}.transform`),
+                        };
+                    })
+                    .sort((left, right) =>
+                        left.coordinates.x - right.coordinates.x ||
+                        left.coordinates.y - right.coordinates.y ||
+                        left.transform.path.localeCompare(right.transform.path)
+                    ),
             };
         }
     );
@@ -73,7 +88,7 @@ function normalizeBuildable(
     validateFootprint(itemId, width, height, footprintTiles, integrity);
     const storageRaw = raw.storage;
     const buildable: Buildable = {
-        schema: 'neonschedule1-buildable-2',
+        schema: 'neonschedule1-buildable-3',
         itemId,
         runtimeType: stringField(raw, 'runtimeType', path),
         placement: {
@@ -82,6 +97,8 @@ function normalizeBuildable(
             footprintWidth: width,
             footprintHeight: height,
             proceduralTileType: nullableStringField(raw, 'proceduralTileType', path),
+            tileSharingRule: normalizeTileSharingRule(raw, path),
+            tileSharingImplementation: nullableStringField(raw, 'tileSharingImplementation', path),
             allowRotation: nullableBoolean(raw, 'allowRotation', path),
             rotationIncrement: nullableNumberField(raw, 'rotationIncrement', path),
             validSurfaceTypes: stringArrayField(raw, 'validSurfaceTypes', path),
@@ -110,6 +127,17 @@ function normalizeBuildable(
         visuals: normalizeSceneVisuals(raw.visuals, `${path}.visuals`, assets, integrity),
     };
     return BuildableSchema.assert(buildable);
+}
+
+function normalizeTileSharingRule(
+    raw: JsonObject,
+    path: string
+): Buildable['placement']['tileSharingRule'] {
+    const value = nullableStringField(raw, 'tileSharingRule', path);
+    if (value === null || value === 'standard' || value === 'floor-rack' || value === 'unsupported') {
+        return value;
+    }
+    throw new TypeError(`${path}.tileSharingRule has unsupported value ${JSON.stringify(value)}`);
 }
 
 function normalizeStorage(raw: JsonObject, path: string): BuildableStorage {

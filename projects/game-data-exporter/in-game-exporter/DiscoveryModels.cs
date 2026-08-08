@@ -100,6 +100,8 @@ internal sealed class DiscoveryBuildableSnapshot
     public float HoldDistance { get; init; }
     public int? FootprintWidth { get; set; }
     public int? FootprintHeight { get; set; }
+    public string TileSharingRule { get; set; } = string.Empty;
+    public string TileSharingImplementation { get; set; } = string.Empty;
     public string ProceduralTileType { get; set; } = string.Empty;
     public bool? AllowRotation { get; set; }
     public float? RotationIncrement { get; set; }
@@ -129,6 +131,14 @@ internal sealed class DiscoveryFootprintTileSnapshot
     public int X { get; init; }
     public int Y { get; init; }
     public float RequiredOffset { get; init; }
+    public TransformSnapshot? Transform { get; init; }
+    public List<DiscoveryCornerObstacleSnapshot> Corners { get; set; } = new();
+}
+
+internal sealed class DiscoveryCornerObstacleSnapshot
+{
+    public bool ObstacleEnabled { get; init; }
+    public VectorSnapshot2 Coordinates { get; init; } = new();
     public TransformSnapshot? Transform { get; init; }
 }
 
@@ -376,6 +386,7 @@ internal sealed class DiscoveryGridTileSnapshot
     public int X { get; init; }
     public int Y { get; init; }
     public float AvailableOffset { get; init; }
+    public bool CanBeBuiltOnInLoadedSave { get; init; }
     public VectorSnapshot3? Position { get; init; }
     public VectorSnapshot3? Rotation { get; init; }
     public int BuildableOccupantCount { get; init; }

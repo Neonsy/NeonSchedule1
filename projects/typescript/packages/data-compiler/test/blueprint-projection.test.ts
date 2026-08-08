@@ -144,7 +144,7 @@ function blueprint(): BlueprintDocument {
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-2',
+        schema: 'neonschedule1-buildable-3',
         itemId: 'bench',
         runtimeType: 'Game.Buildable',
         placement: {
@@ -153,6 +153,8 @@ function buildable(): Buildable {
             footprintWidth: 2,
             footprintHeight: 1,
             proceduralTileType: null,
+            tileSharingRule: 'standard',
+            tileSharingImplementation: 'Game.GridItem',
             allowRotation: null,
             rotationIncrement: null,
             validSurfaceTypes: [],
@@ -187,6 +189,7 @@ function footprintTile(
         y: 0,
         requiredOffset: 0,
         transform: transform(`Footprint/[${x},0]`, worldPosition),
+        cornerObstacles: [],
     };
 }
 

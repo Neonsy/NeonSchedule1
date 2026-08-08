@@ -30,9 +30,10 @@ describe('blueprint validation', () => {
                 itemId: 'bench',
                 gridId: 'main',
                 rotation: 90,
+                tileSharingRule: 'standard',
                 occupiedTiles: [
                     { x: 1, y: 0, requiredOffset: 0, availableOffset: 0 },
-                    { x: 1, y: 1, requiredOffset: 0, availableOffset: 0.25 },
+                    { x: 1, y: 1, requiredOffset: 0, availableOffset: 0 },
                 ],
             },
         ]);
@@ -78,7 +79,7 @@ describe('blueprint validation', () => {
         ]);
     });
 
-    it('reports every exact tile shared by otherwise valid placements', () => {
+    it('reports exact tiles shared by incompatible buildables', () => {
         const validator = new BlueprintValidator(dataset());
         const result = validator.validate(blueprint([
             placement('left', 'bench', 'main', 0, 0, 0),
@@ -90,12 +91,64 @@ describe('blueprint validation', () => {
         expect(result.resolvedPlacements).toHaveLength(3);
         expect(result.issues).toEqual([
             expect.objectContaining({
-                code: 'tile-overlap',
+                code: 'tile-sharing-incompatible',
                 placementIds: ['left', 'right', 'vertical'],
                 gridId: 'main',
                 tiles: [{ x: 1, y: 0 }],
             }),
         ]);
+    });
+
+    it('allows the native floor-rack and standard-item sharing pair', () => {
+        const validator = new BlueprintValidator(dataset());
+        const result = validator.validate(blueprint([
+            placement('rack', 'rack', 'main', 0, 0, 0),
+            placement('bench', 'bench', 'main', 0, 0, 0),
+        ]));
+
+        expect(result.valid).toBe(true);
+        expect(result.issues).toEqual([]);
+    });
+
+    it('applies the native nonzero tile-offset compatibility rule', () => {
+        const input = dataset();
+        const layout = input.propertyLayouts[0]!;
+        const grid = layout.grids[0]!;
+        const validator = new BlueprintValidator({
+            ...input,
+            propertyLayouts: [{
+                ...layout,
+                grids: [{
+                    ...grid,
+                    tiles: grid.tiles.map((tile) =>
+                        tile.x === 0 && tile.y === 1 ? { ...tile, availableOffset: 0.25 } : tile
+                    ),
+                }],
+            }],
+        });
+        const result = validator.validate(blueprint([
+            placement('panel', 'panel', 'main', 0, 0, 0),
+        ]));
+
+        expect(result.valid).toBe(false);
+        expect(result.issues).toEqual([
+            expect.objectContaining({
+                code: 'tile-offset-incompatible',
+                placementIds: ['panel'],
+                tiles: [{ x: 0, y: 1 }],
+            }),
+        ]);
+    });
+
+    it('does not guess when a future build exposes an unknown sharing implementation', () => {
+        const validator = new BlueprintValidator(dataset());
+        const result = validator.validate(blueprint([
+            placement('future', 'future-grid-item', 'main', 0, 0, 0),
+        ]));
+
+        expect(result.valid).toBe(false);
+        expect(result.resolvedPlacements).toEqual([]);
+        expect(result.issues.map((entry) => entry.code)).toEqual(['tile-sharing-unsupported']);
     });
 
     it('stops before placement resolution when the blueprint targets another dataset', () => {
@@ -140,7 +193,13 @@ describe('blueprint validation', () => {
 function dataset(): BlueprintDataset {
     return {
         manifest: { gameVersion, datasetSha256 },
-        buildables: [gridBuildable(), offsetBuildable(), surfaceBuildable()],
+        buildables: [
+            gridBuildable(),
+            offsetBuildable(),
+            rackBuildable(),
+            unsupportedBuildable(),
+            surfaceBuildable(),
+        ],
         propertyLayouts: [propertyLayout()],
     };
 }
@@ -177,6 +236,14 @@ function surfaceBuildable(): Buildable {
     return buildable('wall-lamp', 'surface', null, null, []);
 }
 
+function rackBuildable(): Buildable {
+    return buildable('rack', 'grid', 2, 1, [footprintTile(0, 0), footprintTile(1, 0)], 'floor-rack');
+}
+
+function unsupportedBuildable(): Buildable {
+    return buildable('future-grid-item', 'grid', 1, 1, [footprintTile(0, 0)], 'unsupported');
+}
+
 function offsetBuildable(): Buildable {
     return buildable('panel', 'grid', 2, 2, [
         footprintTile(0, 0, 0),
@@ -191,10 +258,11 @@ function buildable(
     kind: string,
     footprintWidth: number | null,
     footprintHeight: number | null,
-    footprintTiles: Buildable['placement']['footprintTiles']
+    footprintTiles: Buildable['placement']['footprintTiles'],
+    tileSharingRule: Buildable['placement']['tileSharingRule'] = kind === 'grid' ? 'standard' : null
 ): Buildable {
     return {
-        schema: 'neonschedule1-buildable-2',
+        schema: 'neonschedule1-buildable-3',
         itemId,
         runtimeType: 'Game.Buildable',
         placement: {
@@ -203,6 +271,9 @@ function buildable(
             footprintWidth,
             footprintHeight,
             proceduralTileType: null,
+            tileSharingRule,
+            tileSharingImplementation:
+                tileSharingRule === null ? null : `Game.${tileSharingRule}`,
             allowRotation: kind === 'surface' ? true : null,
             rotationIncrement: kind === 'surface' ? 45 : null,
             validSurfaceTypes: kind === 'surface' ? ['Wall'] : [],
@@ -230,6 +301,7 @@ function footprintTile(
         y,
         requiredOffset,
         transform: transform(`Footprint/[${x},${y}]`),
+        cornerObstacles: [],
     };
 }
 
@@ -261,7 +333,7 @@ function propertyGrid(): PropertyGrid {
             tiles.push({
                 x,
                 y,
-                availableOffset: x === 1 && y === 1 ? 0.25 : 0,
+                availableOffset: 0,
                 worldPosition: vector(x, 0, y),
                 worldRotation: vector(0, 0, 0),
             });

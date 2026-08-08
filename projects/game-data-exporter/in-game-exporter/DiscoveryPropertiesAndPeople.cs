@@ -181,6 +181,7 @@ internal static partial class DiscoveryCollector
                                 X = pair.coord.x,
                                 Y = pair.coord.y,
                                 AvailableOffset = pair.tile.AvailableOffset,
+                                CanBeBuiltOnInLoadedSave = pair.tile.CanBeBuiltOn(),
                                 Position = VectorSnapshot3.FromVector(pair.tile.transform.position),
                                 Rotation = VectorSnapshot3.FromVector(pair.tile.transform.eulerAngles),
                                 BuildableOccupantCount = pair.tile.BuildableOccupants?.Count ?? 0,
