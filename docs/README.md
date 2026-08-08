@@ -15,6 +15,7 @@ The repository currently supports:
 - Calculate production materials, time, cost, equipment, and quality
 - Evaluate customer preferences, offers, and recommendations
 - Generate and query verified precomputed recipe data
+- Allocate customers and dealers under shared resource limits
 
 ## Planned player features
 
