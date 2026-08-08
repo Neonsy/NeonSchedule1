@@ -7,6 +7,7 @@
     "check": "pnpm --recursive --if-present check",
     "test": "vitest run",
     "data:normalize": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler normalize",
+    "data:validate-convex": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler validate:convex",
     "solver:benchmark": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark",
     "solver:benchmark:allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:allocation",
     "solver:benchmark:joint-allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:joint-allocation",

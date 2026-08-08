@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.9";
+    public const string ExporterVersion = "0.0.10";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();
@@ -53,7 +53,22 @@ public sealed class ExporterMod : MelonMod
         try
         {
             Directory.CreateDirectory(OutputDirectory);
-            if (GameDataCollector.TryRunNativeRecipeValidation(
+            var recipeRequestPath = Path.Combine(
+                OutputDirectory,
+                GameDataCollector.NativeValidationRequestFileName);
+            var convexRequestPath = Path.Combine(
+                OutputDirectory,
+                GameDataCollector.NativeConvexValidationRequestFileName);
+            if (File.Exists(recipeRequestPath) && File.Exists(convexRequestPath))
+            {
+                throw new InvalidOperationException(
+                    "Recipe and convex validation requests cannot run together.");
+            }
+            if (GameDataCollector.TryRunNativeConvexValidation(
+                    OutputDirectory,
+                    ExporterVersion,
+                    message => LoggerInstance.Msg(message)) ||
+                GameDataCollector.TryRunNativeRecipeValidation(
                     OutputDirectory,
                     ExporterVersion,
                     message => LoggerInstance.Msg(message)))

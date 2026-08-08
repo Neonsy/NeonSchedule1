@@ -4,6 +4,11 @@ import { type Vector3 } from '#core/data/common';
 import { type Collider, type Quaternion, type TriangleMesh } from '#core/data/geometry';
 import { type PropertyLayout, type PropertySurface } from '#core/data/property-layout';
 import { worldBoxFromCollider, type WorldBox } from '#core/geometry/box-collision';
+import {
+    convexHullFromTriangleMesh,
+    signedDistancesToConvexHullFaces,
+    type ConvexHull,
+} from '#core/geometry/convex-hull';
 import { transformPoint } from '#core/geometry/transform';
 import {
     distanceFromPointToTriangleMesh,
@@ -40,6 +45,7 @@ const surfaceFaces = new Set<SurfaceFace>([
     'Right',
 ]);
 const surfaceHitTolerance = 1e-3;
+const maximumConvexHullElements = 255;
 
 export function indexPropertySurfaces(
     layout: PropertyLayout
@@ -86,11 +92,37 @@ export function indexSurfaceMeshes(layout: PropertyLayout): ReadonlyMap<string, 
     return index;
 }
 
+export function indexConvexSurfaceHulls(
+    layout: PropertyLayout,
+    meshById: ReadonlyMap<string, TriangleMesh>
+): ReadonlyMap<string, ConvexHull> {
+    const index = new Map<string, ConvexHull>();
+    for (const collider of layout.surfaces.flatMap((surface) => surface.colliders)) {
+        if (
+            collider.shape !== 'mesh' || collider.isConvex !== true ||
+            collider.meshId === null || index.has(collider.meshId)
+        ) continue;
+        const mesh = meshById.get(collider.meshId);
+        if (mesh === undefined) continue;
+        try {
+            const hull = convexHullFromTriangleMesh(mesh);
+            if (
+                hull.vertices.length <= maximumConvexHullElements &&
+                hull.faces.length <= maximumConvexHullElements
+            ) index.set(collider.meshId, hull);
+        } catch (error) {
+            if (!(error instanceof TypeError || error instanceof RangeError)) throw error;
+        }
+    }
+    return index;
+}
+
 export function resolveSurfacePlacement(
     placement: BlueprintSurfacePlacement,
     buildableByItemId: ReadonlyMap<string, Buildable>,
     surfaceById: ReadonlyMap<string, PropertySurface>,
-    meshById: ReadonlyMap<string, TriangleMesh>
+    meshById: ReadonlyMap<string, TriangleMesh>,
+    convexHullByMeshId: ReadonlyMap<string, ConvexHull>
 ): SurfaceResolution {
     const buildable = buildableByItemId.get(placement.itemId);
     if (buildable === undefined) {
@@ -154,7 +186,7 @@ export function resolveSurfacePlacement(
     }
     const worldHitPoint = transformPoint(surface.transform, placement.relativeHitPoint);
     const evaluations = availableColliders.map((collider) =>
-        evaluateColliderHit(collider, meshById, worldHitPoint)
+        evaluateColliderHit(collider, meshById, convexHullByMeshId, worldHitPoint)
     );
     const exactHits = evaluations.flatMap((evaluation) => evaluation.coordinates === null
         ? []
@@ -218,6 +250,7 @@ interface ColliderHitEvaluation {
 function evaluateColliderHit(
     collider: Collider,
     meshById: ReadonlyMap<string, TriangleMesh>,
+    convexHullByMeshId: ReadonlyMap<string, ConvexHull>,
     worldHitPoint: Vector3
 ): ColliderHitEvaluation {
     try {
@@ -229,20 +262,36 @@ function evaluateColliderHit(
                 coordinates: isOnBoxBoundary(coordinates, box) ? coordinates : null,
             };
         }
-        if (
-            collider.shape === 'mesh' &&
-            collider.isConvex === false &&
-            collider.meshId !== null
-        ) {
+        if (collider.shape === 'mesh' && collider.meshId !== null) {
             const mesh = meshById.get(collider.meshId);
             if (mesh === undefined) return { supported: false, coordinates: null };
-            const distance = distanceFromPointToTriangleMesh(
-                worldHitPoint,
-                collider.transform,
-                collider.worldBasis,
-                mesh
-            );
-            if (distance > surfaceHitTolerance) return { supported: true, coordinates: null };
+            const bounds = collider.isConvex === true
+                ? convexHullByMeshId.get(collider.meshId)?.bounds
+                : mesh.bounds;
+            if (bounds === undefined) return { supported: false, coordinates: null };
+            if (collider.isConvex === true) {
+                const hull = convexHullByMeshId.get(collider.meshId)!;
+                const distances = signedDistancesToConvexHullFaces(
+                    worldHitPoint,
+                    collider.transform,
+                    collider.worldBasis,
+                    hull
+                );
+                if (
+                    distances.some((distance) => distance > surfaceHitTolerance) ||
+                    distances.every((distance) => Math.abs(distance) > surfaceHitTolerance)
+                ) return { supported: true, coordinates: null };
+            } else if (collider.isConvex === false) {
+                const distance = distanceFromPointToTriangleMesh(
+                    worldHitPoint,
+                    collider.transform,
+                    collider.worldBasis,
+                    mesh
+                );
+                if (distance > surfaceHitTolerance) return { supported: true, coordinates: null };
+            } else {
+                return { supported: false, coordinates: null };
+            }
             const local = localPointFromBasis(
                 collider.transform,
                 collider.worldBasis,
@@ -251,9 +300,9 @@ function evaluateColliderHit(
             return {
                 supported: true,
                 coordinates: [
-                    local.x - mesh.bounds.center.x,
-                    local.y - mesh.bounds.center.y,
-                    local.z - mesh.bounds.center.z,
+                    local.x - bounds.center.x,
+                    local.y - bounds.center.y,
+                    local.z - bounds.center.z,
                 ],
             };
         }

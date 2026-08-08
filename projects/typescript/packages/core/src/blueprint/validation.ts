@@ -13,6 +13,7 @@ import {
     type IndexedGrid,
 } from '#core/blueprint/grid-validation';
 import {
+    indexConvexSurfaceHulls,
     indexPropertySurfaces,
     indexSurfaceMeshes,
     resolveSurfacePlacement,
@@ -96,6 +97,7 @@ interface IndexedProperty {
     readonly gridById: ReadonlyMap<string, IndexedGrid>;
     readonly surfaceById: ReturnType<typeof indexPropertySurfaces>;
     readonly surfaceMeshById: ReturnType<typeof indexSurfaceMeshes>;
+    readonly convexSurfaceHullByMeshId: ReturnType<typeof indexConvexSurfaceHulls>;
 }
 
 const sha256Pattern = /^[a-f0-9]{64}$/u;
@@ -120,11 +122,16 @@ export class BlueprintValidator {
         this.#propertyByCode = indexUnique(
             dataset.propertyLayouts.map((input) => {
                 const layout = PropertyLayoutSchema.assert(input);
+                const surfaceMeshById = indexSurfaceMeshes(layout);
                 return {
                     layout,
                     gridById: indexPropertyGrids(layout),
                     surfaceById: indexPropertySurfaces(layout),
-                    surfaceMeshById: indexSurfaceMeshes(layout),
+                    surfaceMeshById,
+                    convexSurfaceHullByMeshId: indexConvexSurfaceHulls(
+                        layout,
+                        surfaceMeshById
+                    ),
                 };
             }),
             ({ layout }) => layout.propertyCode,
@@ -154,7 +161,8 @@ export class BlueprintValidator {
                     placement,
                     this.#buildableByItemId,
                     property.surfaceById,
-                    property.surfaceMeshById
+                    property.surfaceMeshById,
+                    property.convexSurfaceHullByMeshId
                 );
             if (placementResult.placement === null) issues.push(...placementResult.issues);
             else resolvedPlacements.push(placementResult.placement);

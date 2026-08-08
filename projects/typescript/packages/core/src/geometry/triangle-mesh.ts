@@ -59,6 +59,28 @@ export function localPointFromBasis(
     };
 }
 
+export function worldNormalFromBasis(
+    basis: ColliderWorldBasis,
+    localNormal: Vector3
+): Vector3 {
+    const determinant = dot(basis.right, cross(basis.up, basis.forward));
+    if (!Number.isFinite(determinant) || Math.abs(determinant) <= Number.EPSILON) {
+        throw new RangeError('Transform basis is degenerate');
+    }
+    const transformed = scale(add(
+        add(
+            scale(cross(basis.up, basis.forward), localNormal.x),
+            scale(cross(basis.forward, basis.right), localNormal.y)
+        ),
+        scale(cross(basis.right, basis.up), localNormal.z)
+    ), 1 / determinant);
+    const magnitude = length(transformed);
+    if (!Number.isFinite(magnitude) || magnitude === 0) {
+        throw new RangeError('Transformed normal is degenerate');
+    }
+    return scale(transformed, 1 / magnitude);
+}
+
 function distanceFromPointToTriangle(
     point: Vector3,
     a: Vector3,

@@ -128,7 +128,7 @@ describe('surface blueprint placement', () => {
         expect(result.resolvedPlacements).toHaveLength(1);
     });
 
-    it('uses source triangles only for non-convex mesh colliders', () => {
+    it('uses source triangles for non-convex meshes and cooked planes for convex meshes', () => {
         const input = dataset();
         const property = input.propertyLayouts[0]!;
         const surface = property.surfaces[0]!;
@@ -140,12 +140,16 @@ describe('surface blueprint placement', () => {
                 surfaceMeshes: [{
                     meshId: 'mesh:wall',
                     vertices: [
-                        vector(-1, 0.1, -1),
-                        vector(1, 0.1, -1),
-                        vector(0, 0.1, 1),
+                        vector(-1, -0.1, -1), vector(-1, -0.1, 1),
+                        vector(-1, 0.1, -1), vector(-1, 0.1, 1),
+                        vector(1, -0.1, -1), vector(1, -0.1, 1),
+                        vector(1, 0.1, -1), vector(1, 0.1, 1),
+                        vector(-0.5, 0, -0.5),
+                        vector(0.5, 0, -0.5),
+                        vector(0, 0, 0.5),
                     ],
-                    triangles: [0, 1, 2],
-                    bounds: { center: vector(0, 0.1, 0), size: vector(2, 0, 2) },
+                    triangles: [8, 9, 10],
+                    bounds: { center: vector(0, 0, 0), size: vector(2, 0.2, 2) },
                 }],
                 surfaces: [{
                     ...surface,
@@ -163,15 +167,20 @@ describe('surface blueprint placement', () => {
             }],
         });
 
-        const result = new BlueprintValidator(meshLayout(false)).validate(blueprint());
-        const convexResult = new BlueprintValidator(meshLayout(true)).validate(blueprint());
+        const interiorDocument = blueprintAtHitPoint(vector(0, 0, 0));
+        const sourceTriangleResult = new BlueprintValidator(meshLayout(false))
+            .validate(interiorDocument);
+        const convexInteriorResult = new BlueprintValidator(meshLayout(true))
+            .validate(interiorDocument);
+        const convexSurfaceResult = new BlueprintValidator(meshLayout(true)).validate(blueprint());
 
-        expect(result.valid).toBe(true);
-        expect(result.issues).toEqual([]);
-        expect(convexResult.valid).toBe(false);
-        expect(convexResult.issues).toEqual([
-            expect.objectContaining({ code: 'surface-geometry-unsupported' }),
+        expect(sourceTriangleResult.valid).toBe(true);
+        expect(convexInteriorResult.valid).toBe(false);
+        expect(convexInteriorResult.issues).toEqual([
+            expect.objectContaining({ code: 'surface-point-outside-collider' }),
         ]);
+        expect(convexSurfaceResult.valid).toBe(true);
+        expect(convexSurfaceResult.issues).toEqual([]);
     });
 });
 
@@ -199,6 +208,16 @@ function blueprint(): BlueprintDocument {
             relativePosition: vector(0, 0.4, 0),
             relativeRotation: { x: 0, y: 0, z: 0, w: 1 },
         }],
+    };
+}
+
+function blueprintAtHitPoint(relativeHitPoint: Vector3): BlueprintDocument {
+    const document = blueprint();
+    const placement = document.placements[0]!;
+    if (placement.kind !== 'surface') throw new Error('Expected surface fixture');
+    return {
+        ...document,
+        placements: [{ ...placement, relativeHitPoint }],
     };
 }
 
