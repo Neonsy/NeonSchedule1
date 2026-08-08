@@ -9,6 +9,7 @@ export * from '#core/data/person';
 export * from '#core/data/property';
 export * from '#core/data/production';
 export * from '#core/data/shop';
+export * from '#core/data/trade';
 export * from '#core/data/visual';
 export * from '#core/customer/enjoyment';
 export * from '#core/customer/offer';

@@ -500,6 +500,17 @@ function emptyReport(): RawReport {
         },
         world: {
             currentOrderLimitMultiplierInLoadedSave: 1,
+            dealerMechanics: {
+                maximumCustomers: 0,
+                dealArrivalDelay: 0,
+                minimumTravelTime: 0,
+                maximumTravelTime: 0,
+                overflowSlotCount: 0,
+                cashReminderThreshold: 0,
+                relationshipChangePerDeal: 0,
+            },
+            dealers: [],
+            suppliers: [],
             properties: [],
             businesses: [],
         },

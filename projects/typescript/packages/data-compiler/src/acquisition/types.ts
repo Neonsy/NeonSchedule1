@@ -49,6 +49,9 @@ export interface RawReport {
     };
     readonly world: {
         readonly currentOrderLimitMultiplierInLoadedSave: number;
+        readonly dealerMechanics: JsonObject;
+        readonly dealers: JsonObject[];
+        readonly suppliers: JsonObject[];
         readonly properties: JsonObject[];
         readonly businesses: JsonObject[];
     };

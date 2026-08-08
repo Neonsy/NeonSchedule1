@@ -18,10 +18,11 @@ import { normalizePeople } from '#data-compiler/normalize/people';
 import { normalizeProduction } from '#data-compiler/normalize/production';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizeShops } from '#data-compiler/normalize/shops';
+import { normalizeTrade } from '#data-compiler/normalize/trade';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.18';
+export const NORMALIZER_VERSION = '0.0.19';
 
 const deferredDomains = [
     'buildable-geometry',
@@ -55,6 +56,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const properties = normalizeProperties(acquisition.report, integrity);
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
     const people = normalizePeople(acquisition.report, assets, integrity);
+    const trade = normalizeTrade(acquisition.report, people.people, shops, itemIds, integrity);
 
     const buildables = indexUnique(
         acquisition.report.discovery.buildables,
@@ -108,6 +110,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     }
     documents.set('customers/catalog.json', customers.catalog);
     documents.set('people/relationships.json', people.relationships);
+    documents.set('people/trade.json', trade);
     documents.set('mixing/rules.json', mixing);
     documents.set('production/catalog.json', production);
     documents.set('visuals/assets.json', visuals);

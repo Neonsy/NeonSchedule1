@@ -233,6 +233,9 @@ function parseReport(document: JsonObject): RawReport {
                 'currentOrderLimitMultiplierInLoadedSave',
                 'report.world'
             ),
+            dealerMechanics: asObject(world.dealerMechanics, 'report.world.dealerMechanics'),
+            dealers: objectArray(world.dealers, 'report.world.dealers'),
+            suppliers: objectArray(world.suppliers, 'report.world.suppliers'),
             properties: objectArray(world.properties, 'report.world.properties'),
             businesses: objectArray(world.businesses, 'report.world.businesses'),
         },
