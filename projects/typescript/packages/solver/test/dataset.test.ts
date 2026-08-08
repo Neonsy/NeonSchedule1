@@ -11,6 +11,7 @@ import {
     type DatasetFile,
     type DatasetManifest,
     type MixingRules,
+    type TradeCatalog,
 } from '@neonschedule1/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -74,6 +75,7 @@ async function writeDatasetFixture(): Promise<{
     const documents = new Map<string, unknown>([
         ['customers/catalog.json', customerCatalog()],
         ['mixing/rules.json', mixingRules()],
+        ['people/trade.json', tradeCatalog()],
     ]);
     const files: DatasetFile[] = [];
     for (const [relativePath, document] of documents) {
@@ -120,6 +122,22 @@ function mixingRules(): MixingRules {
         maxDeltaDifference: 0,
         defaultProductIds: [],
         maps: [],
+    };
+}
+
+function tradeCatalog(): TradeCatalog {
+    return {
+        schema: 'neonschedule1-trade-catalog-1',
+        dealerMechanics: {
+            maximumCustomers: 10,
+            dealArrivalDelay: 30,
+            travelTime: { minimum: 15, maximum: 360 },
+            overflowSlotCount: 10,
+            cashReminderThreshold: 500,
+            relationshipChangePerDeal: 0.05,
+        },
+        dealers: [],
+        suppliers: [],
     };
 }
 

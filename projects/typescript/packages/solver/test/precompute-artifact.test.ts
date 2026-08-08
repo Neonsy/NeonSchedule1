@@ -768,5 +768,18 @@ function solverDataset(): SolverDataset {
         mixingRules,
         customers: [customer],
         customerCatalog: customerCatalog(),
+        tradeCatalog: {
+            schema: 'neonschedule1-trade-catalog-1',
+            dealerMechanics: {
+                maximumCustomers: 10,
+                dealArrivalDelay: 30,
+                travelTime: { minimum: 15, maximum: 360 },
+                overflowSlotCount: 10,
+                cashReminderThreshold: 500,
+                relationshipChangePerDeal: 0.05,
+            },
+            dealers: [],
+            suppliers: [],
+        },
     };
 }

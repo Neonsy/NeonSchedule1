@@ -9,6 +9,7 @@
     "data:normalize": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler normalize",
     "solver:benchmark": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark",
     "solver:benchmark:allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:allocation",
+    "solver:benchmark:joint-allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:joint-allocation",
     "solver:verify": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver verify",
     "solver:native": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver native",
     "solver:precompute": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver precompute",

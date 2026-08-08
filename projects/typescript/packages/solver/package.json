@@ -16,6 +16,7 @@
     "test": "vitest run --config ../../vitest.config.mts --project solver",
     "benchmark": "node dist/cli.js",
     "benchmark:allocation": "node dist/allocation-benchmark-cli.js",
+    "benchmark:joint-allocation": "node dist/joint-allocation-benchmark-cli.js",
     "verify": "node dist/verify-cli.js",
     "native": "node dist/native-cli.js",
     "precompute": "node dist/precompute-cli.js",

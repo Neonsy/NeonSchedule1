@@ -108,9 +108,12 @@ export function runAllocationBenchmark(
 ): AllocationBenchmarkReport {
     validateOptions(options, dataset.customers.length);
     const selections = new Map(
-        options.customerCounts.map((count) => [count, selectCustomers(dataset.customers, count)])
+        options.customerCounts.map((count) => [
+            count,
+            selectAllocationBenchmarkCustomers(dataset.customers, count),
+        ])
     );
-    const selectedCustomers = uniqueCustomers([...selections.values()].flat());
+    const selectedCustomers = uniqueAllocationBenchmarkCustomers([...selections.values()].flat());
     const productIds = dataset.items
         .filter((item) => item.product !== null && !item.isRuntimeOnly)
         .map((item) => item.id)
@@ -128,7 +131,7 @@ export function runAllocationBenchmark(
     }
 
     const generatedAt = performance.now();
-    const recommendationSets = generateRecommendations(
+    const recommendationSets = generateAllocationBenchmarkRecommendations(
         dataset,
         selectedCustomers,
         productIds,
@@ -150,7 +153,7 @@ export function runAllocationBenchmark(
         const customers = selections.get(customerCount)!;
         const sets = customers.map((customer) => recommendationsByCustomer.get(customer.id)!);
         const referenceCost = sets.reduce(
-            (total, set) => total + requireRecommendation(set).productionCost,
+            (total, set) => total + requireAllocationBenchmarkRecommendation(set).productionCost,
             0
         );
         for (const productionBudgetFraction of options.productionBudgetFractions) {
@@ -162,7 +165,10 @@ export function runAllocationBenchmark(
                     maximumProductionCost,
                     ...(stockMode === 'production-only'
                         ? {}
-                        : { stock: onePerMix(dataset.manifest.datasetSha256, sets) }),
+                        : { stock: onePerMixAllocationBenchmarkStock(
+                              dataset.manifest.datasetSha256,
+                              sets
+                          ) }),
                     maximumStates: options.allocationMaxStates,
                 }));
                 const warmupSamples = Array.from({ length: options.warmups }, execute);
@@ -223,12 +229,18 @@ export function runAllocationBenchmark(
     };
 }
 
-function generateRecommendations(
+export function generateAllocationBenchmarkRecommendations(
     dataset: SolverDataset,
     customers: readonly Customer[],
     productIds: readonly string[],
     ingredientIds: readonly string[],
-    options: AllocationBenchmarkOptions
+    options: Pick<
+        AllocationBenchmarkOptions,
+        | 'maxIngredients'
+        | 'recommendationLimit'
+        | 'recipeMaxStates'
+        | 'maximumOptionProductionCost'
+    >
 ): CustomerRecommendationSet[] {
     const itemsById = new Map(dataset.items.map((item) => [item.id, item]));
     const effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
@@ -272,7 +284,7 @@ function generateRecommendations(
     });
 }
 
-function onePerMix(
+export function onePerMixAllocationBenchmarkStock(
     datasetSha256: string,
     sets: readonly CustomerRecommendationSet[]
 ): { readonly resourceId: string; readonly quantity: number }[] {
@@ -298,7 +310,10 @@ function measure(
     };
 }
 
-function selectCustomers(customers: readonly Customer[], count: number): Customer[] {
+export function selectAllocationBenchmarkCustomers(
+    customers: readonly Customer[],
+    count: number
+): Customer[] {
     const ordered = [...customers].sort((left, right) =>
         weeklySpendMidpoint(left) - weeklySpendMidpoint(right) ||
         left.id.localeCompare(right.id)
@@ -309,7 +324,7 @@ function selectCustomers(customers: readonly Customer[], count: number): Custome
     );
 }
 
-function uniqueCustomers(customers: readonly Customer[]): Customer[] {
+export function uniqueAllocationBenchmarkCustomers(customers: readonly Customer[]): Customer[] {
     return [...new Map(customers.map((customer) => [customer.id, customer])).values()]
         .sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -318,7 +333,9 @@ function weeklySpendMidpoint(customer: Customer): number {
     return (customer.weeklySpend.minimum + customer.weeklySpend.maximum) / 2;
 }
 
-function requireRecommendation(set: CustomerRecommendationSet): CustomerRecommendation {
+export function requireAllocationBenchmarkRecommendation(
+    set: CustomerRecommendationSet
+): CustomerRecommendation {
     const recommendation = set.recommendations[0];
     if (recommendation === undefined) {
         throw new Error(`No recommendation for customer ${JSON.stringify(set.customerId)}`);

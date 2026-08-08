@@ -10,6 +10,7 @@ import {
     EffectSchema,
     ItemSchema,
     MixingRulesSchema,
+    TradeCatalogSchema,
     normalizedDatasetIdentityInput,
     type Customer,
     type CustomerCatalog,
@@ -18,6 +19,7 @@ import {
     type Effect,
     type Item,
     type MixingRules,
+    type TradeCatalog,
 } from '@neonschedule1/core';
 
 export interface SolverDataset {
@@ -28,6 +30,7 @@ export interface SolverDataset {
     readonly mixingRules: MixingRules;
     readonly customers: readonly Customer[];
     readonly customerCatalog: CustomerCatalog;
+    readonly tradeCatalog: TradeCatalog;
 }
 
 export function workspaceRoot(): string {
@@ -77,7 +80,7 @@ export async function loadSolverDataset(directory: string): Promise<SolverDatase
         /^customers\/(?!catalog\.json$)[^/]+\.json$/u
     );
 
-    const [items, effects, customers, mixingRules, customerCatalog] = await Promise.all([
+    const [items, effects, customers, mixingRules, customerCatalog, tradeCatalog] = await Promise.all([
         loadDocuments(resolvedDirectory, files, itemPaths, ItemSchema),
         loadDocuments(resolvedDirectory, files, effectPaths, EffectSchema),
         loadDocuments(resolvedDirectory, files, customerPaths, CustomerSchema),
@@ -88,6 +91,7 @@ export async function loadSolverDataset(directory: string): Promise<SolverDatase
             'customers/catalog.json',
             CustomerCatalogSchema
         ),
+        loadDocument(resolvedDirectory, files, 'people/trade.json', TradeCatalogSchema),
     ]);
 
     requireCount(items.length, manifest.counts.items, 'items');
@@ -103,6 +107,7 @@ export async function loadSolverDataset(directory: string): Promise<SolverDatase
         mixingRules,
         customers,
         customerCatalog,
+        tradeCatalog,
     };
 }
 
