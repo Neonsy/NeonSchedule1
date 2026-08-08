@@ -33,15 +33,18 @@ describe('blueprint world projection', () => {
         expect(projected.buildPoint.worldPosition).toEqual(vector(10.5, 2, 20));
         expect(projected.boundingCollider.transform.worldPosition)
             .toEqual(vector(10.5, 3, 19));
+        expect(projected.boundingCollider.worldBasis).toEqual({
+            right: vector(-1, 0, 0),
+            up: vector(0, 1, 0),
+            forward: vector(0, 0, -1),
+        });
         expect(projected.boundingCollider).not.toHaveProperty('worldBounds');
         expect(projected.interactionPoints[0]?.transform.worldPosition)
             .toEqual(vector(9.5, 2.5, 18));
-        expect(projected.interactionPoints[0]?.transform.worldRotation).toEqual({
-            x: 0,
-            y: -0.9238795325112867,
-            z: 0,
-            w: 0.3826834323650897,
-        });
+        const interactionRotation = projected.interactionPoints[0]!.transform.worldRotation;
+        expect(interactionRotation).toMatchObject({ x: 0, z: 0 });
+        expect(interactionRotation.y).toBeCloseTo(-0.9238795325112867);
+        expect(interactionRotation.w).toBeCloseTo(0.3826834323650897);
     });
 
     it('rejects elevation offsets until their game-space meaning is available', () => {
@@ -141,7 +144,7 @@ function blueprint(): BlueprintDocument {
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-1',
+        schema: 'neonschedule1-buildable-2',
         itemId: 'bench',
         runtimeType: 'Game.Buildable',
         placement: {
@@ -189,7 +192,7 @@ function footprintTile(
 
 function propertyLayout(): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-1',
+        schema: 'neonschedule1-property-layout-2',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -241,6 +244,12 @@ function collider(path: string, worldPosition: Vector3): Collider {
         layerName: 'Default',
         tag: 'Untagged',
         transform: transform(path, worldPosition),
+        worldScale: vector(1, 1, 1),
+        worldBasis: {
+            right: vector(1, 0, 0),
+            up: vector(0, 1, 0),
+            forward: vector(0, 0, 1),
+        },
         worldBounds: { center: worldPosition, size: vector(1, 1, 1) },
         localCenter: vector(0, 0, 0),
         localSize: vector(1, 1, 1),

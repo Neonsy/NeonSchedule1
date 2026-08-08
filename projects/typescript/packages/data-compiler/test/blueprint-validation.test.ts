@@ -194,7 +194,7 @@ function buildable(
     footprintTiles: Buildable['placement']['footprintTiles']
 ): Buildable {
     return {
-        schema: 'neonschedule1-buildable-1',
+        schema: 'neonschedule1-buildable-2',
         itemId,
         runtimeType: 'Game.Buildable',
         placement: {
@@ -235,7 +235,7 @@ function footprintTile(
 
 function propertyLayout(): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-1',
+        schema: 'neonschedule1-property-layout-2',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -288,6 +288,12 @@ function collider(path: string): Collider {
         layerName: 'Default',
         tag: 'Untagged',
         transform: transform(path),
+        worldScale: vector(1, 1, 1),
+        worldBasis: {
+            right: vector(1, 0, 0),
+            up: vector(0, 1, 0),
+            forward: vector(0, 0, 1),
+        },
         worldBounds: { center: vector(0, 0, 0), size: vector(1, 1, 1) },
         localCenter: vector(0, 0, 0),
         localSize: vector(1, 1, 1),

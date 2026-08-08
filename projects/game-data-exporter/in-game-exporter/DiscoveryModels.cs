@@ -552,6 +552,10 @@ internal sealed class ColliderSnapshot
     public string LayerName { get; init; } = string.Empty;
     public string Tag { get; init; } = string.Empty;
     public TransformSnapshot? Transform { get; init; }
+    public VectorSnapshot3 WorldScale { get; init; } = new();
+    public VectorSnapshot3 WorldRight { get; init; } = new();
+    public VectorSnapshot3 WorldUp { get; init; } = new();
+    public VectorSnapshot3 WorldForward { get; init; } = new();
     public VectorSnapshot3 BoundsCenter { get; init; } = new();
     public VectorSnapshot3 BoundsSize { get; init; } = new();
     public VectorSnapshot3? LocalCenter { get; init; }
@@ -623,6 +627,11 @@ internal sealed class ColliderSnapshot
             LayerName = LayerMask.LayerToName(collider.gameObject.layer),
             Tag = collider.gameObject.tag ?? string.Empty,
             Transform = TransformSnapshot.FromTransform(collider.transform),
+            WorldScale = VectorSnapshot3.FromVector(collider.transform.lossyScale),
+            WorldRight = VectorSnapshot3.FromVector(collider.transform.TransformVector(Vector3.right)),
+            WorldUp = VectorSnapshot3.FromVector(collider.transform.TransformVector(Vector3.up)),
+            WorldForward = VectorSnapshot3.FromVector(
+                collider.transform.TransformVector(Vector3.forward)),
             BoundsCenter = VectorSnapshot3.FromVector(collider.bounds.center),
             BoundsSize = VectorSnapshot3.FromVector(collider.bounds.size),
             LocalCenter = localCenter,

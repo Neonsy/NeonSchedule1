@@ -73,7 +73,7 @@ function normalizeBuildable(
     validateFootprint(itemId, width, height, footprintTiles, integrity);
     const storageRaw = raw.storage;
     const buildable: Buildable = {
-        schema: 'neonschedule1-buildable-1',
+        schema: 'neonschedule1-buildable-2',
         itemId,
         runtimeType: stringField(raw, 'runtimeType', path),
         placement: {

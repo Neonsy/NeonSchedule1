@@ -4,7 +4,11 @@ import {
 } from '#core/data/blueprint';
 import { type Buildable, type InteractionPoint } from '#core/data/buildable';
 import { type Vector3 } from '#core/data/common';
-import { type Collider, type Transform } from '#core/data/geometry';
+import {
+    type Collider,
+    type ColliderWorldBasis,
+    type Transform,
+} from '#core/data/geometry';
 import { type PropertyGrid, type PropertyLayout } from '#core/data/property-layout';
 import {
     BlueprintValidator,
@@ -31,8 +35,9 @@ export interface ProjectedBuildableTransform extends BlueprintWorldTransform {
     readonly localScale: Vector3;
 }
 
-export type ProjectedCollider = Omit<Collider, 'transform' | 'worldBounds'> & {
+export type ProjectedCollider = Omit<Collider, 'transform' | 'worldBasis' | 'worldBounds'> & {
     readonly transform: ProjectedBuildableTransform;
+    readonly worldBasis: ColliderWorldBasis;
 };
 
 export type ProjectedInteractionPoint = Omit<InteractionPoint, 'transform'> & {
@@ -222,8 +227,21 @@ function placementFrame(context: ProjectionContext): PlacementFrame {
 }
 
 function projectCollider(collider: Collider, frame: PlacementFrame): ProjectedCollider {
-    const { transform: sourceTransform, worldBounds: _worldBounds, ...definition } = collider;
-    return { ...definition, transform: projectTransform(sourceTransform, frame) };
+    const {
+        transform: sourceTransform,
+        worldBasis: sourceBasis,
+        worldBounds: _worldBounds,
+        ...definition
+    } = collider;
+    return {
+        ...definition,
+        transform: projectTransform(sourceTransform, frame),
+        worldBasis: {
+            right: rotateAroundY(sourceBasis.right, frame.worldYaw),
+            up: rotateAroundY(sourceBasis.up, frame.worldYaw),
+            forward: rotateAroundY(sourceBasis.forward, frame.worldYaw),
+        },
+    };
 }
 
 function projectTransform(
@@ -306,7 +324,7 @@ function canonicalQuaternion(input: Quaternion): Quaternion {
 }
 
 function normalizeZero(value: number): number {
-    return Object.is(value, -0) ? 0 : value;
+    return Math.abs(value) <= Number.EPSILON ? 0 : value;
 }
 
 function rotateAroundY(vector: Vector3, degrees: number): Vector3 {
@@ -314,9 +332,9 @@ function rotateAroundY(vector: Vector3, degrees: number): Vector3 {
     const cosine = Math.cos(radians);
     const sine = Math.sin(radians);
     return {
-        x: cosine * vector.x + sine * vector.z,
-        y: vector.y,
-        z: -sine * vector.x + cosine * vector.z,
+        x: normalizeZero(cosine * vector.x + sine * vector.z),
+        y: normalizeZero(vector.y),
+        z: normalizeZero(-sine * vector.x + cosine * vector.z),
     };
 }
 

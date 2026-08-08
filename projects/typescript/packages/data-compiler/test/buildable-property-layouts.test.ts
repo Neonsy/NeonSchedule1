@@ -101,7 +101,7 @@ describe('buildable and property-layout normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(buildables[0]).toMatchObject({
-            schema: 'neonschedule1-buildable-1',
+            schema: 'neonschedule1-buildable-2',
             itemId: 'workstation',
             placement: {
                 kind: 'grid',
@@ -111,7 +111,18 @@ describe('buildable and property-layout normalization', () => {
                 allowRotation: null,
                 rotationIncrement: null,
             },
-            colliders: [{ shape: 'box' }, { shape: 'sphere' }],
+            colliders: [
+                {
+                    shape: 'box',
+                    worldScale: point(1, 1, 1),
+                    worldBasis: {
+                        right: point(1, 0, 0),
+                        up: point(0, 1, 0),
+                        forward: point(0, 0, 1),
+                    },
+                },
+                { shape: 'sphere' },
+            ],
             storage: { slotCount: 4 },
             visuals: {
                 renderers: [
@@ -240,6 +251,10 @@ function collider(source: string, path: string, options: { readonly radius?: num
         layerName: 'Default',
         tag: 'Untagged',
         transform: transform(path),
+        worldScale: point(1, 1, 1),
+        worldRight: point(1, 0, 0),
+        worldUp: point(0, 1, 0),
+        worldForward: point(0, 0, 1),
         boundsCenter: point(0, 0, 0),
         boundsSize: point(1, 1, 1),
         ...(options.radius === undefined

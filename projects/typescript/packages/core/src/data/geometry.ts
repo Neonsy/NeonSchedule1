@@ -15,6 +15,13 @@ export type Transform = typeof TransformSchema.infer;
 export const ColliderShapeSchema = type("'box' | 'capsule' | 'mesh' | 'sphere' | 'other'");
 export type ColliderShape = typeof ColliderShapeSchema.infer;
 
+export const ColliderWorldBasisSchema = type({
+    right: Vector3Schema,
+    up: Vector3Schema,
+    forward: Vector3Schema,
+});
+export type ColliderWorldBasis = typeof ColliderWorldBasisSchema.infer;
+
 export const ColliderSchema = type({
     source: 'string',
     runtimeType: 'string',
@@ -25,6 +32,8 @@ export const ColliderSchema = type({
     layerName: 'string',
     tag: 'string',
     transform: TransformSchema,
+    worldScale: Vector3Schema,
+    worldBasis: ColliderWorldBasisSchema,
     worldBounds: BoundsSchema,
     localCenter: Vector3Schema.or('null'),
     localSize: Vector3Schema.or('null'),

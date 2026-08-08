@@ -54,6 +54,12 @@ export function normalizeCollider(value: unknown, path: string): Collider {
         layerName: stringField(raw, 'layerName', path),
         tag: stringField(raw, 'tag', path),
         transform: normalizeTransform(raw.transform, `${path}.transform`),
+        worldScale: vector3(raw.worldScale, `${path}.worldScale`),
+        worldBasis: {
+            right: vector3(raw.worldRight, `${path}.worldRight`),
+            up: vector3(raw.worldUp, `${path}.worldUp`),
+            forward: vector3(raw.worldForward, `${path}.worldForward`),
+        },
         worldBounds: {
             center: vector3(raw.boundsCenter, `${path}.boundsCenter`),
             size: vector3(raw.boundsSize, `${path}.boundsSize`),
@@ -94,6 +100,7 @@ export function colliderGeometryKey(collider: Collider): string {
     return JSON.stringify({
         runtimeType: collider.runtimeType,
         transformPath: collider.transform.path,
+        worldBasis: collider.worldBasis,
         worldBounds: collider.worldBounds,
         localCenter: collider.localCenter,
         localSize: collider.localSize,

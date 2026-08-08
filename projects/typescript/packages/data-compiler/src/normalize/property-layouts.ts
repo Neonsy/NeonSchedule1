@@ -110,7 +110,7 @@ function normalizePropertyLayout(
     validatePropertySummary(propertyCode, raw, property, loadingDocks.length, grids.length, integrity);
 
     return PropertyLayoutSchema.assert({
-        schema: 'neonschedule1-property-layout-1',
+        schema: 'neonschedule1-property-layout-2',
         propertyCode,
         propertyName: stringField(raw, 'propertyName', path),
         worldPosition: vector3(raw.position, `${path}.position`),
