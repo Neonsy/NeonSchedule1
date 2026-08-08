@@ -15,10 +15,14 @@ import {
     uniqueAllocationBenchmarkCustomers,
     type AllocationBenchmarkStockMode,
 } from '#solver/allocation-benchmark';
-import { CustomerRecommendationDealerAllocator } from '#solver/customer-dealer-allocation';
+import {
+    CustomerRecommendationDealerAllocator,
+    type CustomerDealerRecommendationSet,
+} from '#solver/customer-dealer-allocation';
 import type { SolverDataset } from '#solver/dataset';
 
 export type JointAllocationSigningFeeState = 'paid' | 'unpaid';
+export type JointAllocationEligibilityMode = 'all' | 'partitioned';
 
 export interface JointAllocationBenchmarkScenario {
     readonly id: string;
@@ -27,6 +31,7 @@ export interface JointAllocationBenchmarkScenario {
     readonly signingFeeState: JointAllocationSigningFeeState;
     readonly productionBudgetFraction: number;
     readonly stockMode: AllocationBenchmarkStockMode;
+    readonly eligibilityMode: JointAllocationEligibilityMode;
 }
 
 export interface JointAllocationBenchmarkOptions {
@@ -65,7 +70,7 @@ export interface JointAllocationBenchmarkCase extends JointAllocationBenchmarkSc
 }
 
 export interface JointAllocationBenchmarkReport {
-    readonly schema: 'neonschedule1-joint-allocation-benchmark-2';
+    readonly schema: 'neonschedule1-joint-allocation-benchmark-3';
     readonly createdAt: string;
     readonly dataset: {
         readonly gameVersion: string;
@@ -92,12 +97,24 @@ export interface JointAllocationBenchmarkReport {
 export function defaultJointAllocationBenchmarkOptions(): JointAllocationBenchmarkOptions {
     return {
         scenarios: [
-            scenario('small-paid', 5, 1, 'paid', 1, 'production-only'),
-            scenario('capacity-unpaid', 10, 1, 'unpaid', 0.75, 'production-only'),
-            scenario('three-paid-stock', 10, 3, 'paid', 1, 'one-per-mix'),
-            scenario('three-unpaid-cash', 20, 3, 'unpaid', 0.75, 'production-only'),
-            scenario('all-paid-cash', 20, 6, 'paid', 1, 'production-only'),
-            scenario('all-unpaid-stock', 20, 6, 'unpaid', 1, 'one-per-mix'),
+            scenario('small-paid', 5, 1, 'paid', 1, 'production-only', 'all'),
+            scenario('capacity-unpaid', 10, 1, 'unpaid', 0.75, 'production-only', 'all'),
+            scenario('three-paid-stock', 10, 3, 'paid', 1, 'one-per-mix', 'all'),
+            scenario('three-unpaid-cash', 20, 3, 'unpaid', 0.75, 'production-only', 'all'),
+            scenario('all-paid-cash', 20, 6, 'paid', 1, 'production-only', 'all'),
+            scenario('all-unpaid-stock', 20, 6, 'unpaid', 1, 'one-per-mix', 'all'),
+            scenario('four-capacity-paid-cash', 40, 4, 'paid', 1, 'production-only', 'all'),
+            scenario('all-capacity-unpaid-stock', 60, 6, 'unpaid', 1, 'one-per-mix', 'all'),
+            scenario('all-over-capacity-paid-cash', 66, 6, 'paid', 1, 'production-only', 'all'),
+            scenario(
+                'partitioned-capacity-paid-cash',
+                60,
+                6,
+                'paid',
+                1,
+                'production-only',
+                'partitioned'
+            ),
         ],
         iterations: 2,
         warmups: 1,
@@ -158,8 +175,12 @@ export function runJointAllocationBenchmark(
     const allocator = new CustomerRecommendationDealerAllocator(dataset.tradeCatalog);
     const cases = options.scenarios.map((definition, index): JointAllocationBenchmarkCase => {
         const customers = selections.get(definition.customerCount)!;
-        const sets = customers.map((customer) => recommendationsByCustomer.get(customer.id)!);
         const dealers = playerDealers.slice(0, definition.dealerCount);
+        const sets = scenarioRecommendationSets(
+            customers.map((customer) => recommendationsByCustomer.get(customer.id)!),
+            dealers.map(({ personId }) => personId),
+            definition.eligibilityMode
+        );
         const referenceCost = sets.reduce(
             (total, set) =>
                 total + requireAllocationBenchmarkRecommendation(set).productionCost,
@@ -206,7 +227,7 @@ export function runJointAllocationBenchmark(
     });
 
     return {
-        schema: 'neonschedule1-joint-allocation-benchmark-2',
+        schema: 'neonschedule1-joint-allocation-benchmark-3',
         createdAt: new Date().toISOString(),
         dataset: {
             gameVersion: dataset.manifest.gameVersion,
@@ -287,6 +308,10 @@ function validateOptions(
         if (definition.stockMode !== 'production-only' && definition.stockMode !== 'one-per-mix') {
             throw new Error('Scenario stock mode is invalid');
         }
+        if (definition.eligibilityMode !== 'all' &&
+            definition.eligibilityMode !== 'partitioned') {
+            throw new Error('Scenario eligibility mode is invalid');
+        }
     }
     requireNonNegativeInteger(options.warmups, 'Joint allocation benchmark warmups');
     for (const [value, label] of [
@@ -309,7 +334,8 @@ function scenario(
     dealerCount: number,
     signingFeeState: JointAllocationSigningFeeState,
     productionBudgetFraction: number,
-    stockMode: AllocationBenchmarkStockMode
+    stockMode: AllocationBenchmarkStockMode,
+    eligibilityMode: JointAllocationEligibilityMode
 ): JointAllocationBenchmarkScenario {
     return {
         id,
@@ -318,7 +344,20 @@ function scenario(
         signingFeeState,
         productionBudgetFraction,
         stockMode,
+        eligibilityMode,
     };
+}
+
+function scenarioRecommendationSets(
+    sets: readonly CustomerDealerRecommendationSet[],
+    dealerIds: readonly string[],
+    mode: JointAllocationEligibilityMode
+): CustomerDealerRecommendationSet[] {
+    if (mode === 'all') return [...sets];
+    return sets.map((set, index) => ({
+        ...set,
+        eligibleDealerIds: [dealerIds[index % dealerIds.length]!],
+    }));
 }
 
 function requirePositiveInteger(value: number, label: string): void {

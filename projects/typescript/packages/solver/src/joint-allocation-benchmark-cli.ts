@@ -36,7 +36,7 @@ async function main(): Promise<void> {
             process.stdout.write(
                 `[${completed}/${total}] ${result.id}: ` +
                 `${result.duration.medianMs.toFixed(3)} ms, ` +
-                `${sample.evidence.evaluatedDealerSubsets} subsets, ` +
+                `${sample.evidence.evaluatedDealerSubsets} dealer configurations, ` +
                 `${sample.evidence.allocationVisitedStates} states (${sample.status})\n`
             );
         }
