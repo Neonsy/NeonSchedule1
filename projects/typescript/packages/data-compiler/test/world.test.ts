@@ -18,6 +18,7 @@ const assets: VerifiedAssets = {
         ['assets/icon.png', iconFileId],
     ]),
     offlineFileIdsByMeshKey: new Map(),
+    filePathById: new Map(),
     directFileCount: 3,
     offlineFileCount: 0,
 };

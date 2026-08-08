@@ -1,7 +1,12 @@
 import { type } from 'arktype';
 
 import { Vector3Schema } from '#core/data/common';
-import { ColliderSchema, SceneVisualsSchema, TransformSchema } from '#core/data/geometry';
+import {
+    ColliderSchema,
+    SceneVisualsSchema,
+    TransformSchema,
+    TriangleMeshSchema,
+} from '#core/data/geometry';
 import { ProceduralTileSchema } from '#core/data/buildable';
 
 export const PropertySurfaceSchema = type({
@@ -46,7 +51,7 @@ export const PropertyGridSchema = type({
 export type PropertyGrid = typeof PropertyGridSchema.infer;
 
 export const PropertyLayoutSchema = type({
-    schema: "'neonschedule1-property-layout-3'",
+    schema: "'neonschedule1-property-layout-4'",
     propertyCode: 'string',
     propertyName: 'string',
     worldPosition: Vector3Schema,
@@ -57,6 +62,7 @@ export const PropertyLayoutSchema = type({
     boundingBox: ColliderSchema.or('null'),
     boundaryColliders: ColliderSchema.array(),
     fixedColliders: ColliderSchema.array(),
+    surfaceMeshes: TriangleMeshSchema.array(),
     surfaces: PropertySurfaceSchema.array(),
     proceduralTiles: ProceduralTileSchema.array(),
     loadingDocks: LoadingDockSchema.array(),

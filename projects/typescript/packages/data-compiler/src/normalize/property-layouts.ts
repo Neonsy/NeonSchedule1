@@ -3,10 +3,13 @@ import {
     type Property,
     type PropertyGrid,
     type PropertyLayout,
+    type MeshAsset,
+    type TriangleMesh,
 } from '@neonschedule1/core';
 
 import type { VerifiedAssets } from '#data-compiler/acquisition/assets';
 import type { RawReport } from '#data-compiler/acquisition/types';
+import { readTriangleMesh } from '#data-compiler/acquisition/triangle-mesh';
 import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
 import {
     numberField,
@@ -23,12 +26,13 @@ import {
     normalizeTransform,
 } from '#data-compiler/normalize/geometry';
 
-export function normalizePropertyLayouts(
+export async function normalizePropertyLayouts(
     report: PropertyLayoutReport,
     assets: VerifiedAssets,
     properties: readonly Property[],
+    meshes: readonly MeshAsset[],
     integrity: Integrity
-): PropertyLayout[] {
+): Promise<PropertyLayout[]> {
     const index = indexUnique(
         report.discovery.propertyLayouts,
         'propertyCode',
@@ -37,24 +41,33 @@ export function normalizePropertyLayouts(
     );
     const propertyByCode = new Map(properties.map((property) => [property.code, property]));
     requireReferences(index.keys(), new Set(propertyByCode.keys()), 'property layout', integrity);
-    return [...index.entries()]
-        .map(([propertyCode, raw]) =>
-            normalizePropertyLayout(propertyCode, raw, propertyByCode.get(propertyCode), assets, integrity)
-        )
-        .sort((left, right) => left.propertyCode.localeCompare(right.propertyCode));
+    const meshById = new Map(meshes.map((mesh) => [mesh.id, mesh]));
+    const layouts: PropertyLayout[] = [];
+    for (const [propertyCode, raw] of index.entries()) {
+        layouts.push(await normalizePropertyLayout(
+            propertyCode,
+            raw,
+            propertyByCode.get(propertyCode),
+            assets,
+            meshById,
+            integrity
+        ));
+    }
+    return layouts.sort((left, right) => left.propertyCode.localeCompare(right.propertyCode));
 }
 
 type PropertyLayoutReport = {
     readonly discovery: Pick<RawReport['discovery'], 'propertyLayouts'>;
 };
 
-function normalizePropertyLayout(
+async function normalizePropertyLayout(
     propertyCode: string,
     raw: JsonObject,
     property: Property | undefined,
     assets: VerifiedAssets,
+    meshById: ReadonlyMap<string, MeshAsset>,
     integrity: Integrity
-): PropertyLayout {
+): Promise<PropertyLayout> {
     const path = `report.discovery.propertyLayouts[${JSON.stringify(propertyCode)}]`;
     const boundaryColliders = objectArray(raw.boundaryColliders, `${path}.boundaryColliders`).map(
         (collider, index) => normalizeCollider(collider, `${path}.boundaryColliders[${index}]`)
@@ -87,6 +100,7 @@ function normalizePropertyLayout(
             ),
         };
     });
+    const surfaceMeshes = await normalizeSurfaceMeshes(surfaces, assets, meshById, integrity);
     const proceduralTiles = objectArray(raw.proceduralTiles, `${path}.proceduralTiles`)
         .map((tile, index) => {
             const tilePath = `${path}.proceduralTiles[${index}]`;
@@ -126,7 +140,7 @@ function normalizePropertyLayout(
     validatePropertySummary(propertyCode, raw, property, loadingDocks.length, grids.length, integrity);
 
     return PropertyLayoutSchema.assert({
-        schema: 'neonschedule1-property-layout-3',
+        schema: 'neonschedule1-property-layout-4',
         propertyCode,
         propertyName: stringField(raw, 'propertyName', path),
         worldPosition: vector3(raw.position, `${path}.position`),
@@ -140,12 +154,62 @@ function normalizePropertyLayout(
                 : normalizeCollider(raw.boundingBox, `${path}.boundingBox`),
         boundaryColliders,
         fixedColliders,
+        surfaceMeshes,
         surfaces,
         proceduralTiles,
         loadingDocks,
         grids,
         visuals: normalizeSceneVisuals(raw.visuals, `${path}.visuals`, assets, integrity),
     });
+}
+
+async function normalizeSurfaceMeshes(
+    surfaces: readonly PropertyLayout['surfaces'][number][],
+    assets: VerifiedAssets,
+    meshById: ReadonlyMap<string, MeshAsset>,
+    integrity: Integrity
+): Promise<TriangleMesh[]> {
+    const meshIds = [...new Set(surfaces.flatMap((surface) =>
+        surface.colliders.flatMap((collider) => collider.meshId === null ? [] : [collider.meshId])
+    ))].sort();
+    const fileById = new Map(assets.files.map((file) => [file.id, file]));
+    const geometries: TriangleMesh[] = [];
+    for (const meshId of meshIds) {
+        const mesh = meshById.get(meshId);
+        if (mesh === undefined || mesh.fileIds.length !== 1) {
+            integrity.addError(
+                `Surface mesh ${JSON.stringify(meshId)} must resolve to exactly one geometry file`
+            );
+            continue;
+        }
+        const fileId = mesh.fileIds[0]!;
+        const file = fileById.get(fileId);
+        const filePath = assets.filePathById.get(fileId);
+        if (file === undefined || filePath === undefined) {
+            integrity.addError(`Surface mesh ${JSON.stringify(meshId)} has no verified local file`);
+            continue;
+        }
+        try {
+            const geometry = await readTriangleMesh(filePath, file.mediaType);
+            integrity.check(
+                `surface mesh ${meshId} bounds match its report`,
+                boundsMatch(geometry.bounds, mesh.bounds),
+                `Surface mesh ${JSON.stringify(meshId)} geometry bounds differ from its report`
+            );
+            geometries.push({ meshId, ...geometry });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            integrity.addError(`Surface mesh ${JSON.stringify(meshId)} could not be decoded: ${message}`);
+        }
+    }
+    return geometries;
+}
+
+function boundsMatch(left: TriangleMesh['bounds'], right: TriangleMesh['bounds']): boolean {
+    return (['x', 'y', 'z'] as const).every((axis) =>
+        Math.abs(left.center[axis] - right.center[axis]) <= 1e-5 &&
+        Math.abs(left.size[axis] - right.size[axis]) <= 1e-5
+    );
 }
 
 function normalizeGrid(raw: JsonObject, path: string, integrity: Integrity): PropertyGrid {

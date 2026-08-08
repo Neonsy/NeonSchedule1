@@ -1,10 +1,14 @@
 import { type BlueprintSurfacePlacement } from '#core/data/blueprint';
 import { type Buildable } from '#core/data/buildable';
 import { type Vector3 } from '#core/data/common';
-import { type Quaternion } from '#core/data/geometry';
+import { type Collider, type Quaternion, type TriangleMesh } from '#core/data/geometry';
 import { type PropertyLayout, type PropertySurface } from '#core/data/property-layout';
 import { worldBoxFromCollider, type WorldBox } from '#core/geometry/box-collision';
 import { transformPoint } from '#core/geometry/transform';
+import {
+    distanceFromPointToTriangleMesh,
+    localPointFromBasis,
+} from '#core/geometry/triangle-mesh';
 import type {
     BlueprintValidationIssue,
     BlueprintValidationIssueCode,
@@ -65,10 +69,28 @@ export function indexPropertySurfaces(
     return index;
 }
 
+export function indexSurfaceMeshes(layout: PropertyLayout): ReadonlyMap<string, TriangleMesh> {
+    const index = new Map<string, TriangleMesh>();
+    for (const mesh of layout.surfaceMeshes) {
+        if (mesh.meshId.trim().length === 0) {
+            throw new TypeError(`Surface mesh ID in property ${JSON.stringify(layout.propertyCode)} must not be blank`);
+        }
+        if (index.has(mesh.meshId)) {
+            throw new Error(
+                `Dataset contains duplicate surface mesh ${JSON.stringify(mesh.meshId)} in property ` +
+                    JSON.stringify(layout.propertyCode)
+            );
+        }
+        index.set(mesh.meshId, mesh);
+    }
+    return index;
+}
+
 export function resolveSurfacePlacement(
     placement: BlueprintSurfacePlacement,
     buildableByItemId: ReadonlyMap<string, Buildable>,
-    surfaceById: ReadonlyMap<string, PropertySurface>
+    surfaceById: ReadonlyMap<string, PropertySurface>,
+    meshById: ReadonlyMap<string, TriangleMesh>
 ): SurfaceResolution {
     const buildable = buildableByItemId.get(placement.itemId);
     if (buildable === undefined) {
@@ -131,18 +153,15 @@ export function resolveSurfacePlacement(
         );
     }
     const worldHitPoint = transformPoint(surface.transform, placement.relativeHitPoint);
-    const boxHits = availableColliders.flatMap((collider) => {
-        if (collider.shape !== 'box') return [];
-        try {
-            const box = worldBoxFromCollider(collider);
-            const coordinates = normalizedBoxCoordinates(worldHitPoint, box);
-            return [{ box, coordinates }];
-        } catch (error) {
-            if (!(error instanceof TypeError || error instanceof RangeError)) throw error;
-            return [];
-        }
-    });
-    if (boxHits.length === 0) {
+    const evaluations = availableColliders.map((collider) =>
+        evaluateColliderHit(collider, meshById, worldHitPoint)
+    );
+    const exactHits = evaluations.flatMap((evaluation) => evaluation.coordinates === null
+        ? []
+        : [evaluation.coordinates]
+    );
+    const hasUnsupportedGeometry = evaluations.some((evaluation) => !evaluation.supported);
+    if (exactHits.length === 0 && hasUnsupportedGeometry) {
         return failed(
             'surface-geometry-unsupported',
             `Placement ${JSON.stringify(placement.id)} cannot prove a raycast hit against the ` +
@@ -150,10 +169,7 @@ export function resolveSurfacePlacement(
             placement
         );
     }
-    const boundaryHits = boxHits.filter(({ box, coordinates }) =>
-        isOnBoxBoundary(coordinates, box)
-    );
-    if (boundaryHits.length === 0) {
+    if (exactHits.length === 0) {
         return failed(
             'surface-point-outside-collider',
             `Placement ${JSON.stringify(placement.id)} does not contain a raycast hit on surface ` +
@@ -161,9 +177,17 @@ export function resolveSurfacePlacement(
             placement
         );
     }
-    if (!boundaryHits.some(({ coordinates }) =>
+    if (!exactHits.some((coordinates) =>
         surface.validFaces.some((face) => faceAccepts(face as SurfaceFace, coordinates))
     )) {
+        if (hasUnsupportedGeometry) {
+            return failed(
+                'surface-geometry-unsupported',
+                `Placement ${JSON.stringify(placement.id)} cannot prove the accepted face of all ` +
+                    `surface collider geometry at ${JSON.stringify(placement.surfaceColliderPath)}`,
+                placement
+            );
+        }
         return failed(
             'surface-face-incompatible',
             `Placement ${JSON.stringify(placement.id)} hits a face not accepted by surface ` +
@@ -184,6 +208,60 @@ export function resolveSurfacePlacement(
         },
         issues: [],
     };
+}
+
+interface ColliderHitEvaluation {
+    readonly supported: boolean;
+    readonly coordinates: readonly [number, number, number] | null;
+}
+
+function evaluateColliderHit(
+    collider: Collider,
+    meshById: ReadonlyMap<string, TriangleMesh>,
+    worldHitPoint: Vector3
+): ColliderHitEvaluation {
+    try {
+        if (collider.shape === 'box') {
+            const box = worldBoxFromCollider(collider);
+            const coordinates = normalizedBoxCoordinates(worldHitPoint, box);
+            return {
+                supported: true,
+                coordinates: isOnBoxBoundary(coordinates, box) ? coordinates : null,
+            };
+        }
+        if (
+            collider.shape === 'mesh' &&
+            collider.isConvex === false &&
+            collider.meshId !== null
+        ) {
+            const mesh = meshById.get(collider.meshId);
+            if (mesh === undefined) return { supported: false, coordinates: null };
+            const distance = distanceFromPointToTriangleMesh(
+                worldHitPoint,
+                collider.transform,
+                collider.worldBasis,
+                mesh
+            );
+            if (distance > surfaceHitTolerance) return { supported: true, coordinates: null };
+            const local = localPointFromBasis(
+                collider.transform,
+                collider.worldBasis,
+                worldHitPoint
+            );
+            return {
+                supported: true,
+                coordinates: [
+                    local.x - mesh.bounds.center.x,
+                    local.y - mesh.bounds.center.y,
+                    local.z - mesh.bounds.center.z,
+                ],
+            };
+        }
+        return { supported: false, coordinates: null };
+    } catch (error) {
+        if (!(error instanceof TypeError || error instanceof RangeError)) throw error;
+        return { supported: false, coordinates: null };
+    }
 }
 
 function normalizedBoxCoordinates(

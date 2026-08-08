@@ -26,6 +26,7 @@ export interface VerifiedAssets {
     readonly files: AssetFile[];
     readonly directFileIdByPath: ReadonlyMap<string, string>;
     readonly offlineFileIdsByMeshKey: ReadonlyMap<string, readonly string[]>;
+    readonly filePathById: ReadonlyMap<string, string>;
     readonly directFileCount: number;
     readonly offlineFileCount: number;
 }
@@ -34,8 +35,14 @@ const completeStatuses = new Set(['matched', 'matched-identical-duplicates', 'am
 
 export async function verifyAssets(acquisition: LoadedAcquisition, integrity: Integrity): Promise<VerifiedAssets> {
     const registry = new Map<string, MutableAssetFile>();
-    const directFileIdByPath = await verifyDirectAssets(acquisition, registry, integrity);
-    const offline = await verifyOfflineAssets(acquisition, registry, integrity);
+    const filePathById = new Map<string, string>();
+    const directFileIdByPath = await verifyDirectAssets(
+        acquisition,
+        registry,
+        filePathById,
+        integrity
+    );
+    const offline = await verifyOfflineAssets(acquisition, registry, filePathById, integrity);
     integrity.throwIfInvalid();
 
     const files = [...registry.values()]
@@ -52,6 +59,7 @@ export async function verifyAssets(acquisition: LoadedAcquisition, integrity: In
         files,
         directFileIdByPath,
         offlineFileIdsByMeshKey: offline.byMeshKey,
+        filePathById,
         directFileCount: directFileIdByPath.size,
         offlineFileCount: offline.fileCount,
     };
@@ -60,6 +68,7 @@ export async function verifyAssets(acquisition: LoadedAcquisition, integrity: In
 async function verifyDirectAssets(
     acquisition: LoadedAcquisition,
     registry: Map<string, MutableAssetFile>,
+    filePathById: Map<string, string>,
     integrity: Integrity
 ): Promise<Map<string, string>> {
     const descriptors = collectDirectDescriptors(acquisition.report.document, integrity);
@@ -98,6 +107,7 @@ async function verifyDirectAssets(
             `exports/${relativePath}`,
             integrity
         );
+        recordFilePath(filePathById, actualHash, fullPath);
         directFileIdByPath.set(relativePath, actualHash);
     }
 
@@ -123,6 +133,7 @@ async function verifyDirectAssets(
 async function verifyOfflineAssets(
     acquisition: LoadedAcquisition,
     registry: Map<string, MutableAssetFile>,
+    filePathById: Map<string, string>,
     integrity: Integrity
 ): Promise<{ byMeshKey: Map<string, readonly string[]>; fileCount: number }> {
     const recordedPaths = new Set<string>();
@@ -176,6 +187,7 @@ async function verifyOfflineAssets(
                 relativePosix(acquisition.root, fullPath),
                 integrity
             );
+            recordFilePath(filePathById, actualHash, fullPath);
             fileIds.push(actualHash);
         }
 
@@ -272,6 +284,11 @@ function addRegistryFile(
         integrity.addError(`Asset checksum ${sha256} has conflicting file metadata`);
     }
     existing.sourcePaths.add(sourcePath);
+}
+
+function recordFilePath(paths: Map<string, string>, fileId: string, filePath: string): void {
+    const existing = paths.get(fileId);
+    if (existing === undefined || filePath.localeCompare(existing) < 0) paths.set(fileId, filePath);
 }
 
 async function walkFiles(directory: string): Promise<string[]> {

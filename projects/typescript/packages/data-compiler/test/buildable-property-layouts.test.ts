@@ -11,6 +11,7 @@ const assets: VerifiedAssets = {
     files: [],
     directFileIdByPath: new Map([['sprites/test.png', 'file:test']]),
     offlineFileIdsByMeshKey: new Map(),
+    filePathById: new Map(),
     directFileCount: 1,
     offlineFileCount: 0,
 };
@@ -166,7 +167,7 @@ describe('buildable and property-layout normalization', () => {
         ]);
     });
 
-    it('removes loaded-save state and duplicate boundary geometry from property layouts', () => {
+    it('removes loaded-save state and duplicate boundary geometry from property layouts', async () => {
         const integrity = new Integrity();
         const property: Property = {
             schema: 'neonschedule1-property-1',
@@ -184,7 +185,7 @@ describe('buildable and property-layout normalization', () => {
         };
         const boundary = collider('property-boundary', 'Boundary');
         const duplicateBoundary = collider('property-fixed', 'Boundary');
-        const layouts = normalizePropertyLayouts(
+        const layouts = await normalizePropertyLayouts(
             {
                 discovery: {
                     propertyLayouts: [
@@ -234,6 +235,7 @@ describe('buildable and property-layout normalization', () => {
             },
             assets,
             [property],
+            [],
             integrity
         );
 

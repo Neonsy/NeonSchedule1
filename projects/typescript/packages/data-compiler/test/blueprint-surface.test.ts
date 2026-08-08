@@ -127,6 +127,52 @@ describe('surface blueprint placement', () => {
         expect(result.issues).toEqual([]);
         expect(result.resolvedPlacements).toHaveLength(1);
     });
+
+    it('uses source triangles only for non-convex mesh colliders', () => {
+        const input = dataset();
+        const property = input.propertyLayouts[0]!;
+        const surface = property.surfaces[0]!;
+        const source = surface.colliders[0]!;
+        const meshLayout = (isConvex: boolean): BlueprintDataset => ({
+            ...input,
+            propertyLayouts: [{
+                ...property,
+                surfaceMeshes: [{
+                    meshId: 'mesh:wall',
+                    vertices: [
+                        vector(-1, 0.1, -1),
+                        vector(1, 0.1, -1),
+                        vector(0, 0.1, 1),
+                    ],
+                    triangles: [0, 1, 2],
+                    bounds: { center: vector(0, 0.1, 0), size: vector(2, 0, 2) },
+                }],
+                surfaces: [{
+                    ...surface,
+                    colliders: [{
+                        ...source,
+                        shape: 'mesh',
+                        localCenter: null,
+                        localSize: null,
+                        meshId: 'mesh:wall',
+                        meshName: 'Wall',
+                        meshIsReadable: false,
+                        isConvex,
+                    } satisfies Collider],
+                }],
+            }],
+        });
+
+        const result = new BlueprintValidator(meshLayout(false)).validate(blueprint());
+        const convexResult = new BlueprintValidator(meshLayout(true)).validate(blueprint());
+
+        expect(result.valid).toBe(true);
+        expect(result.issues).toEqual([]);
+        expect(convexResult.valid).toBe(false);
+        expect(convexResult.issues).toEqual([
+            expect.objectContaining({ code: 'surface-geometry-unsupported' }),
+        ]);
+    });
 });
 
 function dataset(): BlueprintDataset {
@@ -209,7 +255,7 @@ function propertyLayout(): PropertyLayout {
         localSize: vector(2, 0.2, 2),
     } satisfies Collider;
     return {
-        schema: 'neonschedule1-property-layout-3',
+        schema: 'neonschedule1-property-layout-4',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -220,6 +266,7 @@ function propertyLayout(): PropertyLayout {
         boundingBox: null,
         boundaryColliders: [],
         fixedColliders: [],
+        surfaceMeshes: [],
         surfaces: [{
             id: 'wall-a',
             sourceGuid: 'wall-a',

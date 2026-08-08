@@ -204,7 +204,7 @@ function footprintTile(
 
 function propertyLayout(): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-3',
+        schema: 'neonschedule1-property-layout-4',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -215,6 +215,7 @@ function propertyLayout(): PropertyLayout {
         boundingBox: null,
         boundaryColliders: [],
         fixedColliders: [],
+        surfaceMeshes: [],
         surfaces: [],
         proceduralTiles: [],
         loadingDocks: [],

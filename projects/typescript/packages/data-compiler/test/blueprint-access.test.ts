@@ -155,7 +155,7 @@ function buildable(): Buildable {
 
 function propertyLayout(fixedShape: ColliderShape): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-3',
+        schema: 'neonschedule1-property-layout-4',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -166,6 +166,7 @@ function propertyLayout(fixedShape: ColliderShape): PropertyLayout {
         boundingBox: null,
         boundaryColliders: [],
         fixedColliders: [collider('Wall', vector(8, 0, 0), fixedShape)],
+        surfaceMeshes: [],
         surfaces: [],
         proceduralTiles: [],
         loadingDocks: [],

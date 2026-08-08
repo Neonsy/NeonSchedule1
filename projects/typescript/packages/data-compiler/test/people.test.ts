@@ -10,6 +10,7 @@ const assets: VerifiedAssets = {
     files: [],
     directFileIdByPath: new Map([['assets/alice.png', mugshotHash]]),
     offlineFileIdsByMeshKey: new Map(),
+    filePathById: new Map(),
     directFileCount: 1,
     offlineFileCount: 0,
 };

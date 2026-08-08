@@ -14,6 +14,7 @@ import {
 } from '#core/blueprint/grid-validation';
 import {
     indexPropertySurfaces,
+    indexSurfaceMeshes,
     resolveSurfacePlacement,
     type ResolvedBlueprintSurfacePlacement,
 } from '#core/blueprint/surface-validation';
@@ -94,6 +95,7 @@ interface IndexedProperty {
     readonly layout: PropertyLayout;
     readonly gridById: ReadonlyMap<string, IndexedGrid>;
     readonly surfaceById: ReturnType<typeof indexPropertySurfaces>;
+    readonly surfaceMeshById: ReturnType<typeof indexSurfaceMeshes>;
 }
 
 const sha256Pattern = /^[a-f0-9]{64}$/u;
@@ -122,6 +124,7 @@ export class BlueprintValidator {
                     layout,
                     gridById: indexPropertyGrids(layout),
                     surfaceById: indexPropertySurfaces(layout),
+                    surfaceMeshById: indexSurfaceMeshes(layout),
                 };
             }),
             ({ layout }) => layout.propertyCode,
@@ -147,7 +150,12 @@ export class BlueprintValidator {
         for (const placement of document.placements) {
             const placementResult = placement.kind === 'grid'
                 ? resolveGridPlacement(placement, this.#buildableByItemId, property.gridById)
-                : resolveSurfacePlacement(placement, this.#buildableByItemId, property.surfaceById);
+                : resolveSurfacePlacement(
+                    placement,
+                    this.#buildableByItemId,
+                    property.surfaceById,
+                    property.surfaceMeshById
+                );
             if (placementResult.placement === null) issues.push(...placementResult.issues);
             else resolvedPlacements.push(placementResult.placement);
         }

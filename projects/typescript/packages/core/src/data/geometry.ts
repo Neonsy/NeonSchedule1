@@ -55,6 +55,14 @@ export const ColliderSchema = type({
 });
 export type Collider = typeof ColliderSchema.infer;
 
+export const TriangleMeshSchema = type({
+    meshId: 'string',
+    vertices: Vector3Schema.array(),
+    triangles: 'number[]',
+    bounds: BoundsSchema,
+});
+export type TriangleMesh = typeof TriangleMeshSchema.infer;
+
 export const SceneRendererSchema = type({
     runtimeType: 'string',
     transform: TransformSchema,

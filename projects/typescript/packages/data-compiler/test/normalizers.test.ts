@@ -13,6 +13,7 @@ const noAssets: VerifiedAssets = {
     files: [],
     directFileIdByPath: new Map(),
     offlineFileIdsByMeshKey: new Map(),
+    filePathById: new Map(),
     directFileCount: 0,
     offlineFileCount: 0,
 };

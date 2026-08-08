@@ -233,7 +233,7 @@ function buildable(): Buildable {
 
 function propertyLayout(fixedColliders: readonly Collider[]): PropertyLayout {
     return {
-        schema: 'neonschedule1-property-layout-3',
+        schema: 'neonschedule1-property-layout-4',
         propertyCode: 'warehouse',
         propertyName: 'Warehouse',
         worldPosition: vector(0, 0, 0),
@@ -244,6 +244,7 @@ function propertyLayout(fixedColliders: readonly Collider[]): PropertyLayout {
         boundingBox: null,
         boundaryColliders: [],
         fixedColliders: [...fixedColliders],
+        surfaceMeshes: [],
         surfaces: [],
         proceduralTiles: [],
         loadingDocks: [],

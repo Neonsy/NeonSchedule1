@@ -25,7 +25,7 @@ import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.24';
+export const NORMALIZER_VERSION = '0.0.25';
 
 const deferredDomains = [] as const;
 
@@ -54,8 +54,14 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
     const buildables = normalizeBuildables(acquisition.report, assets, itemIds, integrity);
-    const propertyLayouts = normalizePropertyLayouts(acquisition.report, assets, properties, integrity);
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
+    const propertyLayouts = await normalizePropertyLayouts(
+        acquisition.report,
+        assets,
+        properties,
+        visuals.meshes,
+        integrity
+    );
     const people = normalizePeople(acquisition.report, assets, integrity);
     const trade = normalizeTrade(acquisition.report, people.people, shops, itemIds, integrity);
     const world = normalizeWorld(
