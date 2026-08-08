@@ -43,3 +43,4 @@ export * from '#core/world/shop-routing';
 export * from '#core/blueprint/collision';
 export * from '#core/blueprint/projection';
 export * from '#core/blueprint/validation';
+export * from '#core/blueprint/construction';

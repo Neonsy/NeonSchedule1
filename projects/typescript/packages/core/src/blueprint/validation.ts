@@ -11,6 +11,7 @@ import {
     type PropertyGrid,
     type PropertyLayout,
 } from '#core/data/property-layout';
+import { rotateFootprint } from '#core/blueprint/grid-footprint';
 
 export interface BlueprintDataset {
     readonly manifest: {
@@ -47,6 +48,11 @@ export interface ResolvedBlueprintGridTile extends BlueprintGridCoordinate {
     readonly availableOffset: number;
 }
 
+export interface ResolvedBlueprintCornerObstacle {
+    readonly sourceTile: BlueprintGridCoordinate;
+    readonly neighbouringTiles: readonly BlueprintGridCoordinate[];
+}
+
 export interface ResolvedBlueprintGridPlacement {
     readonly id: string;
     readonly itemId: string;
@@ -54,6 +60,7 @@ export interface ResolvedBlueprintGridPlacement {
     readonly rotation: BlueprintGridRotation;
     readonly tileSharingRule: 'standard' | 'floor-rack';
     readonly occupiedTiles: readonly ResolvedBlueprintGridTile[];
+    readonly cornerObstacles: readonly ResolvedBlueprintCornerObstacle[];
 }
 
 export interface BlueprintValidationResult {
@@ -275,6 +282,7 @@ export class BlueprintValidator {
                 sortedCoordinates(incompatibleOffsets.map(({ x, y }) => ({ x, y })))
             );
         }
+        const cornerObstacles = resolvedCornerObstacles(rotated, placement.anchor, grid);
         return {
             placement: {
                 id: placement.id,
@@ -283,6 +291,7 @@ export class BlueprintValidator {
                 rotation: placement.rotation,
                 tileSharingRule,
                 occupiedTiles: occupiedTiles.sort(compareCoordinates),
+                cornerObstacles,
             },
             issues: [],
         };
@@ -383,26 +392,30 @@ function validatedFootprint(buildable: Buildable): readonly Buildable['placement
     return buildable.placement.footprintTiles;
 }
 
-function rotateFootprint(
-    footprint: readonly Buildable['placement']['footprintTiles'][number][],
-    rotation: BlueprintGridRotation
-): readonly { readonly x: number; readonly y: number; readonly requiredOffset: number }[] {
-    const maximumX = Math.max(...footprint.map((tile) => tile.x));
-    const maximumY = Math.max(...footprint.map((tile) => tile.y));
-    return footprint.map((tile) => {
-        if (rotation === 0) return tile;
-        if (rotation === 90) {
-            return { x: maximumY - tile.y, y: tile.x, requiredOffset: tile.requiredOffset };
+function resolvedCornerObstacles(
+    footprint: ReturnType<typeof rotateFootprint>,
+    anchor: BlueprintGridCoordinate,
+    grid: IndexedGrid
+): ResolvedBlueprintCornerObstacle[] {
+    const obstacles: ResolvedBlueprintCornerObstacle[] = [];
+    for (const tile of footprint) {
+        const sourceTile = { x: anchor.x + tile.x, y: anchor.y + tile.y };
+        for (const direction of tile.cornerDirections) {
+            const neighbouringTiles = sortedCoordinates([
+                sourceTile,
+                { x: sourceTile.x + direction.x, y: sourceTile.y },
+                { x: sourceTile.x, y: sourceTile.y + direction.y },
+                { x: sourceTile.x + direction.x, y: sourceTile.y + direction.y },
+            ]);
+            if (neighbouringTiles.every((entry) => grid.tileByCoordinate.has(coordinateKey(entry)))) {
+                obstacles.push({ sourceTile, neighbouringTiles });
+            }
         }
-        if (rotation === 180) {
-            return {
-                x: maximumX - tile.x,
-                y: maximumY - tile.y,
-                requiredOffset: tile.requiredOffset,
-            };
-        }
-        return { x: tile.y, y: maximumX - tile.x, requiredOffset: tile.requiredOffset };
-    });
+    }
+    return obstacles.sort((left, right) =>
+        compareCoordinates(left.sourceTile, right.sourceTile) ||
+        compareCoordinates(left.neighbouringTiles[0]!, right.neighbouringTiles[0]!)
+    );
 }
 
 function tileSharingIssues(

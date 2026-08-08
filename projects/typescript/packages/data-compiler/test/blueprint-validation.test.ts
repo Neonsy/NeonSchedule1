@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     BlueprintValidator,
+    planBlueprintConstructionOrder,
     type BlueprintDataset,
     type BlueprintDocument,
     type Buildable,
@@ -35,6 +36,7 @@ describe('blueprint validation', () => {
                     { x: 1, y: 0, requiredOffset: 0, availableOffset: 0 },
                     { x: 1, y: 1, requiredOffset: 0, availableOffset: 0 },
                 ],
+                cornerObstacles: [],
             },
         ]);
     });
@@ -108,6 +110,77 @@ describe('blueprint validation', () => {
 
         expect(result.valid).toBe(true);
         expect(result.issues).toEqual([]);
+    });
+
+    it('derives a construction order from rotated native corner-obstacle geometry', () => {
+        const input = datasetWithCompleteGrid();
+        const validator = new BlueprintValidator(input);
+        const validation = validator.validate(blueprint([
+            placement('blocker', 'panel', 'main', 0, 1, 0),
+            placement('rack', 'rack', 'main', 1, 0, 90),
+        ]));
+        const plan = planBlueprintConstructionOrder(validation);
+
+        expect(validation.valid).toBe(true);
+        expect(validation.resolvedPlacements[1]?.cornerObstacles).toEqual([{
+            sourceTile: { x: 1, y: 1 },
+            neighbouringTiles: [
+                { x: 0, y: 1 },
+                { x: 0, y: 2 },
+                { x: 1, y: 1 },
+                { x: 1, y: 2 },
+            ],
+        }]);
+        expect(plan).toEqual(expect.objectContaining({
+            kind: 'ordered',
+            occupancyScope: 'blueprint-placements-only',
+            placementIds: ['rack', 'blocker'],
+            constraints: [{
+                beforePlacementId: 'rack',
+                afterPlacementId: 'blocker',
+                gridId: 'main',
+                cornerTiles: [
+                    { x: 0, y: 1 },
+                    { x: 0, y: 2 },
+                    { x: 1, y: 1 },
+                    { x: 1, y: 2 },
+                ],
+            }],
+        }));
+    });
+
+    it('reports mutually blocking construction constraints without inventing an order', () => {
+        const input = datasetWithCompleteGrid();
+        const validator = new BlueprintValidator({
+            ...input,
+            buildables: input.buildables.map((entry) =>
+                entry.itemId === 'rack' || entry.itemId === 'panel'
+                    ? withInteriorCorner(entry)
+                    : entry
+            ),
+        });
+        const validation = validator.validate(blueprint([
+            placement('rack', 'rack', 'main', 0, 0, 0),
+            placement('panel', 'panel', 'main', 0, 0, 0),
+        ]));
+        const plan = planBlueprintConstructionOrder(validation);
+
+        expect(validation.valid).toBe(true);
+        expect(plan).toEqual(expect.objectContaining({
+            kind: 'cyclic',
+            placeablePrefixIds: [],
+            blockedPlacementIds: ['rack', 'panel'],
+            constraints: [
+                expect.objectContaining({
+                    beforePlacementId: 'panel',
+                    afterPlacementId: 'rack',
+                }),
+                expect.objectContaining({
+                    beforePlacementId: 'rack',
+                    afterPlacementId: 'panel',
+                }),
+            ],
+        }));
     });
 
     it('applies the native nonzero tile-offset compatibility rule', () => {
@@ -204,6 +277,31 @@ function dataset(): BlueprintDataset {
     };
 }
 
+function datasetWithCompleteGrid(): BlueprintDataset {
+    const input = dataset();
+    const layout = input.propertyLayouts[0]!;
+    const grid = layout.grids[0]!;
+    return {
+        ...input,
+        propertyLayouts: [{
+            ...layout,
+            grids: [{
+                ...grid,
+                tiles: [
+                    ...grid.tiles,
+                    {
+                        x: 2,
+                        y: 1,
+                        availableOffset: 0,
+                        worldPosition: vector(2, 0, 1),
+                        worldRotation: vector(0, 0, 0),
+                    },
+                ],
+            }],
+        }],
+    };
+}
+
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
         schema: 'neonschedule1-blueprint-1',
@@ -237,11 +335,42 @@ function surfaceBuildable(): Buildable {
 }
 
 function rackBuildable(): Buildable {
-    return buildable('rack', 'grid', 2, 1, [footprintTile(0, 0), footprintTile(1, 0)], 'floor-rack');
+    return buildable('rack', 'grid', 2, 2, [
+        footprintTile(0, 0),
+        footprintTile(0, 1),
+        footprintTile(1, 0),
+        footprintTile(1, 1, 0, [{
+            enabled: true,
+            coordinates: { x: 1, y: 1 },
+            transform: transform('Footprint/[1,1]/CornerObstacle', vector(0.25, 0, 0.25)),
+        }]),
+    ], 'floor-rack');
 }
 
 function unsupportedBuildable(): Buildable {
     return buildable('future-grid-item', 'grid', 1, 1, [footprintTile(0, 0)], 'unsupported');
+}
+
+function withInteriorCorner(buildable: Buildable): Buildable {
+    return {
+        ...buildable,
+        placement: {
+            ...buildable.placement,
+            footprintTiles: buildable.placement.footprintTiles.map((tile) => ({
+                ...tile,
+                cornerObstacles: tile.x === 0 && tile.y === 0
+                    ? [{
+                        enabled: true,
+                        coordinates: { x: 0, y: 0 },
+                        transform: transform(
+                            `${buildable.itemId}/Footprint/[0,0]/CornerObstacle`,
+                            vector(0.25, 0, 0.25)
+                        ),
+                    }]
+                    : [],
+            })),
+        },
+    };
 }
 
 function offsetBuildable(): Buildable {
@@ -294,14 +423,15 @@ function buildable(
 function footprintTile(
     x: number,
     y: number,
-    requiredOffset = 0
+    requiredOffset = 0,
+    cornerObstacles: Buildable['placement']['footprintTiles'][number]['cornerObstacles'] = []
 ): Buildable['placement']['footprintTiles'][number] {
     return {
         x,
         y,
         requiredOffset,
         transform: transform(`Footprint/[${x},${y}]`),
-        cornerObstacles: [],
+        cornerObstacles,
     };
 }
 
@@ -379,12 +509,12 @@ function collider(path: string): Collider {
     };
 }
 
-function transform(path: string): Transform {
+function transform(path: string, localPosition = vector(0, 0, 0)): Transform {
     return {
         name: path,
         path,
         worldPosition: vector(0, 0, 0),
-        localPosition: vector(0, 0, 0),
+        localPosition,
         worldRotation: vector(0, 0, 0),
         localScale: vector(1, 1, 1),
     };
