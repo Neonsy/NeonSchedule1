@@ -17,6 +17,8 @@ export const IntegrityCountsSchema = type({
     offlineAssetFiles: 'number',
     meshAssets: 'number',
     materialAssets: 'number',
+    'buildables?': 'number',
+    'propertyLayouts?': 'number',
     'worldRegions?': 'number',
     'worldLocations?': 'number',
     'mapServices?': 'number',

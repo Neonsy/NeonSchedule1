@@ -4,31 +4,30 @@ import { IntegrityReportSchema, type IntegrityCounts, type IntegrityReport } fro
 
 import { verifyAssets } from '#data-compiler/acquisition/assets';
 import { loadAcquisition } from '#data-compiler/acquisition/load';
-import { indexUnique, Integrity, requireReferences } from '#data-compiler/integrity';
+import { Integrity } from '#data-compiler/integrity';
 import { sha256Text, stringField } from '#data-compiler/json';
 import {
     normalizeCustomers,
     validateCustomerEnjoymentOracles,
 } from '#data-compiler/normalize/customers';
 import { validateCustomerOfferOracles } from '#data-compiler/normalize/customer-offers';
+import { normalizeBuildables } from '#data-compiler/normalize/buildables';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
 import { normalizePeople } from '#data-compiler/normalize/people';
 import { normalizeProduction } from '#data-compiler/normalize/production';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
+import { normalizePropertyLayouts } from '#data-compiler/normalize/property-layouts';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeTrade } from '#data-compiler/normalize/trade';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.20';
+export const NORMALIZER_VERSION = '0.0.21';
 
-const deferredDomains = [
-    'buildable-geometry',
-    'property-layouts',
-] as const;
+const deferredDomains = [] as const;
 
 export async function compileDataset(acquisitionPath: string, outputRoot?: string): Promise<WrittenDataset> {
     const acquisition = await loadAcquisition(acquisitionPath);
@@ -54,6 +53,8 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     const production = normalizeProduction(acquisition.report, itemIds, integrity);
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
+    const buildables = normalizeBuildables(acquisition.report, assets, itemIds, integrity);
+    const propertyLayouts = normalizePropertyLayouts(acquisition.report, assets, properties, integrity);
     const visuals = normalizeVisuals(acquisition.report, assets, integrity);
     const people = normalizePeople(acquisition.report, assets, integrity);
     const trade = normalizeTrade(acquisition.report, people.people, shops, itemIds, integrity);
@@ -65,13 +66,6 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         integrity
     );
 
-    const buildables = indexUnique(
-        acquisition.report.discovery.buildables,
-        'itemId',
-        'report.discovery.buildables',
-        integrity
-    );
-    requireReferences(buildables.keys(), itemIds, 'buildable', integrity);
     integrity.throwIfInvalid();
 
     const counts: IntegrityCounts = {
@@ -91,6 +85,8 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         offlineAssetFiles: assets.offlineFileCount,
         meshAssets: visuals.meshes.length,
         materialAssets: visuals.materials.length,
+        buildables: buildables.length,
+        propertyLayouts: propertyLayouts.length,
         worldRegions: world.map.regions.length,
         worldLocations: world.locations.locations.length,
         mapServices: world.locations.services.length,
@@ -114,6 +110,12 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     for (const shop of shops) documents.set(`shops/${entityFileName(shop.code)}`, shop);
     for (const property of properties) {
         documents.set(`properties/${entityDirectoryName(property.code)}/summary.json`, property);
+    }
+    for (const buildable of buildables) {
+        documents.set(`buildables/${entityFileName(buildable.itemId)}`, buildable);
+    }
+    for (const layout of propertyLayouts) {
+        documents.set(`properties/${entityDirectoryName(layout.propertyCode)}/layout.json`, layout);
     }
     for (const customer of customers.customers) {
         documents.set(`customers/${entityFileName(customer.id)}`, customer);
