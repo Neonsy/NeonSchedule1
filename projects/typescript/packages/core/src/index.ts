@@ -49,3 +49,4 @@ export * from '#core/blueprint/projection';
 export * from '#core/blueprint/validation';
 export * from '#core/blueprint/construction';
 export * from '#core/blueprint/item-cost';
+export * from '#core/blueprint/temperature';

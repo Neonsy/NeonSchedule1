@@ -1,5 +1,9 @@
 import { type BlueprintDocument, type BlueprintGridCoordinate } from '#core/data/blueprint';
-import { type Buildable, type InteractionPoint } from '#core/data/buildable';
+import {
+    type Buildable,
+    type InteractionPoint,
+    type TemperatureEmitter,
+} from '#core/data/buildable';
 import { type Vector3 } from '#core/data/common';
 import {
     type Collider,
@@ -49,6 +53,10 @@ export type ProjectedInteractionPoint = Omit<InteractionPoint, 'transform'> & {
     readonly transform: ProjectedBuildableTransform;
 };
 
+export type ProjectedTemperatureEmitter = Omit<TemperatureEmitter, 'emissionPoint'> & {
+    readonly worldPosition: Vector3;
+};
+
 interface ProjectedBlueprintPlacementBase {
     readonly id: string;
     readonly itemId: string;
@@ -56,6 +64,7 @@ interface ProjectedBlueprintPlacementBase {
     readonly buildPoint: ProjectedBuildableTransform;
     readonly boundingCollider: ProjectedCollider;
     readonly colliders: readonly ProjectedCollider[];
+    readonly temperatureEmitters: readonly ProjectedTemperatureEmitter[];
     readonly interactionPoints: readonly ProjectedInteractionPoint[];
     readonly isTransitEntity: boolean;
     readonly transitAccessPoints: readonly ProjectedBuildableTransform[];
@@ -327,6 +336,9 @@ function projectBuildable(buildable: Buildable, frame: PlacementFrame): Projecte
         buildPoint: projectTransform(buildable.placement.buildPoint, frame),
         boundingCollider: projectCollider(buildable.placement.boundingCollider, frame),
         colliders: buildable.colliders.map((collider) => projectCollider(collider, frame)),
+        temperatureEmitters: buildable.temperatureEmitters.map((emitter) =>
+            projectTemperatureEmitter(emitter, frame)
+        ),
         interactionPoints: buildable.interactionPoints.map((point) => ({
             ...point,
             transform: projectTransform(point.transform, frame),
@@ -334,6 +346,26 @@ function projectBuildable(buildable: Buildable, frame: PlacementFrame): Projecte
         isTransitEntity: buildable.isTransitEntity,
         transitAccessPoints: buildable.transitAccessPoints.map((point) =>
             projectTransform(point, frame)
+        ),
+    };
+}
+
+function projectTemperatureEmitter(
+    emitter: TemperatureEmitter,
+    frame: PlacementFrame
+): ProjectedTemperatureEmitter {
+    if (!Number.isFinite(emitter.temperature)) {
+        throw new RangeError('Temperature emitter temperature must be finite');
+    }
+    if (!Number.isFinite(emitter.range) || emitter.range < 0) {
+        throw new RangeError('Temperature emitter range must be finite and non-negative');
+    }
+    return {
+        temperature: emitter.temperature,
+        range: emitter.range,
+        worldPosition: add(
+            frame.rootPosition,
+            rotateVectorByQuaternion(frame.rootRotation, emitter.emissionPoint)
         ),
     };
 }

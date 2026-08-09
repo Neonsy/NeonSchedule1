@@ -16,7 +16,7 @@ const gameVersion = '0.4.6f11';
 const datasetSha256 = 'a'.repeat(64);
 
 describe('blueprint world projection', () => {
-    it('projects a rotated footprint, collider, and interaction point into property space', () => {
+    it('projects a rotated footprint, collider, emitter, and interaction point into property space', () => {
         const result = new BlueprintProjector(dataset()).project(blueprint());
 
         expect(result.kind).toBe('projected');
@@ -41,6 +41,11 @@ describe('blueprint world projection', () => {
             forward: vector(0, 0, -1),
         });
         expect(projected.boundingCollider).not.toHaveProperty('worldBounds');
+        expect(projected.temperatureEmitters).toEqual([{
+            temperature: 0,
+            range: 4,
+            worldPosition: vector(9.5, 2.5, 18),
+        }]);
         expect(projected.interactionPoints[0]?.transform.worldPosition)
             .toEqual(vector(9.5, 2.5, 18));
         expect(projected.transitAccessPoints[0]?.worldPosition)
@@ -175,7 +180,11 @@ function buildable(): Buildable {
         componentTypes: [],
         colliders: [collider('Body', vector(0, 0, 0))],
         storage: null,
-        temperatureEmitters: [],
+        temperatureEmitters: [{
+            temperature: 0,
+            range: 4,
+            emissionPoint: vector(1, 0, 2),
+        }],
         interactionPoints: [{
             componentType: 'Game.Interactable',
             member: 'AccessPoint',
