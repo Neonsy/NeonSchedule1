@@ -1,91 +1,43 @@
 import type { BlueprintDocument } from '#core/data/blueprint';
-import type {
-    ProductionBatchPlan,
-    ProductionBatchStep,
-} from '#core/production/plan';
+import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
+import type { ProductionStation } from '#core/data/production';
 import {
     BlueprintProductionCapacityAnalyzer,
     type BlueprintProductionCapacityDataset,
-    type BlueprintProductionCapacityResult,
     type BlueprintProductionEquipmentCapacity,
+    type BlueprintProductionPlacementCapacity,
+    type BlueprintProductionProcessCapacity,
+    type BlueprintProductionTemperatureRule,
 } from '#core/blueprint/production-capacity';
+import {
+    scheduleConstrainedProduction,
+    type BlueprintProductionSchedulePlacement,
+    type BlueprintProductionScheduleResolvedStep,
+} from '#core/blueprint/production-schedule-algorithm';
+import {
+    productionScheduleProcessKind,
+    type BlueprintProductionLightingAssessment,
+    type BlueprintProductionScheduleIssue,
+    type BlueprintProductionScheduleResult,
+    type BlueprintProductionTemperatureAssessment,
+} from '#core/blueprint/production-schedule-types';
 
-export interface BlueprintProductionBatchAssignment {
-    readonly equipmentItemId: string;
-    readonly placementId: string;
-    readonly firstBatchNumber: number;
-    readonly lastBatchNumber: number;
-    readonly batchCount: number;
-    readonly startMinute: number;
-    readonly endMinute: number;
+export * from '#core/blueprint/production-schedule-types';
+
+interface CompatibleEquipment {
+    readonly equipment: BlueprintProductionEquipmentCapacity;
+    readonly process: BlueprintProductionProcessCapacity;
 }
 
-export interface BlueprintProductionScheduledStep {
-    readonly stepIndex: number;
-    readonly itemId: string;
-    readonly routeId: string;
-    readonly equipmentItemId: string;
-    readonly installedUnitCount: number;
-    readonly usedUnitCount: number;
-    readonly batchCount: number;
-    readonly durationMinutesPerBatch: number;
-    readonly waveCount: number;
-    readonly startMinute: number;
-    readonly endMinute: number;
-    readonly elapsedMinutes: number;
-    readonly assignments: readonly BlueprintProductionBatchAssignment[];
-}
-
-interface BlueprintProductionScheduleIssueBase {
-    readonly stepIndex: number;
-    readonly itemId: string;
-    readonly routeId: string;
-    readonly acceptedEquipmentItemIds: readonly string[];
-    readonly selectedEquipmentItemId: string | null;
-}
-
-export type BlueprintProductionScheduleIssue =
-    | BlueprintProductionScheduleIssueBase & {
-        readonly code: 'missing-compatible-equipment';
-        readonly compatibleInstalledEquipmentItemIds: readonly string[];
+type TemperatureResolution =
+    | {
+        readonly kind: 'eligible';
+        readonly assessment: BlueprintProductionTemperatureAssessment;
     }
-    | BlueprintProductionScheduleIssueBase & {
-        readonly code: 'equipment-selection-required';
-        readonly compatibleInstalledEquipmentItemIds: readonly string[];
+    | {
+        readonly kind: 'unsatisfied';
+        readonly rule: BlueprintProductionTemperatureRule;
     };
-
-export type BlueprintProductionScheduleResult =
-    | {
-        readonly kind: 'rejected';
-        readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'rejected' }>;
-        readonly schedule: readonly [];
-    }
-    | {
-        readonly kind: 'unavailable';
-        readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'analyzed' }>;
-        readonly issues: readonly BlueprintProductionScheduleIssue[];
-        readonly schedule: readonly [];
-    }
-    | {
-        readonly kind: 'scheduled';
-        readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'analyzed' }>;
-        readonly durationBasis: 'production-batch-plan';
-        readonly parallelScheduling: 'whole-batches-within-each-production-step';
-        readonly crossStepConcurrency: 'not-evaluated';
-        readonly batchPipelining: 'not-evaluated';
-        readonly routing: 'not-evaluated';
-        readonly lightingCoverage: 'not-evaluated';
-        readonly effectiveTemperature: 'not-evaluated';
-        readonly serialProcessMinutes: number;
-        readonly scheduledElapsedMinutes: number;
-        readonly parallelTimeSavedMinutes: number;
-        readonly schedule: readonly BlueprintProductionScheduledStep[];
-    };
-
-interface ResolvedStepEquipment {
-    readonly itemId: string;
-    readonly placements: readonly { readonly placementId: string }[];
-}
 
 export class BlueprintProductionScheduleAnalyzer {
     readonly #capacity: BlueprintProductionCapacityAnalyzer;
@@ -113,7 +65,7 @@ export class BlueprintProductionScheduleAnalyzer {
             return { kind: 'rejected', capacity, schedule: [] };
         }
 
-        const resolved: ResolvedStepEquipment[] = [];
+        const resolved: BlueprintProductionScheduleResolvedStep[] = [];
         const issues: BlueprintProductionScheduleIssue[] = [];
         plan.productionSteps.forEach((step, stepIndex) => {
             const result = resolveStepEquipment(step, stepIndex, capacity.equipment);
@@ -129,32 +81,30 @@ export class BlueprintProductionScheduleAnalyzer {
             };
         }
 
-        const schedule: BlueprintProductionScheduledStep[] = [];
-        let startMinute = 0;
-        plan.productionSteps.forEach((step, stepIndex) => {
-            const equipment = resolved[stepIndex];
-            if (equipment === undefined) {
-                throw new Error('Production schedule lost resolved equipment for a validated step');
-            }
-            const scheduled = scheduleStep(step, stepIndex, equipment, startMinute);
-            schedule.push(scheduled);
-            startMinute = scheduled.endMinute;
-        });
-
+        const constrained = scheduleConstrainedProduction(plan, resolved);
+        const savedMinutes = subtractFinite(
+            plan.totalProcessMinutes,
+            constrained.scheduledElapsedMinutes,
+            'Production parallel time saved'
+        );
         return {
             kind: 'scheduled',
             capacity,
             durationBasis: 'production-batch-plan',
-            parallelScheduling: 'whole-batches-within-each-production-step',
-            crossStepConcurrency: 'not-evaluated',
-            batchPipelining: 'not-evaluated',
+            schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
+            optimality: 'not-proven',
+            parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
+            crossStepConcurrency: 'production-dependency-and-equipment-constrained',
+            batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
-            lightingCoverage: 'not-evaluated',
-            effectiveTemperature: 'not-evaluated',
+            employeeScheduling: 'not-evaluated-no-task-duration-contract',
+            lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
+            effectiveTemperature: 'ambient-only-without-covering-emitters',
+            constraintStatus: constrained.constraintStatus,
             serialProcessMinutes: plan.totalProcessMinutes,
-            scheduledElapsedMinutes: startMinute,
-            parallelTimeSavedMinutes: cleanZero(plan.totalProcessMinutes - startMinute),
-            schedule,
+            scheduledElapsedMinutes: constrained.scheduledElapsedMinutes,
+            parallelTimeSavedMinutes: cleanZero(savedMinutes),
+            schedule: constrained.schedule,
         };
     }
 }
@@ -163,26 +113,40 @@ function resolveStepEquipment(
     step: ProductionBatchStep,
     stepIndex: number,
     equipment: readonly BlueprintProductionEquipmentCapacity[]
-): ResolvedStepEquipment | BlueprintProductionScheduleIssue {
+): BlueprintProductionScheduleResolvedStep | BlueprintProductionScheduleIssue {
     const accepted = new Set(step.acceptedEquipmentItemIds);
     const compatible = equipment
-        .filter((entry) => accepted.has(entry.itemId) && supportsStep(entry, step))
-        .sort((left, right) => left.itemId.localeCompare(right.itemId));
-    const compatibleInstalledEquipmentItemIds = compatible.map((entry) => entry.itemId);
+        .flatMap((entry): CompatibleEquipment[] => {
+            if (!accepted.has(entry.itemId)) return [];
+            const process = matchingProcess(entry, step);
+            return process === null ? [] : [{ equipment: entry, process }];
+        })
+        .sort((left, right) => left.equipment.itemId.localeCompare(right.equipment.itemId));
+    const compatibleInstalledEquipmentItemIds = compatible.map((entry) => entry.equipment.itemId);
     const selected = step.equipmentItemId;
 
-    if (selected !== null) {
-        const match = compatible.find((entry) => entry.itemId === selected);
-        if (match !== undefined) return resolvedEquipment(match);
-        return issue(
-            'missing-compatible-equipment',
+    if (step.method === 'seed-harvest' && selected === null) {
+        return equipmentIssue(
+            'equipment-selection-required',
             step,
             stepIndex,
             compatibleInstalledEquipmentItemIds
         );
     }
+    if (selected !== null) {
+        const match = compatible.find((entry) => entry.equipment.itemId === selected);
+        if (match === undefined) {
+            return equipmentIssue(
+                'missing-compatible-equipment',
+                step,
+                stepIndex,
+                compatibleInstalledEquipmentItemIds
+            );
+        }
+        return resolveCompatibleEquipment(match, step, stepIndex, equipment);
+    }
     if (compatible.length === 0) {
-        return issue(
+        return equipmentIssue(
             'missing-compatible-equipment',
             step,
             stepIndex,
@@ -190,54 +154,191 @@ function resolveStepEquipment(
         );
     }
     if (compatible.length > 1) {
-        return issue(
+        return equipmentIssue(
             'equipment-selection-required',
             step,
             stepIndex,
             compatibleInstalledEquipmentItemIds
         );
     }
-    return resolvedEquipment(compatible[0]!);
+    return resolveCompatibleEquipment(compatible[0]!, step, stepIndex, equipment);
 }
 
-function resolvedEquipment(
-    equipment: BlueprintProductionEquipmentCapacity
-): ResolvedStepEquipment {
-    return {
-        itemId: equipment.itemId,
-        placements: equipment.placements
-            .map((placement) => ({ placementId: placement.placementId }))
-            .sort((left, right) => left.placementId.localeCompare(right.placementId)),
-    };
-}
-
-function issue(
-    code: BlueprintProductionScheduleIssue['code'],
+function resolveCompatibleEquipment(
+    match: CompatibleEquipment,
     step: ProductionBatchStep,
     stepIndex: number,
-    compatibleInstalledEquipmentItemIds: readonly string[]
-): BlueprintProductionScheduleIssue {
+    allEquipment: readonly BlueprintProductionEquipmentCapacity[]
+): BlueprintProductionScheduleResolvedStep | BlueprintProductionScheduleIssue {
+    const lighting = lightingAssessment(match.equipment, step, stepIndex, allEquipment);
+    if ('code' in lighting) return lighting;
+    const placements: BlueprintProductionSchedulePlacement[] = [];
+    const incompatiblePlacementIds: string[] = [];
+    for (const placement of match.equipment.placements) {
+        const temperature = temperatureAssessment(placement, match.process.temperatureRule);
+        if (temperature.kind === 'unsatisfied') {
+            incompatiblePlacementIds.push(placement.placementId);
+            continue;
+        }
+        placements.push({
+            placementId: placement.placementId,
+            lighting,
+            temperature: temperature.assessment,
+            constraintStatus:
+                lighting.kind === 'selected-external-grow-light' ||
+                temperature.assessment.kind === 'conditional'
+                    ? 'conditional'
+                    : 'satisfied',
+        });
+    }
+    if (placements.length === 0 && incompatiblePlacementIds.length > 0) {
+        return {
+            ...issueBase(step, stepIndex),
+            code: 'temperature-constraint-unsatisfied',
+            incompatiblePlacementIds: incompatiblePlacementIds.sort(),
+            temperatureRule: match.process.temperatureRule!,
+        };
+    }
     return {
-        code,
-        stepIndex,
-        itemId: step.itemId,
-        routeId: step.routeId,
-        acceptedEquipmentItemIds: step.acceptedEquipmentItemIds,
-        selectedEquipmentItemId: step.equipmentItemId,
-        compatibleInstalledEquipmentItemIds,
+        equipmentItemId: match.equipment.itemId,
+        installedUnitCount: match.equipment.installedUnitCount,
+        placements: placements.sort((left, right) => left.placementId.localeCompare(right.placementId)),
     };
 }
 
-function supportsStep(
+function lightingAssessment(
+    equipment: BlueprintProductionEquipmentCapacity,
+    step: ProductionBatchStep,
+    stepIndex: number,
+    allEquipment: readonly BlueprintProductionEquipmentCapacity[]
+): BlueprintProductionLightingAssessment | BlueprintProductionScheduleIssue {
+    if (step.method !== 'seed-harvest') return { kind: 'not-required' };
+    const station = growContainer(equipment.station, equipment.itemId);
+    if (!station.requiresExternalGrowLight) {
+        if (step.growLightItemId !== null) {
+            throw new Error(
+                `Production step ${JSON.stringify(step.routeId)} selects a grow light for built-in lighting`
+            );
+        }
+        return { kind: 'built-in', equipmentItemId: equipment.itemId };
+    }
+    if (step.growLightItemId === null) {
+        return {
+            ...issueBase(step, stepIndex),
+            code: 'grow-light-selection-required',
+            equipmentPlacementIds: equipment.placements.map((placement) => placement.placementId).sort(),
+        };
+    }
+    const installed = allEquipment.find((candidate) => candidate.itemId === step.growLightItemId);
+    const installedPlacementIds = installed?.station?.kind === 'grow-light'
+        ? installed.placements
+        .map((placement) => placement.placementId)
+        .sort()
+        : [];
+    if (installedPlacementIds.length === 0) {
+        return {
+            ...issueBase(step, stepIndex),
+            code: 'missing-selected-grow-light',
+            selectedGrowLightItemId: step.growLightItemId,
+            equipmentPlacementIds: equipment.placements.map((placement) => placement.placementId).sort(),
+        };
+    }
+    return {
+        kind: 'selected-external-grow-light',
+        growLightItemId: step.growLightItemId,
+        installedPlacementIds,
+        physicalCoverage: 'not-evaluated',
+    };
+}
+
+function temperatureAssessment(
+    placement: BlueprintProductionPlacementCapacity,
+    rule: BlueprintProductionTemperatureRule | null
+): TemperatureResolution {
+    if (rule === null) {
+        return {
+            kind: 'eligible',
+            assessment: { kind: 'not-applicable', reason: 'process-has-no-temperature-rule', rule },
+        };
+    }
+    if (rule.kind === 'internal-cook-setpoint') {
+        return {
+            kind: 'eligible',
+            assessment: { kind: 'not-applicable', reason: 'internal-cook-setpoint', rule },
+        };
+    }
+    if (placement.temperature.kind === 'not-evaluated') {
+        return {
+            kind: 'eligible',
+            assessment: {
+                kind: 'conditional',
+                reason: 'placement-not-on-property-grid',
+                ambientTemperature: null,
+                rule,
+            },
+        };
+    }
+    const ambientTemperature = placement.temperature.tiles[0]?.ambientTemperature;
+    if (ambientTemperature === undefined) {
+        throw new Error('Property-grid production placement has no occupied temperature tiles');
+    }
+    if (placement.temperature.tiles.some((tile) => tile.sources.length > 0)) {
+        return {
+            kind: 'eligible',
+            assessment: {
+                kind: 'conditional',
+                reason: 'effective-emitter-temperature-not-evaluated',
+                ambientTemperature,
+                rule,
+            },
+        };
+    }
+    if (rule.kind === 'environmental-maximum') {
+        return ambientTemperature <= rule.maximumTemperature
+            ? {
+                kind: 'eligible',
+                assessment: {
+                    kind: 'satisfied',
+                    basis: 'ambient-without-covering-emitters',
+                    ambientTemperature,
+                    rule,
+                },
+            }
+            : { kind: 'unsatisfied', rule };
+    }
+    if (ambientTemperature >= rule.minimumTemperature &&
+        ambientTemperature <= rule.maximumTemperature) {
+        return {
+            kind: 'eligible',
+            assessment: {
+                kind: 'satisfied',
+                basis: 'ambient-without-covering-emitters',
+                ambientTemperature,
+                rule,
+            },
+        };
+    }
+    return {
+        kind: 'eligible',
+        assessment: {
+            kind: 'conditional',
+            reason: 'temperature-duration-multiplier-not-evaluated',
+            ambientTemperature,
+            rule,
+        },
+    };
+}
+
+function matchingProcess(
     equipment: BlueprintProductionEquipmentCapacity,
     step: ProductionBatchStep
-): boolean {
-    const kind = processKind(step);
-    return equipment.processes.some((process) =>
+): BlueprintProductionProcessCapacity | null {
+    const kind = productionScheduleProcessKind(step);
+    return equipment.processes.find((process) =>
         process.kind === kind &&
         process.outputItemId === step.itemId &&
         routeMatchesProcess(step, process.id)
-    );
+    ) ?? null;
 }
 
 function routeMatchesProcess(step: ProductionBatchStep, processId: string): boolean {
@@ -247,77 +348,45 @@ function routeMatchesProcess(step: ProductionBatchStep, processId: string): bool
     return step.routeId === processId;
 }
 
-function processKind(
-    step: ProductionBatchStep
-): BlueprintProductionEquipmentCapacity['processes'][number]['kind'] {
-    switch (step.method) {
-        case 'seed-harvest':
-        case 'shroom-harvest':
-        case 'station-recipe':
-            return step.method;
-        case 'oven':
-            return 'oven-transform';
-        case 'cauldron':
-        case 'mushroom-spawn':
-            return step.method;
+function growContainer(
+    station: ProductionStation | null,
+    itemId: string
+): Extract<ProductionStation, { readonly kind: 'grow-container' }> {
+    if (station?.kind !== 'grow-container') {
+        throw new Error(`Seed production equipment ${JSON.stringify(itemId)} is not a grow container`);
     }
+    return station;
 }
 
-function scheduleStep(
+function equipmentIssue(
+    code: 'missing-compatible-equipment' | 'equipment-selection-required',
     step: ProductionBatchStep,
     stepIndex: number,
-    equipment: ResolvedStepEquipment,
-    startMinute: number
-): BlueprintProductionScheduledStep {
-    const usedUnitCount = Math.min(step.batchCount, equipment.placements.length);
-    const waveCount = Math.ceil(step.batchCount / usedUnitCount);
-    const elapsedMinutes = multiplyFinite(
-        waveCount,
-        step.durationMinutesPerBatch,
-        `${step.routeId} elapsed duration`
-    );
-    const endMinute = addFinite(startMinute, elapsedMinutes, `${step.routeId} end minute`);
-    const batchesPerUnit = Math.floor(step.batchCount / usedUnitCount);
-    const remainder = step.batchCount % usedUnitCount;
-    let firstBatchNumber = 1;
-    const assignments = equipment.placements.slice(0, usedUnitCount).map((placement, index) => {
-        const batchCount = batchesPerUnit + (index < remainder ? 1 : 0);
-        const lastBatchNumber = firstBatchNumber + batchCount - 1;
-        const assignmentEnd = addFinite(
-            startMinute,
-            multiplyFinite(
-                batchCount,
-                step.durationMinutesPerBatch,
-                `${step.routeId} assignment duration`
-            ),
-            `${step.routeId} assignment end minute`
-        );
-        const assignment = {
-            equipmentItemId: equipment.itemId,
-            placementId: placement.placementId,
-            firstBatchNumber,
-            lastBatchNumber,
-            batchCount,
-            startMinute,
-            endMinute: assignmentEnd,
-        };
-        firstBatchNumber = lastBatchNumber + 1;
-        return assignment;
-    });
+    compatibleInstalledEquipmentItemIds: readonly string[]
+): BlueprintProductionScheduleIssue {
+    return {
+        ...issueBase(step, stepIndex),
+        code,
+        compatibleInstalledEquipmentItemIds,
+    };
+}
+
+function issueBase(
+    step: ProductionBatchStep,
+    stepIndex: number
+): {
+    readonly stepIndex: number;
+    readonly itemId: string;
+    readonly routeId: string;
+    readonly acceptedEquipmentItemIds: readonly string[];
+    readonly selectedEquipmentItemId: string | null;
+} {
     return {
         stepIndex,
         itemId: step.itemId,
         routeId: step.routeId,
-        equipmentItemId: equipment.itemId,
-        installedUnitCount: equipment.placements.length,
-        usedUnitCount,
-        batchCount: step.batchCount,
-        durationMinutesPerBatch: step.durationMinutesPerBatch,
-        waveCount,
-        startMinute,
-        endMinute,
-        elapsedMinutes,
-        assignments,
+        acceptedEquipmentItemIds: step.acceptedEquipmentItemIds,
+        selectedEquipmentItemId: step.equipmentItemId,
     };
 }
 
@@ -338,6 +407,13 @@ function validatePlan(plan: ProductionBatchPlan): void {
         indexes.set(step.itemId, index);
         requirePositiveInteger(step.batchCount, `${step.routeId} batch count`);
         requirePositiveFinite(step.durationMinutesPerBatch, `${step.routeId} batch duration`);
+        requirePositiveFinite(step.outputQuantityPerBatch, `${step.routeId} output quantity per batch`);
+        if (step.growLightItemId !== null) {
+            requireNonBlank(step.growLightItemId, `${step.routeId} grow-light item ID`);
+            if (step.method !== 'seed-harvest') {
+                throw new Error(`Production step ${JSON.stringify(step.routeId)} selects an inapplicable grow light`);
+            }
+        }
         if (step.acceptedEquipmentItemIds.length === 0) {
             throw new Error(`Production step ${JSON.stringify(step.routeId)} has no accepted equipment`);
         }
@@ -451,8 +527,20 @@ function addFinite(left: number, right: number, label: string): number {
     return result;
 }
 
+function subtractFinite(left: number, right: number, label: string): number {
+    const result = left - right;
+    if (!Number.isFinite(result) || result < -numberTolerance(left, right)) {
+        throw new RangeError(`${label} must be non-negative`);
+    }
+    return result;
+}
+
 function sameNumber(left: number, right: number): boolean {
-    return Math.abs(left - right) <= 1e-9 * Math.max(1, Math.abs(left), Math.abs(right));
+    return Math.abs(left - right) <= numberTolerance(left, right);
+}
+
+function numberTolerance(left: number, right: number): number {
+    return 1e-9 * Math.max(1, Math.abs(left), Math.abs(right));
 }
 
 function cleanZero(value: number): number {

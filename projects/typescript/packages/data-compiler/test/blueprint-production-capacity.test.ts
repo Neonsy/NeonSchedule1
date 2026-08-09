@@ -234,6 +234,7 @@ describe('blueprint production capacity', () => {
                 placement('pot-b', 'pot', 1),
                 placement('chemistry', 'chemistry', 2),
                 placement('pot-a', 'pot', 0),
+                placement('light', 'light', 7),
             ]),
             schedulePlan()
         );
@@ -242,15 +243,19 @@ describe('blueprint production capacity', () => {
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
             durationBasis: 'production-batch-plan',
-            parallelScheduling: 'whole-batches-within-each-production-step',
-            crossStepConcurrency: 'not-evaluated',
-            batchPipelining: 'not-evaluated',
+            schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
+            optimality: 'not-proven',
+            parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
+            crossStepConcurrency: 'production-dependency-and-equipment-constrained',
+            batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
-            lightingCoverage: 'not-evaluated',
-            effectiveTemperature: 'not-evaluated',
+            employeeScheduling: 'not-evaluated-no-task-duration-contract',
+            lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
+            effectiveTemperature: 'ambient-only-without-covering-emitters',
+            constraintStatus: 'conditional',
             serialProcessMinutes: 350,
-            scheduledElapsedMinutes: 230,
-            parallelTimeSavedMinutes: 120,
+            scheduledElapsedMinutes: 190,
+            parallelTimeSavedMinutes: 160,
             schedule: [
                 {
                     stepIndex: 0,
@@ -260,27 +265,39 @@ describe('blueprint production capacity', () => {
                     usedUnitCount: 2,
                     batchCount: 5,
                     durationMinutesPerBatch: 60,
-                    waveCount: 3,
                     startMinute: 0,
                     endMinute: 180,
                     elapsedMinutes: 180,
+                    constraintStatus: 'conditional',
                     assignments: [
                         {
                             placementId: 'pot-a',
-                            firstBatchNumber: 1,
-                            lastBatchNumber: 3,
+                            batchNumbers: [1, 3, 5],
                             batchCount: 3,
-                            startMinute: 0,
-                            endMinute: 180,
+                            lighting: {
+                                kind: 'selected-external-grow-light',
+                                growLightItemId: 'light',
+                                installedPlacementIds: ['light'],
+                                physicalCoverage: 'not-evaluated',
+                            },
+                            temperature: {
+                                kind: 'satisfied',
+                                basis: 'ambient-without-covering-emitters',
+                                ambientTemperature: 20,
+                            },
                         },
                         {
                             placementId: 'pot-b',
-                            firstBatchNumber: 4,
-                            lastBatchNumber: 5,
+                            batchNumbers: [2, 4],
                             batchCount: 2,
-                            startMinute: 0,
-                            endMinute: 120,
                         },
+                    ],
+                    batches: [
+                        { batchNumber: 1, placementId: 'pot-a', startMinute: 0, endMinute: 60 },
+                        { batchNumber: 2, placementId: 'pot-b', startMinute: 0, endMinute: 60 },
+                        { batchNumber: 3, placementId: 'pot-a', startMinute: 60, endMinute: 120 },
+                        { batchNumber: 4, placementId: 'pot-b', startMinute: 60, endMinute: 120 },
+                        { batchNumber: 5, placementId: 'pot-a', startMinute: 120, endMinute: 180 },
                     ],
                 },
                 {
@@ -290,9 +307,15 @@ describe('blueprint production capacity', () => {
                     installedUnitCount: 1,
                     usedUnitCount: 1,
                     batchCount: 5,
-                    waveCount: 5,
-                    startMinute: 180,
-                    endMinute: 230,
+                    startMinute: 60,
+                    endMinute: 190,
+                    batches: [
+                        { batchNumber: 1, dependencyReadyMinute: 60, startMinute: 60, endMinute: 70 },
+                        { batchNumber: 2, dependencyReadyMinute: 60, startMinute: 70, endMinute: 80 },
+                        { batchNumber: 3, dependencyReadyMinute: 120, startMinute: 120, endMinute: 130 },
+                        { batchNumber: 4, dependencyReadyMinute: 120, startMinute: 130, endMinute: 140 },
+                        { batchNumber: 5, dependencyReadyMinute: 180, startMinute: 180, endMinute: 190 },
+                    ],
                 },
             ],
         });
@@ -313,7 +336,10 @@ describe('blueprint production capacity', () => {
 
     it('returns no partial schedule when compatible equipment is missing', () => {
         const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
-            blueprint([placement('pot', 'pot', 0)]),
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('light', 'light', 7),
+            ]),
             schedulePlan()
         );
 
@@ -328,6 +354,109 @@ describe('blueprint production capacity', () => {
             acceptedEquipmentItemIds: ['chemistry'],
             selectedEquipmentItemId: 'chemistry',
             compatibleInstalledEquipmentItemIds: [],
+        }]);
+    });
+
+    it('requires the selected external grow light to be installed', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry', 'chemistry', 1),
+            ]),
+            schedulePlan()
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.issues).toEqual([{
+            code: 'missing-selected-grow-light',
+            stepIndex: 0,
+            itemId: 'leaf',
+            routeId: 'seed:seed:leaf:soil:pot:light',
+            acceptedEquipmentItemIds: ['pot'],
+            selectedEquipmentItemId: 'pot',
+            selectedGrowLightItemId: 'light',
+            equipmentPlacementIds: ['pot'],
+        }]);
+    });
+
+    it('allocates producer batches once across branching consumers', () => {
+        const source = dataset();
+        const recipe = source.production.stationRecipes[0]!;
+        const result = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            production: {
+                ...source.production,
+                stationRecipes: [
+                    { ...recipe, id: 'a', outputItemId: 'a' },
+                    { ...recipe, id: 'b', outputItemId: 'b' },
+                    {
+                        ...recipe,
+                        id: 'final',
+                        outputItemId: 'final',
+                        ingredients: [
+                            { quantity: 1, acceptedItemIds: ['a'] },
+                            { quantity: 1, acceptedItemIds: ['b'] },
+                        ],
+                    },
+                ],
+            },
+        }).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry-a', 'chemistry', 1),
+                placement('chemistry-b', 'chemistry', 2),
+                placement('light', 'light', 7),
+            ]),
+            branchingSchedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result.scheduledElapsedMinutes).toBe(140);
+        expect(result.schedule).toMatchObject([
+            {
+                itemId: 'leaf',
+                batches: [
+                    { batchNumber: 1, endMinute: 60 },
+                    { batchNumber: 2, endMinute: 120 },
+                ],
+            },
+            {
+                itemId: 'a',
+                batches: [{ batchNumber: 1, dependencyReadyMinute: 60, endMinute: 70 }],
+            },
+            {
+                itemId: 'b',
+                batches: [{ batchNumber: 1, dependencyReadyMinute: 120, endMinute: 130 }],
+            },
+            {
+                itemId: 'final',
+                batches: [{ batchNumber: 1, dependencyReadyMinute: 130, endMinute: 140 }],
+            },
+        ]);
+    });
+
+    it('rejects exact ambient temperature above a hard growth maximum', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([placement('mushroom-bed', 'mushroom-bed', 0)]),
+            shroomSchedulePlan()
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.issues).toEqual([{
+            code: 'temperature-constraint-unsatisfied',
+            stepIndex: 0,
+            itemId: 'shroom',
+            routeId: 'shroom:spawn:shroom:mushroom-soil',
+            acceptedEquipmentItemIds: ['mushroom-bed'],
+            selectedEquipmentItemId: 'mushroom-bed',
+            incompatiblePlacementIds: ['mushroom-bed'],
+            temperatureRule: {
+                kind: 'environmental-maximum',
+                maximumTemperature: 15,
+            },
         }]);
     });
 
@@ -351,6 +480,7 @@ describe('blueprint production capacity', () => {
                 placement('pot', 'pot', 0),
                 placement('chemistry', 'chemistry', 1),
                 placement('chemistry-mk2', 'chemistry-mk2', 2),
+                placement('light', 'light', 7),
             ]),
             {
                 ...plan,
@@ -385,6 +515,7 @@ describe('blueprint production capacity', () => {
             blueprint([
                 placement('pot', 'pot', 0),
                 placement('chemistry', 'chemistry', 1),
+                placement('light', 'light', 7),
             ]),
             {
                 ...plan,
@@ -401,6 +532,7 @@ describe('blueprint production capacity', () => {
             blueprint([
                 placement('pot', 'pot', 0),
                 placement('chemistry', 'chemistry', 1),
+                placement('light', 'light', 7),
             ]),
             {
                 ...plan,
@@ -416,6 +548,7 @@ describe('blueprint production capacity', () => {
             blueprint([
                 placement('pot', 'pot', 0),
                 placement('chemistry', 'chemistry', 1),
+                placement('light', 'light', 7),
             ]),
             {
                 ...plan,
@@ -441,17 +574,95 @@ describe('blueprint production capacity', () => {
 });
 
 function schedulePlan(): ProductionBatchPlan {
-    const items = ['seed', 'soil', 'leaf', 'liquid', 'pot', 'chemistry']
+    const items = ['seed', 'soil', 'leaf', 'liquid', 'pot', 'chemistry', 'light']
         .map((itemId) => item(itemId, ['seed', 'soil'].includes(itemId) ? 1 : null));
     const catalog = production();
     const costs = new ProductionMaterialCostEvaluator(
         new Map(items.map((entry) => [entry.id, entry])),
-        { ...catalog, shrooms: [] }
+        { ...catalog, shrooms: [] },
+        { growContainerItemId: 'pot', growLightItemId: 'light' }
     );
     return new ProductionBatchPlanner(
         costs,
         { gameVersion, datasetSha256 }
     ).plan('liquid', 5);
+}
+
+function shroomSchedulePlan(): ProductionBatchPlan {
+    const mushroomSoil = {
+        ...item('mushroom-soil', 1),
+        soil: { quality: 'Test', uses: 1 },
+    };
+    const items = [
+        item('spawn', 1),
+        mushroomSoil,
+        item('shroom', null),
+        item('mushroom-bed', null),
+    ];
+    const catalog = production();
+    const costs = new ProductionMaterialCostEvaluator(
+        new Map(items.map((entry) => [entry.id, entry])),
+        { ...catalog, seeds: [], stationRecipes: [] }
+    );
+    return new ProductionBatchPlanner(
+        costs,
+        { gameVersion, datasetSha256 }
+    ).plan('shroom', 16);
+}
+
+function branchingSchedulePlan(): ProductionBatchPlan {
+    const leaf = schedulePlan().productionSteps[0]!;
+    const recipeStep = (
+        itemId: string,
+        inputItemIds: readonly string[]
+    ): ProductionBatchPlan['productionSteps'][number] => ({
+        itemId,
+        routeId: `recipe:${itemId}`,
+        method: 'station-recipe',
+        requiredQuantity: 1,
+        batchCount: 1,
+        outputQuantityPerBatch: 1,
+        durationMinutesPerBatch: 10,
+        acceptedEquipmentItemIds: ['chemistry'],
+        equipmentItemId: 'chemistry',
+        growLightItemId: null,
+        additiveItemIds: [],
+        quality: null,
+        totalProcessMinutes: 10,
+        producedQuantity: 1,
+        leftoverQuantity: 0,
+        inputs: inputItemIds.map((inputItemId) => ({
+            itemId: inputItemId,
+            quantityPerBatch: inputItemId === 'leaf' ? 10 : 1,
+            totalQuantity: inputItemId === 'leaf' ? 10 : 1,
+        })),
+    });
+    return {
+        dataset: { gameVersion, datasetSha256 },
+        targetItemId: 'final',
+        targetQuantity: 1,
+        totalProcessMinutes: 150,
+        requiredMaterialCost: 0,
+        purchaseCost: 0,
+        purchases: [],
+        productionSteps: [
+            {
+                ...leaf,
+                requiredQuantity: 20,
+                batchCount: 2,
+                totalProcessMinutes: 120,
+                producedQuantity: 20,
+                leftoverQuantity: 0,
+                inputs: leaf.inputs.map((input) => ({
+                    ...input,
+                    totalQuantity: input.quantityPerBatch * 2,
+                })),
+            },
+            recipeStep('a', ['leaf']),
+            recipeStep('b', ['leaf']),
+            recipeStep('final', ['a', 'b']),
+        ],
+    };
 }
 
 function analyzer(): BlueprintProductionCapacityAnalyzer {
@@ -465,6 +676,7 @@ function dataset(): BlueprintProductionCapacityDataset {
         buildables: [
             buildable('cooler', [{ temperature: 0, range: 2, emissionPoint: vector(0, 0, 0) }]),
             buildable('pot'),
+            buildable('light'),
             buildable('dryer'),
             buildable('mixer'),
             buildable('chemistry'),
@@ -533,6 +745,12 @@ function production(): ProductionCatalog {
                 maximumTemperatureThreshold: 40,
                 allowedSoilIds: ['soil'],
                 allowedAdditiveIds: [],
+            },
+            {
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'light',
+                kind: 'grow-light',
+                growSpeedMultiplier: 1,
             },
             {
                 schema: 'neonschedule1-production-station-3',
