@@ -125,6 +125,28 @@ describe('navigation network', () => {
         expect(result.points.map(({ sampleIndex }) => sampleIndex)).toEqual([0, 1]);
     });
 
+    it('routes exact sample identities when disconnected samples share a position', () => {
+        const network = new NavigationNetwork(graph(
+            [position(0, 0), position(0, 0), position(2, 0)],
+            [[1, 2]]
+        ));
+
+        const result = network.findPathBetweenSamples({
+            startSampleIndex: 1,
+            endSampleIndex: 2,
+        });
+
+        expect(result.kind).toBe('found');
+        if (result.kind !== 'found') return;
+        expect(result.start).toMatchObject({ sampleIndex: 1, snapDistance: 0, componentId: 1 });
+        expect(result.end).toMatchObject({ sampleIndex: 2, snapDistance: 0, componentId: 1 });
+        expect(result.points.map(({ sampleIndex }) => sampleIndex)).toEqual([1, 2]);
+        expect(() => network.findPathBetweenSamples({
+            startSampleIndex: -1,
+            endSampleIndex: 2,
+        })).toThrow('Navigation path start sample must reference an existing sample');
+    });
+
     it('rejects local edges beyond the exported employee movement limits', () => {
         expect(() => new NavigationNetwork(graph(
             [{ x: 0, y: 0, z: 0 }, { x: 2, y: 2.5, z: 0 }],

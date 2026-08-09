@@ -19,6 +19,11 @@ export interface ReachableNavigationPathInput {
     readonly maximumEndSnapDistance: number;
 }
 
+export interface NavigationSamplePathInput {
+    readonly startSampleIndex: number;
+    readonly endSampleIndex: number;
+}
+
 export interface NavigationEndpoint {
     readonly requestedPosition: Vector3;
     readonly sampleIndex: number;
@@ -241,6 +246,30 @@ export class NavigationNetwork {
                 exploredSampleCount: 0,
             };
         }
+        return this.#findSamplePath(start, end);
+    }
+
+    findPathBetweenSamples(input: NavigationSamplePathInput): NavigationPathResult {
+        requireSampleIndex(
+            input.startSampleIndex,
+            this.#samples.length,
+            'Navigation path start sample'
+        );
+        requireSampleIndex(
+            input.endSampleIndex,
+            this.#samples.length,
+            'Navigation path end sample'
+        );
+        const start = this.#endpoint(
+            this.#samples[input.startSampleIndex]!.position,
+            input.startSampleIndex,
+            0
+        );
+        const end = this.#endpoint(
+            this.#samples[input.endSampleIndex]!.position,
+            input.endSampleIndex,
+            0
+        );
         return this.#findSamplePath(start, end);
     }
 
