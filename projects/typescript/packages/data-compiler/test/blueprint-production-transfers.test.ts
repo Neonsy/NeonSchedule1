@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BlueprintProductionLogisticsAnalyzer,
     BlueprintProductionTransferAnalyzer,
     type BlueprintDocument,
-    type BlueprintProductionEndpointAccessDataset,
+    type BlueprintProductionLogisticsDataset,
     type Buildable,
     type Collider,
     type NavigationGraph,
@@ -248,6 +249,177 @@ describe('blueprint production transfers', () => {
     });
 });
 
+describe('blueprint production logistics', () => {
+    it('preserves Handler route order and calculates native per-trip capacity bounds', () => {
+        const input = logisticsBlueprint();
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.configuration).toMatchObject({
+            valid: true,
+            employeeCount: 3,
+            routeSelection: 'stored-order-first-ready',
+            stationMovementScope: 'employee-specific-not-configured-handler-routes',
+            employees: [
+                {
+                    employeeId: 'botanist-1',
+                    assignmentKind: 'pots',
+                    stationMovements: [{
+                        placementId: 'source-b',
+                        movementKind: 'station-specific',
+                        configuredHandlerRoute: false,
+                    }],
+                    supply: {
+                        placementId: 'source-b',
+                        storageSlotCount: 3,
+                    },
+                },
+                {
+                    employeeId: 'chemist-1',
+                    assignmentKind: 'stations',
+                    stationMovements: [{
+                        placementId: 'destination-b',
+                        movementKind: 'station-specific',
+                        configuredHandlerRoute: false,
+                    }],
+                },
+                {
+                    employeeId: 'handler-1',
+                    assignmentKind: 'stations',
+                    configuredRoutes: [
+                        { routeId: 'first-ready', storedOrderIndex: 0 },
+                        { routeId: 'second-ready', storedOrderIndex: 1 },
+                    ],
+                },
+            ],
+        });
+        expect(result).toMatchObject({
+            productionRequirementScope: 'internally-produced-plan-dependencies',
+            purchasedInputSupply: 'not-evaluated',
+            routeQuantityAllocation: 'not-evaluated',
+        });
+        const configured = result.requirements[0]?.assignmentPairs.find((pair) =>
+            pair.sourcePlacementId === 'source-a' && pair.destinationPlacementId === 'destination-a'
+        );
+        expect(configured).toMatchObject({
+            configuredRouteCoverage: 'configured',
+            configuredRouteCandidates: [
+                {
+                    routeId: 'first-ready',
+                    storedOrderIndex: 0,
+                    capacity: {
+                        itemStackLimit: 10,
+                        sourceProducedQuantity: 3,
+                        requestedDestinationQuantity: 2,
+                        employeeInventoryCapacity: 50,
+                        destinationEmptyCapacity: 20,
+                        destinationCapacityStatus: 'calculated',
+                        maximumMovedQuantityPerTrip: 2,
+                        currentSlotContents: 'not-evaluated',
+                    },
+                },
+                {
+                    routeId: 'second-ready',
+                    storedOrderIndex: 1,
+                },
+            ],
+        });
+    });
+
+    it('reports unsupported ownership, limits, endpoints, filters, and shared assignments', () => {
+        const input = logisticsBlueprint();
+        const chemist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Chemist'
+        )!;
+        const handler = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Handler'
+        )!;
+        chemist.assignedStationPlacementIds = ['source-b'];
+        handler.assignedStationPlacementIds = [
+            'source-a',
+            'destination-a',
+            'missing-station',
+            'source-b',
+        ];
+        handler.handlerRoutes = [
+            ...handler.handlerRoutes,
+            {
+                id: 'broken',
+                sourcePlacementId: 'missing-source',
+                destinationPlacementId: 'missing-destination',
+                filter: { mode: 'whitelist', itemIds: ['missing-item'] },
+            },
+            {
+                id: 'too-many',
+                sourcePlacementId: 'source-a',
+                destinationPlacementId: 'destination-a',
+                filter: { mode: 'blacklist', itemIds: [] },
+            },
+            {
+                id: 'still-too-many',
+                sourcePlacementId: 'source-a',
+                destinationPlacementId: 'destination-a',
+                filter: { mode: 'blacklist', itemIds: [] },
+            },
+            {
+                id: 'over-the-limit',
+                sourcePlacementId: 'source-a',
+                destinationPlacementId: 'destination-a',
+                filter: { mode: 'blacklist', itemIds: [] },
+            },
+        ];
+
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 2 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('invalid-configuration');
+        if (result.kind !== 'invalid-configuration') return;
+        expect(result.configuration.valid).toBe(false);
+        expect(result.configuration.issues.map((issue) => issue.code)).toEqual(
+            expect.arrayContaining([
+                'property-employee-capacity-exceeded',
+                'station-assigned-more-than-once',
+                'assigned-station-limit-exceeded',
+                'assigned-placement-unavailable',
+                'handler-route-limit-exceeded',
+                'route-source-unavailable',
+                'route-destination-unavailable',
+                'route-filter-item-unavailable',
+            ])
+        );
+    });
+
+    it('does not invent destination capacity when a native slot filter is unsupported', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const destination = inputDataset.productionLogistics.stations.find(
+            (station) => station.itemId === 'destination-station'
+        )!;
+        destination.inputSlots[0]!.filters = [{
+            nativeType: 'ScheduleOne.ItemFramework.ItemFilter_Dryable',
+            isWhitelist: null,
+            itemIds: [],
+            categories: [],
+        }];
+        const result = new BlueprintProductionLogisticsAnalyzer(inputDataset)
+            .analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        const configured = result.requirements[0]?.assignmentPairs.find((pair) =>
+            pair.sourcePlacementId === 'source-a' && pair.destinationPlacementId === 'destination-a'
+        )?.configuredRouteCandidates[0];
+        expect(configured?.capacity).toMatchObject({
+            destinationEmptyCapacity: null,
+            destinationCapacityStatus: 'filter-evidence-unavailable',
+            maximumMovedQuantityPerTrip: null,
+        });
+    });
+});
+
 interface DatasetOptions {
     readonly employeeCapacity?: number;
     readonly missingSourceTransitPoint?: boolean;
@@ -320,12 +492,53 @@ function layoutBlueprint(): BlueprintDocument {
     ]);
 }
 
+function logisticsBlueprint(): BlueprintDocument {
+    return {
+        ...layoutBlueprint(),
+        productionLogistics: {
+            employees: [
+                {
+                    id: 'botanist-1',
+                    employeeType: 'Botanist',
+                    assignedPotPlacementIds: ['source-b'],
+                    supplyPlacementId: 'source-b',
+                },
+                {
+                    id: 'chemist-1',
+                    employeeType: 'Chemist',
+                    assignedStationPlacementIds: ['destination-b'],
+                },
+                {
+                    id: 'handler-1',
+                    employeeType: 'Handler',
+                    assignedStationPlacementIds: [],
+                    handlerRoutes: [
+                        {
+                            id: 'first-ready',
+                            sourcePlacementId: 'source-a',
+                            destinationPlacementId: 'destination-a',
+                            filter: { mode: 'blacklist', itemIds: ['raw'] },
+                        },
+                        {
+                            id: 'second-ready',
+                            sourcePlacementId: 'source-a',
+                            destinationPlacementId: 'destination-a',
+                            filter: { mode: 'whitelist', itemIds: ['intermediate'] },
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+}
+
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-1',
+        schema: 'neonschedule1-blueprint-2',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
+        productionLogistics: { employees: [] },
         placements,
     };
 }
@@ -338,7 +551,7 @@ function placement(
     return { id, kind: 'grid', itemId, gridId: 'main', anchor: { x, y: 0 }, rotation: 0 };
 }
 
-function dataset(options: DatasetOptions): BlueprintProductionEndpointAccessDataset {
+function dataset(options: DatasetOptions): BlueprintProductionLogisticsDataset {
     const transitAccessPoints = options.multipleTransitPoints
         ? [transform('TransitAccess/[0]', 1), transform('TransitAccess/[1]', 1.5)]
         : [transform('TransitAccess', 1)];
@@ -354,7 +567,116 @@ function dataset(options: DatasetOptions): BlueprintProductionEndpointAccessData
         ],
         propertyLayouts: [propertyLayout()],
         production: production(),
+        productionLogistics: logisticsCatalog(),
+        items: [
+            item('raw', 20),
+            item('intermediate', 10),
+            item('final', 5),
+        ],
         navigation: navigation(),
+    };
+}
+
+function logisticsCatalog(): BlueprintProductionLogisticsDataset['productionLogistics'] {
+    return {
+        schema: 'neonschedule1-production-logistics-1',
+        routeRules: {
+            filterModes: ['whitelist', 'blacklist'],
+            selection: 'stored-order-first-ready',
+            movedQuantityLimits: [
+                'source-quantity',
+                'requested-maximum',
+                'destination-input-capacity',
+            ],
+            accessPointSelection: 'npc-reachable',
+        },
+        handlerTaskPriority: [
+            'packaging-station-work',
+            'brick-press-work',
+            'packaging-station-supply-move',
+            'brick-press-supply-move',
+            'configured-transit-route',
+        ],
+        employeeRoles: [
+            employeeRole('Botanist', 8, null, ['station-specific']),
+            employeeRole('Chemist', 4, null, ['station-specific']),
+            employeeRole('Handler', 3, 5, [
+                'assigned-station-supply',
+                'configured-route',
+            ]),
+        ],
+        stations: [
+            station('source-station', 1, []),
+            station('destination-station', 2, [{
+                nativeType: 'ScheduleOne.ItemFramework.ItemFilter_ID',
+                isWhitelist: true,
+                itemIds: ['intermediate'],
+                categories: [],
+            }]),
+        ],
+    };
+}
+
+function employeeRole(
+    employeeType: 'Botanist' | 'Chemist' | 'Handler',
+    assignedStationLimit: number,
+    configuredRouteLimit: number | null,
+    movementKinds: BlueprintProductionLogisticsDataset['productionLogistics']['employeeRoles'][number]['movementKinds']
+): BlueprintProductionLogisticsDataset['productionLogistics']['employeeRoles'][number] {
+    return {
+        employeeType,
+        runtimeType: `Game.${employeeType}`,
+        dailyWage: 200,
+        baseWorkSpeed: 1,
+        inventorySlotCount: 5,
+        assignmentKind: employeeType === 'Botanist' ? 'pots' : 'stations',
+        assignedStationLimit,
+        configuredRouteLimit,
+        movementKinds,
+    };
+}
+
+function station(
+    itemId: string,
+    inputSlotCount: number,
+    filters: BlueprintProductionLogisticsDataset['productionLogistics']['stations'][number]['inputSlots'][number]['filters']
+): BlueprintProductionLogisticsDataset['productionLogistics']['stations'][number] {
+    return {
+        itemId,
+        kind: 'fixture',
+        inputSlots: Array.from({ length: inputSlotCount }, (_, index) => ({
+            index,
+            filters: filters.map((filter) => ({ ...filter })),
+        })),
+        outputSlots: [{ index: 0, filters: [] }],
+    };
+}
+
+function item(id: string, stackLimit: number): BlueprintProductionLogisticsDataset['items'][number] {
+    return {
+        schema: 'neonschedule1-item-3',
+        id,
+        name: id,
+        category: 'Ingredient',
+        isRuntimeOnly: false,
+        stackLimit,
+        isStorable: true,
+        basePurchasePrice: null,
+        resellMultiplier: 0.5,
+        requiredRank: null,
+        requiredRankTier: null,
+        product: null,
+        packaging: null,
+        additive: null,
+        soil: null,
+        mixingIngredient: null,
+        presentation: {
+            description: '',
+            iconFileId: null,
+            visualKind: 'none',
+            fallbackMeshIds: [],
+            fallbackMaterialIds: [],
+        },
     };
 }
 
@@ -451,7 +773,15 @@ function buildable(itemId: string, transitAccessPoints: Transform[]): Buildable 
         },
         componentTypes: [],
         colliders: [],
-        storage: null,
+        storage: itemId === 'source-station' ? {
+            name: 'Storage',
+            subtitle: '',
+            slotCount: 3,
+            displayRowCount: 1,
+            slotsAreFilterable: true,
+            maxAccessDistance: 2,
+            transform: transform('Storage', 0),
+        } : null,
         temperatureEmitters: [],
         interactionPoints: [],
         isTransitEntity: true,

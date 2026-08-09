@@ -382,7 +382,87 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
             relativeRotation: { ...placement.relativeRotation },
         };
     });
-    return { ...document, placements };
+    const employeeIds = new Set<string>();
+    const employees = document.productionLogistics.employees.map((employee, employeeIndex) => {
+        requireNonBlank(employee.id, `Blueprint employee ID at index ${employeeIndex}`);
+        if (employeeIds.has(employee.id)) {
+            throw new TypeError(
+                `Blueprint contains duplicate employee ID ${JSON.stringify(employee.id)}`
+            );
+        }
+        employeeIds.add(employee.id);
+        const assignedPlacementIds = uniqueNonBlankStrings(
+            employee.employeeType === 'Botanist'
+                ? employee.assignedPotPlacementIds
+                : employee.assignedStationPlacementIds,
+            `Blueprint employee ${JSON.stringify(employee.id)} assigned placement ID`
+        );
+        if (employee.employeeType === 'Botanist' && employee.supplyPlacementId !== null) {
+            requireNonBlank(
+                employee.supplyPlacementId,
+                `Blueprint employee ${JSON.stringify(employee.id)} supply placement ID`
+            );
+        }
+        if (employee.employeeType !== 'Handler') {
+            return employee.employeeType === 'Botanist'
+                ? { ...employee, assignedPotPlacementIds: assignedPlacementIds }
+                : { ...employee, assignedStationPlacementIds: assignedPlacementIds };
+        }
+        const routeIds = new Set<string>();
+        const handlerRoutes = employee.handlerRoutes.map((route, routeIndex) => {
+            requireNonBlank(
+                route.id,
+                `Blueprint employee ${JSON.stringify(employee.id)} route ID at index ${routeIndex}`
+            );
+            if (routeIds.has(route.id)) {
+                throw new TypeError(
+                    `Blueprint employee ${JSON.stringify(employee.id)} contains duplicate route ID ` +
+                        JSON.stringify(route.id)
+                );
+            }
+            routeIds.add(route.id);
+            requireNonBlank(
+                route.sourcePlacementId,
+                `Blueprint route ${JSON.stringify(route.id)} source placement ID`
+            );
+            requireNonBlank(
+                route.destinationPlacementId,
+                `Blueprint route ${JSON.stringify(route.id)} destination placement ID`
+            );
+            return {
+                ...route,
+                filter: {
+                    ...route.filter,
+                    itemIds: uniqueNonBlankStrings(
+                        route.filter.itemIds,
+                        `Blueprint route ${JSON.stringify(route.id)} filter item ID`
+                    ),
+                },
+            };
+        });
+        return {
+            ...employee,
+            assignedStationPlacementIds: assignedPlacementIds,
+            handlerRoutes,
+        };
+    });
+    return {
+        ...document,
+        placements,
+        productionLogistics: { employees },
+    };
+}
+
+function uniqueNonBlankStrings(values: readonly string[], label: string): string[] {
+    const seen = new Set<string>();
+    return values.map((value, index) => {
+        requireNonBlank(value, `${label} at index ${index}`);
+        if (seen.has(value)) {
+            throw new TypeError(`${label} ${JSON.stringify(value)} is duplicated`);
+        }
+        seen.add(value);
+        return value;
+    });
 }
 
 function requireFiniteQuaternion(

@@ -261,6 +261,35 @@ describe('blueprint validation', () => {
             .toThrow('must be a lowercase SHA-256');
     });
 
+    it('rejects duplicate logistics identities before production analysis', () => {
+        const validator = new BlueprintValidator(dataset());
+        const employee = {
+            id: 'worker-1',
+            employeeType: 'Handler' as const,
+            assignedStationPlacementIds: [],
+            handlerRoutes: [{
+                id: 'route-1',
+                sourcePlacementId: 'source',
+                destinationPlacementId: 'destination',
+                filter: { mode: 'blacklist' as const, itemIds: [] },
+            }],
+        };
+
+        expect(() => validator.validate({
+            ...blueprint([]),
+            productionLogistics: { employees: [employee, employee] },
+        })).toThrow('duplicate employee ID "worker-1"');
+        expect(() => validator.validate({
+            ...blueprint([]),
+            productionLogistics: {
+                employees: [{
+                    ...employee,
+                    handlerRoutes: [employee.handlerRoutes[0]!, employee.handlerRoutes[0]!],
+                }],
+            },
+        })).toThrow('duplicate route ID "route-1"');
+    });
+
     it('rejects ambiguous normalized dataset indexes', () => {
         const input = dataset();
         expect(() => new BlueprintValidator({
@@ -311,10 +340,11 @@ function datasetWithCompleteGrid(): BlueprintDataset {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-1',
+        schema: 'neonschedule1-blueprint-2',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
+        productionLogistics: { employees: [] },
         placements,
     };
 }

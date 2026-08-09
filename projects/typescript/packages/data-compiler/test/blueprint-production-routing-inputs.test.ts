@@ -206,10 +206,11 @@ function production(): ProductionCatalog {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-1',
+        schema: 'neonschedule1-blueprint-2',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
+        productionLogistics: { employees: [] },
         placements,
     };
 }
