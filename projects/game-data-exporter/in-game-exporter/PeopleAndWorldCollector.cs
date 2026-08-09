@@ -487,6 +487,7 @@ internal static partial class GameDataCollector
                             packager.PackagingSpeedMultiplier.ToString(
                                 "R",
                                 CultureInfo.InvariantCulture);
+                        mechanics["MaxAssignedRoutes"] = "5";
                     }
                 }
                 var botanist = prefab.TryCast<Il2CppScheduleOne.Employees.Botanist>();
@@ -517,6 +518,12 @@ internal static partial class GameDataCollector
                     RuntimeType = DiscoveryReflection.RuntimeTypeName(prefab),
                     DailyWage = prefab.DailyWage,
                     BaseWorkSpeed = prefab.CurrentWorkSpeed,
+                    // Registry prefabs have not applied NPCData yet. Read the serialized
+                    // source used by native initialization instead of the empty runtime field.
+                    InventorySlotCount = prefab._npcData
+                        ?.GetOriginalData()
+                        ?.Inventory
+                        ?.InventorySlotCount ?? 0,
                     Mechanics = mechanics,
                 });
             }

@@ -82,6 +82,7 @@ internal static partial class GameDataCollector
             OvenTransformSources = ovenTransformCollection.Sources,
             OvenTransforms = ovenTransformCollection.Transforms,
             ProductionStations = CollectProductionStations(nativeItems),
+            ProductionLogistics = CollectProductionLogistics(),
             QualityValues = qualityValues,
             QualityMechanics = CollectQualityMechanics(qualityValues),
             PeopleSources = peopleCollection.Sources,

@@ -40,6 +40,7 @@ internal sealed class GameDataReport
     public OvenTransformSourceSnapshot OvenTransformSources { get; init; } = new();
     public List<OvenTransformSnapshot> OvenTransforms { get; init; } = new();
     public List<ProductionStationSnapshot> ProductionStations { get; init; } = new();
+    public ProductionLogisticsSnapshot ProductionLogistics { get; init; } = new();
     public List<QualityValueSnapshot> QualityValues { get; init; } = new();
     public QualityMechanicsSnapshot QualityMechanics { get; init; } = new();
     public PeopleSourceSnapshot PeopleSources { get; init; } = new();
@@ -478,6 +479,7 @@ internal sealed class ProductionStationSnapshot
     public List<string> AllowedSoilIds { get; set; } = new();
     public List<string> AllowedAdditiveIds { get; set; } = new();
     public List<SlotFilterSnapshot> InputFilters { get; set; } = new();
+    public List<SlotFilterSnapshot> OutputFilters { get; set; } = new();
     public List<SporeSyringeSnapshot> SporeSyringes { get; set; } = new();
 }
 
@@ -487,6 +489,18 @@ internal sealed class SlotFilterSnapshot
     public string FilterType { get; init; } = string.Empty;
     public bool? IsWhitelist { get; set; }
     public List<string> ItemIds { get; set; } = new();
+    public List<string> Categories { get; set; } = new();
+}
+
+internal sealed class ProductionLogisticsSnapshot
+{
+    public int HandlerRouteLimit { get; init; }
+    public string RouteSelection { get; init; } = string.Empty;
+    public List<string> RouteFilterModes { get; init; } = new();
+    public List<string> MovedQuantityLimits { get; init; } = new();
+    public string AccessPointSelection { get; init; } = string.Empty;
+    public List<string> HandlerTaskPriority { get; init; } = new();
+    public List<string> StationMovementEmployeeTypes { get; init; } = new();
 }
 
 internal sealed class SporeSyringeSnapshot
@@ -611,6 +625,7 @@ internal sealed class EmployeeTypeSnapshot
     public string RuntimeType { get; init; } = string.Empty;
     public float DailyWage { get; init; }
     public float BaseWorkSpeed { get; init; }
+    public int InventorySlotCount { get; init; }
     public Dictionary<string, string> Mechanics { get; init; } = new();
 }
 

@@ -12,6 +12,7 @@ export * from '#core/data/person';
 export * from '#core/data/property';
 export * from '#core/data/property-layout';
 export * from '#core/data/production';
+export * from '#core/data/production-logistics';
 export * from '#core/data/shop';
 export * from '#core/data/trade';
 export * from '#core/data/visual';

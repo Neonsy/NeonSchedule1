@@ -30,6 +30,7 @@ const reportShape = type({
     shroomSpawns: 'unknown[]',
     ovenTransforms: 'unknown[]',
     productionStations: 'unknown[]',
+    productionLogistics: 'object',
     qualityValues: 'unknown[]',
     qualityMechanics: 'object',
     shops: 'unknown[]',
@@ -133,6 +134,10 @@ async function readJson(filePath: string): Promise<JsonObject> {
 
 function parseReport(document: JsonObject): RawReport {
     const mixing = asObject(document.mixing, 'report.mixing');
+    const productionLogistics = asObject(
+        document.productionLogistics,
+        'report.productionLogistics'
+    );
     const world = asObject(document.world, 'report.world');
     const discovery = asObject(document.discovery, 'report.discovery');
     const qualityMechanics = asObject(document.qualityMechanics, 'report.qualityMechanics');
@@ -153,6 +158,7 @@ function parseReport(document: JsonObject): RawReport {
         shroomSpawns: objectArray(document.shroomSpawns, 'report.shroomSpawns'),
         ovenTransforms: objectArray(document.ovenTransforms, 'report.ovenTransforms'),
         productionStations: objectArray(document.productionStations, 'report.productionStations'),
+        productionLogistics,
         qualityValues: objectArray(document.qualityValues, 'report.qualityValues'),
         qualityMechanics: {
             customerQualityMaxEffect: numberField(
@@ -238,6 +244,7 @@ function parseReport(document: JsonObject): RawReport {
             suppliers: objectArray(world.suppliers, 'report.world.suppliers'),
             properties: objectArray(world.properties, 'report.world.properties'),
             businesses: objectArray(world.businesses, 'report.world.businesses'),
+            employeeTypes: objectArray(world.employeeTypes, 'report.world.employeeTypes'),
         },
         discovery: {
             assetDirectory: stringField(discovery, 'assetDirectory', 'report.discovery'),

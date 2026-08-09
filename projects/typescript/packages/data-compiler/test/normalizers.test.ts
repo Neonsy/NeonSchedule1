@@ -461,6 +461,7 @@ function emptyReport(): RawReport {
         shroomSpawns: [],
         ovenTransforms: [],
         productionStations: [],
+        productionLogistics: {},
         qualityValues: [],
         qualityMechanics: {
             customerQualityMaxEffect: 0.3,
@@ -514,6 +515,7 @@ function emptyReport(): RawReport {
             suppliers: [],
             properties: [],
             businesses: [],
+            employeeTypes: [],
         },
         discovery: {
             assetDirectory: 'assets',

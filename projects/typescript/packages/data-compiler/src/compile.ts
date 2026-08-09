@@ -18,6 +18,7 @@ import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
 import { normalizePeople } from '#data-compiler/normalize/people';
 import { normalizeProduction } from '#data-compiler/normalize/production';
+import { normalizeProductionLogistics } from '#data-compiler/normalize/production-logistics';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizePropertyLayouts } from '#data-compiler/normalize/property-layouts';
 import { normalizeShops } from '#data-compiler/normalize/shops';
@@ -26,7 +27,7 @@ import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.28';
+export const NORMALIZER_VERSION = '0.0.29';
 
 const deferredDomains = [] as const;
 
@@ -52,6 +53,11 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     validateCustomerEnjoymentOracles(acquisition.report, customers, items, integrity);
     validateCustomerOfferOracles(acquisition.report, customers, items, integrity);
     const production = normalizeProduction(acquisition.report, itemIds, integrity);
+    const productionLogistics = normalizeProductionLogistics(
+        acquisition.report,
+        itemIds,
+        integrity
+    );
     const shops = normalizeShops(acquisition.report, itemIds, integrity);
     const properties = normalizeProperties(acquisition.report, integrity);
     const buildables = normalizeBuildables(acquisition.report, assets, itemIds, integrity);
@@ -136,6 +142,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     documents.set('people/trade.json', trade);
     documents.set('mixing/rules.json', mixing);
     documents.set('production/catalog.json', production);
+    documents.set('production/logistics.json', productionLogistics);
     documents.set('visuals/assets.json', visuals);
     documents.set('world/map.json', world.map);
     documents.set('world/locations.json', world.locations);

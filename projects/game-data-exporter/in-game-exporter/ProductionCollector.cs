@@ -260,6 +260,8 @@ internal static partial class GameDataCollector
         };
     }
 
+    // Native Awake and InitializeGridItem methods create the transit slots. The registry's
+    // buildable prefabs have not initialized those lists, so this versioned topology is explicit.
     private static List<ProductionStationSnapshot> CollectProductionStations(
         IEnumerable<Il2CppScheduleOne.ItemFramework.ItemDefinition> items)
     {
@@ -285,9 +287,16 @@ internal static partial class GameDataCollector
                     : "packaging-mk2";
                 station.EmployeeSpeedMultiplier =
                     packagingStation.PackagerEmployeeSpeedMultiplier;
-                station.InputSlotCount = packagingStation.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = packagingStation.OutputSlots?.Count ?? 0;
-                station.InputFilters = CopyInputFilters(packagingStation.InputSlots);
+                SetTransitTopology(
+                    station,
+                    2,
+                    1,
+                    new[]
+                    {
+                        CategoryFilter(0, "Packaging"),
+                        TypeFilter(1, "ItemFilter_UnpackagedProduct"),
+                    },
+                    new[] { TypeFilter(0, "ItemFilter_PackagedProduct") });
                 result.Add(station);
                 continue;
             }
@@ -305,9 +314,11 @@ internal static partial class GameDataCollector
                     Il2CppScheduleOne.ObjectScripts.DryingRack.WARMTH_MIN_THRESHOLD;
                 station.MaximumTemperatureThreshold =
                     Il2CppScheduleOne.ObjectScripts.DryingRack.WARMTH_MAX_THRESHOLD;
-                station.InputSlotCount = dryingRack.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = dryingRack.OutputSlots?.Count ?? 0;
-                station.InputFilters = CopyInputFilters(dryingRack.InputSlots);
+                SetTransitTopology(
+                    station,
+                    1,
+                    1,
+                    new[] { TypeFilter(0, "ItemFilter_Dryable") });
                 result.Add(station);
                 continue;
             }
@@ -316,12 +327,18 @@ internal static partial class GameDataCollector
             if (brickPress is not null)
             {
                 station.Kind = "brick-press";
-                station.InputSlotCount = brickPress.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = brickPress.OutputSlots?.Count ?? 0;
-                station.ProductSlotCount = brickPress.ProductSlots?.Length ?? 0;
+                station.ProductSlotCount = 2;
                 station.PackagingItemId = brickPress.BrickPackaging?.ID ?? string.Empty;
                 station.PackagingQuantity = brickPress.BrickPackaging?.Quantity;
-                station.InputFilters = CopyInputFilters(brickPress.InputSlots);
+                SetTransitTopology(
+                    station,
+                    2,
+                    1,
+                    new[]
+                    {
+                        TypeFilter(0, "ItemFilter_UnpackagedProduct"),
+                        TypeFilter(1, "ItemFilter_UnpackagedProduct"),
+                    });
                 result.Add(station);
                 continue;
             }
@@ -338,9 +355,15 @@ internal static partial class GameDataCollector
                 station.TimePerItem = mixingStation.MixTimePerItem;
                 station.RequiresManualIngredientInsertion =
                     mixingStation.RequiresIngredientInsertion;
-                station.InputSlotCount = mixingStation.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = mixingStation.OutputSlots?.Count ?? 0;
-                station.InputFilters = CopyInputFilters(mixingStation.InputSlots);
+                SetTransitTopology(
+                    station,
+                    2,
+                    1,
+                    new[]
+                    {
+                        TypeFilter(0, "ItemFilter_UnpackagedProduct"),
+                        TypeFilter(1, "ItemFilter_MixingIngredient"),
+                    });
                 result.Add(station);
                 continue;
             }
@@ -349,9 +372,7 @@ internal static partial class GameDataCollector
             if (labOven is not null)
             {
                 station.Kind = "lab-oven";
-                station.InputSlotCount = labOven.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = labOven.OutputSlots?.Count ?? 0;
-                station.InputFilters = CopyInputFilters(labOven.InputSlots);
+                SetTransitTopology(station, 1, 1);
                 result.Add(station);
                 continue;
             }
@@ -384,9 +405,18 @@ internal static partial class GameDataCollector
                     items,
                     cauldron.GasolinePrefab);
                 station.OutputItemId = cauldron.CocaineBaseDefinition?.ID ?? string.Empty;
-                station.InputSlotCount = cauldron.InputSlots?.Count ?? 0;
-                station.OutputSlotCount = cauldron.OutputSlots?.Count ?? 0;
-                station.InputFilters = CopyInputFilters(cauldron.InputSlots);
+                SetTransitTopology(
+                    station,
+                    5,
+                    1,
+                    new[]
+                    {
+                        IdFilter(0, station.PrimaryInputItemId),
+                        IdFilter(1, station.PrimaryInputItemId),
+                        IdFilter(2, station.PrimaryInputItemId),
+                        IdFilter(3, station.PrimaryInputItemId),
+                        IdFilter(4, station.SecondaryInputItemId),
+                    });
                 result.Add(station);
                 continue;
             }
@@ -419,6 +449,16 @@ internal static partial class GameDataCollector
                     }
                 }
 
+                SetTransitTopology(
+                    station,
+                    2,
+                    1,
+                    new[]
+                    {
+                        IdFilter(0, station.GrainBagItemId),
+                        IdFilter(1, station.SporeSyringes.Select(syringe => syringe.ItemId)),
+                    });
+
                 result.Add(station);
                 continue;
             }
@@ -438,6 +478,7 @@ internal static partial class GameDataCollector
                     Il2CppScheduleOne.ObjectScripts.Pot.WarmthMaxThreshold;
                 station.AllowedSoilIds = CopyIds(pot.AllowedSoils);
                 station.AllowedAdditiveIds = CopyIds(pot.AllowedAdditives);
+                SetTransitTopology(station, 0, 1);
                 result.Add(station);
                 continue;
             }
@@ -454,6 +495,73 @@ internal static partial class GameDataCollector
 
         return result.OrderBy(station => station.ItemId, StringComparer.Ordinal).ToList();
     }
+
+    // These current-version values come from the native route and employee behavior methods.
+    private static ProductionLogisticsSnapshot CollectProductionLogistics() => new()
+    {
+        HandlerRouteLimit = 5,
+        RouteSelection = "stored-order-first-ready",
+        RouteFilterModes = new List<string> { "whitelist", "blacklist" },
+        MovedQuantityLimits = new List<string>
+        {
+            "source-quantity",
+            "requested-maximum",
+            "destination-input-capacity",
+        },
+        AccessPointSelection = "npc-reachable",
+        HandlerTaskPriority = new List<string>
+        {
+            "packaging-station-work",
+            "brick-press-work",
+            "packaging-station-supply-move",
+            "brick-press-supply-move",
+            "configured-transit-route",
+        },
+        StationMovementEmployeeTypes = new List<string> { "Botanist", "Chemist" },
+    };
+
+    private static void SetTransitTopology(
+        ProductionStationSnapshot station,
+        int inputSlotCount,
+        int outputSlotCount,
+        IEnumerable<SlotFilterSnapshot>? inputFilters = null,
+        IEnumerable<SlotFilterSnapshot>? outputFilters = null)
+    {
+        station.InputSlotCount = inputSlotCount;
+        station.OutputSlotCount = outputSlotCount;
+        station.InputFilters = inputFilters?.ToList() ?? new List<SlotFilterSnapshot>();
+        station.OutputFilters = outputFilters?.ToList() ?? new List<SlotFilterSnapshot>();
+    }
+
+    private static SlotFilterSnapshot TypeFilter(int slotIndex, string filterType) => new()
+    {
+        SlotIndex = slotIndex,
+        FilterType = $"ScheduleOne.ItemFramework.{filterType}",
+    };
+
+    private static SlotFilterSnapshot CategoryFilter(int slotIndex, string category) => new()
+    {
+        SlotIndex = slotIndex,
+        FilterType = "ScheduleOne.ItemFramework.ItemFilter_Category",
+        Categories = new List<string> { category },
+    };
+
+    private static SlotFilterSnapshot IdFilter(int slotIndex, string itemId) =>
+        IdFilter(slotIndex, new[] { itemId });
+
+    private static SlotFilterSnapshot IdFilter(
+        int slotIndex,
+        IEnumerable<string> itemIds) => new()
+    {
+        SlotIndex = slotIndex,
+        FilterType = "ScheduleOne.ItemFramework.ItemFilter_ID",
+        IsWhitelist = true,
+        ItemIds = itemIds
+            .Where(itemId => !string.IsNullOrWhiteSpace(itemId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(itemId => itemId, StringComparer.Ordinal)
+            .ToList(),
+    };
 
     private static string ResolveStationItemId(
         IEnumerable<Il2CppScheduleOne.ItemFramework.ItemDefinition> items,
@@ -504,54 +612,6 @@ internal static partial class GameDataCollector
         }
 
         return string.Empty;
-    }
-
-    private static List<SlotFilterSnapshot> CopyInputFilters(
-        Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemSlot>? slots)
-    {
-        var result = new List<SlotFilterSnapshot>();
-        if (slots is null)
-        {
-            return result;
-        }
-
-        for (var slotIndex = 0; slotIndex < slots.Count; slotIndex++)
-        {
-            var slot = slots[slotIndex];
-            if (slot?.HardFilters is null)
-            {
-                continue;
-            }
-
-            for (var filterIndex = 0; filterIndex < slot.HardFilters.Count; filterIndex++)
-            {
-                var filter = slot.HardFilters[filterIndex];
-                if (filter is null)
-                {
-                    continue;
-                }
-
-                var snapshot = new SlotFilterSnapshot
-                {
-                    SlotIndex = slotIndex,
-                    FilterType = filter.GetType().FullName ?? string.Empty,
-                };
-                var idFilter = filter.TryCast<
-                    Il2CppScheduleOne.ItemFramework.ItemFilter_ID>();
-                if (idFilter?.IDs is not null)
-                {
-                    snapshot.IsWhitelist = idFilter.IsWhitelist;
-                    for (var idIndex = 0; idIndex < idFilter.IDs.Count; idIndex++)
-                    {
-                        snapshot.ItemIds.Add(idFilter.IDs[idIndex]);
-                    }
-                }
-
-                result.Add(snapshot);
-            }
-        }
-
-        return result;
     }
 
     private static List<string> CopyIds<T>(
