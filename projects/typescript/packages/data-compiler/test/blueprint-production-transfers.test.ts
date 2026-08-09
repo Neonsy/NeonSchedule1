@@ -273,7 +273,7 @@ describe('blueprint production logistics', () => {
                         configuredHandlerRoute: false,
                     }],
                     supply: {
-                        placementId: 'source-b',
+                        placementId: 'raw-storage',
                         storageSlotCount: 3,
                     },
                 },
@@ -292,13 +292,14 @@ describe('blueprint production logistics', () => {
                     configuredRoutes: [
                         { routeId: 'first-ready', storedOrderIndex: 0 },
                         { routeId: 'second-ready', storedOrderIndex: 1 },
+                        { routeId: 'raw-to-source-a', storedOrderIndex: 2 },
                     ],
                 },
             ],
         });
         expect(result).toMatchObject({
             productionRequirementScope: 'internally-produced-plan-dependencies',
-            purchasedInputSupply: 'not-evaluated',
+            purchasedInputSupplyScope: 'first-production-consumers',
             routeQuantityAllocation: 'not-evaluated',
         });
         const configured = result.requirements[0]?.assignmentPairs.find((pair) =>
@@ -312,7 +313,7 @@ describe('blueprint production logistics', () => {
                     storedOrderIndex: 0,
                     capacity: {
                         itemStackLimit: 10,
-                        sourceProducedQuantity: 3,
+                        sourceAvailableQuantity: 3,
                         requestedDestinationQuantity: 2,
                         employeeInventoryCapacity: 50,
                         destinationEmptyCapacity: 20,
@@ -327,6 +328,55 @@ describe('blueprint production logistics', () => {
                 },
             ],
         });
+        expect(result.purchasedInputRequirements).toMatchObject([{
+            itemId: 'raw',
+            requiredQuantity: 2,
+            purchaseQuantity: 2,
+            plannedSupplyQuantity: 2,
+            supplyQuantityCoverage: 'sufficient',
+            destinationAssignments: [
+                { consumerStepIndex: 0, placementId: 'source-a', requiredQuantity: 1 },
+                { consumerStepIndex: 0, placementId: 'source-b', requiredQuantity: 1 },
+            ],
+            supplyPairs: [
+                {
+                    supplyId: 'raw-supply',
+                    destinationPlacementId: 'source-a',
+                    movementCoverage: 'configured',
+                    movementCandidates: [{
+                        kind: 'configured-handler-route',
+                        employeeId: 'handler-1',
+                        routeId: 'raw-to-source-a',
+                        storedOrderIndex: 2,
+                        networkRouteCandidateStatus: 'not-evaluated',
+                        capacity: {
+                            sourceAvailableQuantity: 2,
+                            requestedDestinationQuantity: 1,
+                            employeeInventoryCapacity: 100,
+                            destinationEmptyCapacity: 20,
+                            maximumMovedQuantityPerTrip: 1,
+                        },
+                    }],
+                },
+                {
+                    supplyId: 'raw-supply',
+                    destinationPlacementId: 'source-b',
+                    movementCoverage: 'configured',
+                    movementCandidates: [{
+                        kind: 'botanist-station-specific',
+                        employeeId: 'botanist-1',
+                        networkRouteCandidateStatus: 'not-applicable-same-employee-assignment',
+                        capacity: {
+                            sourceAvailableQuantity: 2,
+                            requestedDestinationQuantity: 1,
+                            employeeInventoryCapacity: 100,
+                            destinationEmptyCapacity: 20,
+                            maximumMovedQuantityPerTrip: 1,
+                        },
+                    }],
+                },
+            ],
+        }]);
     });
 
     it('reports unsupported ownership, limits, endpoints, filters, and shared assignments', () => {
@@ -371,6 +421,7 @@ describe('blueprint production logistics', () => {
                 filter: { mode: 'blacklist', itemIds: [] },
             },
         ];
+        input.productionLogistics.supplies[0]!.quantity = 100;
 
         const result = new BlueprintProductionLogisticsAnalyzer(
             dataset({ employeeCapacity: 2 })
@@ -389,8 +440,42 @@ describe('blueprint production logistics', () => {
                 'route-source-unavailable',
                 'route-destination-unavailable',
                 'route-filter-item-unavailable',
+                'supply-storage-capacity-exceeded',
+                'supply-storage-slots-exceeded',
             ])
         );
+    });
+
+    it('reports insufficient planned input supply and uncovered first consumers', () => {
+        const input = logisticsBlueprint();
+        input.productionLogistics.supplies[0]!.quantity = 1;
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        const handler = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Handler'
+        )!;
+        botanist.assignedPotPlacementIds = [];
+        handler.handlerRoutes = handler.handlerRoutes.filter(
+            (route) => route.id !== 'raw-to-source-a'
+        );
+
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.purchasedInputRequirements).toMatchObject([{
+            itemId: 'raw',
+            requiredQuantity: 2,
+            plannedSupplyQuantity: 1,
+            supplyQuantityCoverage: 'insufficient',
+            supplyPairs: [
+                { destinationPlacementId: 'source-a', movementCoverage: 'unconfigured' },
+                { destinationPlacementId: 'source-b', movementCoverage: 'unconfigured' },
+            ],
+        }]);
     });
 
     it('does not invent destination capacity when a native slot filter is unsupported', () => {
@@ -418,6 +503,18 @@ describe('blueprint production logistics', () => {
             maximumMovedQuantityPerTrip: null,
         });
     });
+
+    it('rejects a purchased-input total that disagrees with production-step demand', () => {
+        const inputPlan = plan();
+        const purchase = inputPlan.purchases[0]!;
+
+        expect(() => new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(logisticsBlueprint(), {
+            ...inputPlan,
+            purchases: [{ ...purchase, requiredQuantity: 3 }],
+        })).toThrow('Purchased input raw requirement is inconsistent');
+    });
 });
 
 interface DatasetOptions {
@@ -436,9 +533,17 @@ function plan(): ProductionBatchPlan {
         targetItemId: 'final',
         targetQuantity: 2,
         totalProcessMinutes: 10,
-        requiredMaterialCost: 0,
-        purchaseCost: 0,
-        purchases: [],
+        requiredMaterialCost: 2,
+        purchaseCost: 2,
+        purchases: [{
+            itemId: 'raw',
+            requiredQuantity: 2,
+            purchaseQuantity: 2,
+            leftoverQuantity: 0,
+            unitCost: 1,
+            requiredCost: 2,
+            purchaseCost: 2,
+        }],
         productionSteps: [
             {
                 itemId: 'intermediate',
@@ -493,15 +598,23 @@ function layoutBlueprint(): BlueprintDocument {
 }
 
 function logisticsBlueprint(): BlueprintDocument {
+    const base = layoutBlueprint();
     return {
-        ...layoutBlueprint(),
+        ...base,
+        placements: [...base.placements, placement('raw-storage', 'storage', 4)],
         productionLogistics: {
+            supplies: [{
+                id: 'raw-supply',
+                itemId: 'raw',
+                sourcePlacementId: 'raw-storage',
+                quantity: 2,
+            }],
             employees: [
                 {
                     id: 'botanist-1',
                     employeeType: 'Botanist',
                     assignedPotPlacementIds: ['source-b'],
-                    supplyPlacementId: 'source-b',
+                    supplyPlacementId: 'raw-storage',
                 },
                 {
                     id: 'chemist-1',
@@ -525,6 +638,12 @@ function logisticsBlueprint(): BlueprintDocument {
                             destinationPlacementId: 'destination-a',
                             filter: { mode: 'whitelist', itemIds: ['intermediate'] },
                         },
+                        {
+                            id: 'raw-to-source-a',
+                            sourcePlacementId: 'raw-storage',
+                            destinationPlacementId: 'source-a',
+                            filter: { mode: 'whitelist', itemIds: ['raw'] },
+                        },
                     ],
                 },
             ],
@@ -534,11 +653,11 @@ function logisticsBlueprint(): BlueprintDocument {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-2',
+        schema: 'neonschedule1-blueprint-3',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
-        productionLogistics: { employees: [] },
+        productionLogistics: { employees: [], supplies: [] },
         placements,
     };
 }
@@ -564,6 +683,7 @@ function dataset(options: DatasetOptions): BlueprintProductionLogisticsDataset {
                 options.missingSourceTransitPoint ? [] : transitAccessPoints
             ),
             buildable('destination-station', transitAccessPoints),
+            buildable('storage', transitAccessPoints),
         ],
         propertyLayouts: [propertyLayout()],
         production: production(),
@@ -773,7 +893,7 @@ function buildable(itemId: string, transitAccessPoints: Transform[]): Buildable 
         },
         componentTypes: [],
         colliders: [],
-        storage: itemId === 'source-station' ? {
+        storage: itemId === 'storage' ? {
             name: 'Storage',
             subtitle: '',
             slotCount: 3,
@@ -810,11 +930,11 @@ function propertyLayout(): PropertyLayout {
         loadingDocks: [],
         grids: [{
             id: 'main',
-            width: 4,
+            width: 5,
             height: 1,
             tileSize: 4,
             worldOrigin: vector(0, 0, 0),
-            tiles: Array.from({ length: 4 }, (_, x) => ({
+            tiles: Array.from({ length: 5 }, (_, x) => ({
                 x,
                 y: 0,
                 availableOffset: 0,
@@ -827,7 +947,7 @@ function propertyLayout(): PropertyLayout {
 }
 
 function navigation(): NavigationGraph {
-    const positions = [0, 1, 5, 9, 13].map((x) => vector(x, 0, 0));
+    const positions = [0, 1, 5, 9, 13, 17].map((x) => vector(x, 0, 0));
     return {
         schema: 'neonschedule1-navigation-graph-2',
         method: 'test',

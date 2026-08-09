@@ -2,6 +2,7 @@ import type {
     BlueprintDocument,
     BlueprintEmployeeAssignment,
     BlueprintHandlerRoute,
+    BlueprintProductionSupply,
 } from '#core/data/blueprint';
 import { BuildableSchema, type Buildable } from '#core/data/buildable';
 import { ItemSchema, type Item } from '#core/data/item';
@@ -9,167 +10,28 @@ import {
     ProductionLogisticsCatalogSchema,
     type ProductionLogisticsCatalog,
     type ProductionLogisticsEmployeeRole,
-    type ProductionLogisticsRouteRules,
     type ProductionLogisticsSlot,
 } from '#core/data/production-logistics';
 import type { ProductionBatchPlan } from '#core/production/plan';
-import type { BlueprintProductionEndpointAccessDataset } from '#core/blueprint/production-endpoint-access';
+import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
+import { BlueprintProductionLogisticsConfigurationAnalyzer } from '#core/blueprint/production-logistics-configuration';
 import {
     BlueprintProductionTransferAnalyzer,
     type BlueprintProductionTransferAssignmentPair,
-    type BlueprintProductionTransferResult,
 } from '#core/blueprint/production-transfers';
 
-export interface BlueprintProductionLogisticsDataset
-    extends BlueprintProductionEndpointAccessDataset {
-    readonly items: readonly Item[];
-    readonly productionLogistics: ProductionLogisticsCatalog;
-}
+export * from '#core/blueprint/production-logistics-types';
 
-export type BlueprintProductionLogisticsIssueCode =
-    | 'property-employee-capacity-exceeded'
-    | 'employee-role-unavailable'
-    | 'assigned-station-limit-exceeded'
-    | 'station-assigned-more-than-once'
-    | 'assigned-placement-unavailable'
-    | 'assigned-station-topology-unavailable'
-    | 'supply-placement-unavailable'
-    | 'supply-storage-unavailable'
-    | 'handler-route-limit-exceeded'
-    | 'route-source-unavailable'
-    | 'route-destination-unavailable'
-    | 'route-source-not-transit-entity'
-    | 'route-destination-not-transit-entity'
-    | 'route-filter-item-unavailable';
-
-export interface BlueprintProductionLogisticsIssue {
-    readonly code: BlueprintProductionLogisticsIssueCode;
-    readonly message: string;
-    readonly employeeId: string | null;
-    readonly placementIds: readonly string[];
-    readonly routeId: string | null;
-    readonly itemId: string | null;
-}
-
-export interface BlueprintProductionStationMovement {
-    readonly employeeId: string;
-    readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
-    readonly placementId: string;
-    readonly movementKind: 'station-specific' | 'assigned-station-supply';
-    readonly configuredHandlerRoute: false;
-}
-
-export interface BlueprintProductionSupplyAssignment {
-    readonly employeeId: string;
-    readonly placementId: string;
-    readonly storageSlotCount: number | null;
-    readonly capacityBasis: 'storage-slots-times-item-stack-limit';
-    readonly currentContents: 'not-evaluated';
-}
-
-export interface BlueprintProductionConfiguredRoute {
-    readonly employeeId: string;
-    readonly routeId: string;
-    readonly storedOrderIndex: number;
-    readonly sourcePlacementId: string;
-    readonly destinationPlacementId: string;
-    readonly filterMode: BlueprintHandlerRoute['filter']['mode'];
-    readonly filterItemIds: readonly string[];
-    readonly selection: 'stored-order-first-ready';
-    readonly accessPointSelection: 'npc-reachable';
-}
-
-export interface BlueprintProductionEmployeeLogistics {
-    readonly employeeId: string;
-    readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
-    readonly dailyWage: number | null;
-    readonly baseWorkSpeed: number | null;
-    readonly inventorySlotCount: number | null;
-    readonly assignmentKind: ProductionLogisticsEmployeeRole['assignmentKind'] | null;
-    readonly assignedStationLimit: number | null;
-    readonly configuredRouteLimit: number | null;
-    readonly stationCompatibility: 'not-evaluated';
-    readonly stationMovements: readonly BlueprintProductionStationMovement[];
-    readonly supply: BlueprintProductionSupplyAssignment | null;
-    readonly configuredRoutes: readonly BlueprintProductionConfiguredRoute[];
-}
-
-export interface BlueprintProductionLogisticsConfiguration {
-    readonly valid: boolean;
-    readonly propertyEmployeeCapacity: number | null;
-    readonly employeeCount: number;
-    readonly assignmentOwnership: 'exclusive';
-    readonly routeSelection: 'stored-order-first-ready';
-    readonly stationMovementScope: 'employee-specific-not-configured-handler-routes';
-    readonly employees: readonly BlueprintProductionEmployeeLogistics[];
-    readonly issues: readonly BlueprintProductionLogisticsIssue[];
-}
-
-export interface BlueprintProductionTransferCapacity {
-    readonly itemId: string;
-    readonly itemStackLimit: number;
-    readonly sourceProducedQuantity: number;
-    readonly requestedDestinationQuantity: number;
-    readonly employeeInventoryCapacity: number;
-    readonly destinationEmptyCapacity: number | null;
-    readonly destinationCapacityStatus: 'calculated' | 'filter-evidence-unavailable';
-    readonly maximumMovedQuantityPerTrip: number | null;
-    readonly movedQuantityLimits: ProductionLogisticsRouteRules['movedQuantityLimits'];
-    readonly currentSlotContents: 'not-evaluated';
-}
-
-export interface BlueprintProductionConfiguredRouteCandidate {
-    readonly employeeId: string;
-    readonly routeId: string;
-    readonly storedOrderIndex: number;
-    readonly networkRouteCandidateStatus: BlueprintProductionTransferAssignmentPair['networkRouteCandidateStatus'];
-    readonly capacity: BlueprintProductionTransferCapacity;
-}
-
-export interface BlueprintProductionLogisticsRequirementPair {
-    readonly sourcePlacementId: string;
-    readonly destinationPlacementId: string;
-    readonly configuredRouteCoverage: 'configured' | 'unconfigured';
-    readonly configuredRouteCandidates: readonly BlueprintProductionConfiguredRouteCandidate[];
-}
-
-export interface BlueprintProductionLogisticsRequirement {
-    readonly itemId: string;
-    readonly producerStepIndex: number;
-    readonly consumerStepIndex: number;
-    readonly requiredQuantity: number;
-    readonly assignmentPairs: readonly BlueprintProductionLogisticsRequirementPair[];
-}
-
-export type BlueprintProductionLogisticsResult =
-    | {
-        readonly kind: 'rejected';
-        readonly transfers: Extract<BlueprintProductionTransferResult, { readonly kind: 'rejected' }>;
-        readonly configuration: null;
-        readonly requirements: readonly [];
-    }
-    | {
-        readonly kind: 'invalid-configuration';
-        readonly transfers: Exclude<BlueprintProductionTransferResult, { readonly kind: 'rejected' }>;
-        readonly configuration: BlueprintProductionLogisticsConfiguration;
-        readonly requirements: readonly [];
-    }
-    | {
-        readonly kind: 'unavailable';
-        readonly transfers: Extract<BlueprintProductionTransferResult, { readonly kind: 'unavailable' }>;
-        readonly configuration: BlueprintProductionLogisticsConfiguration;
-        readonly requirements: readonly [];
-    }
-    | {
-        readonly kind: 'analyzed';
-        readonly transfers: Extract<BlueprintProductionTransferResult, { readonly kind: 'analyzed' }>;
-        readonly configuration: BlueprintProductionLogisticsConfiguration;
-        readonly productionRequirementScope: 'internally-produced-plan-dependencies';
-        readonly purchasedInputSupply: 'not-evaluated';
-        readonly routeQuantityAllocation: 'not-evaluated';
-        readonly transferTiming: 'not-evaluated';
-        readonly requirements: readonly BlueprintProductionLogisticsRequirement[];
-    };
+import type {
+    BlueprintProductionInputDestinationAssignment,
+    BlueprintProductionInputMovementCandidate,
+    BlueprintProductionInputSupplyPair,
+    BlueprintProductionLogisticsDataset,
+    BlueprintProductionLogisticsRequirementPair,
+    BlueprintProductionLogisticsResult,
+    BlueprintProductionPurchasedInputRequirement,
+    BlueprintProductionTransferCapacity,
+} from '#core/blueprint/production-logistics-types';
 
 interface IndexedRoute {
     readonly employee: BlueprintEmployeeAssignment;
@@ -180,6 +42,7 @@ interface IndexedRoute {
 
 export class BlueprintProductionLogisticsAnalyzer {
     readonly #transfers: BlueprintProductionTransferAnalyzer;
+    readonly #configuration: BlueprintProductionLogisticsConfigurationAnalyzer;
     readonly #catalog: ProductionLogisticsCatalog;
     readonly #itemById: ReadonlyMap<string, Item>;
     readonly #buildableByItemId: ReadonlyMap<string, Buildable>;
@@ -188,7 +51,15 @@ export class BlueprintProductionLogisticsAnalyzer {
         this.#transfers = new BlueprintProductionTransferAnalyzer(dataset);
         this.#catalog = ProductionLogisticsCatalogSchema.assert(dataset.productionLogistics);
         this.#itemById = indexUnique(
-            dataset.items.map((item) => ItemSchema.assert(item)),
+            dataset.items.map((input) => {
+                const item = ItemSchema.assert(input);
+                if (!Number.isSafeInteger(item.stackLimit) || item.stackLimit <= 0) {
+                    throw new RangeError(
+                        `Item ${JSON.stringify(item.id)} stack limit must be a positive safe integer`
+                    );
+                }
+                return item;
+            }),
             (item) => item.id,
             'item ID'
         );
@@ -196,6 +67,11 @@ export class BlueprintProductionLogisticsAnalyzer {
             dataset.buildables.map((buildable) => BuildableSchema.assert(buildable)),
             (buildable) => buildable.itemId,
             'buildable item ID'
+        );
+        this.#configuration = new BlueprintProductionLogisticsConfigurationAnalyzer(
+            this.#catalog,
+            this.#itemById,
+            this.#buildableByItemId
         );
     }
 
@@ -209,7 +85,7 @@ export class BlueprintProductionLogisticsAnalyzer {
         }
         const propertyEmployeeCapacity = transfers.endpointAccess.employeeReachabilityBasis
             .propertyEmployeeCapacity;
-        const configuration = this.#configuration(blueprint, propertyEmployeeCapacity);
+        const configuration = this.#configuration.analyze(blueprint, propertyEmployeeCapacity);
         if (!configuration.valid) {
             return {
                 kind: 'invalid-configuration',
@@ -232,233 +108,186 @@ export class BlueprintProductionLogisticsAnalyzer {
                 this.#requirementPair(requirement.itemId, pair, routes, placementById)
             ),
         }));
+        const purchasedInputRequirements = this.#purchasedInputRequirements(
+            blueprint,
+            plan,
+            transfers.schedule.schedule,
+            routes,
+            placementById
+        );
         return {
             kind: 'analyzed',
             transfers,
             configuration,
             productionRequirementScope: 'internally-produced-plan-dependencies',
-            purchasedInputSupply: 'not-evaluated',
+            purchasedInputSupplyScope: 'first-production-consumers',
             routeQuantityAllocation: 'not-evaluated',
             transferTiming: 'not-evaluated',
             requirements,
+            purchasedInputRequirements,
         };
     }
 
-    #configuration(
+    #purchasedInputRequirements(
         blueprint: BlueprintDocument,
-        propertyEmployeeCapacity: number
-    ): BlueprintProductionLogisticsConfiguration {
-        const issues: BlueprintProductionLogisticsIssue[] = [];
-        const placementById = new Map(blueprint.placements.map((placement) => [placement.id, placement]));
-        const roleByType = new Map(this.#catalog.employeeRoles.map((role) => [role.employeeType, role]));
-        const stationByItemId = new Map(this.#catalog.stations.map((station) => [station.itemId, station]));
-        const stationOwner = new Map<string, string>();
-        if (blueprint.productionLogistics.employees.length > propertyEmployeeCapacity) {
-            issues.push(logisticsIssue(
-                'property-employee-capacity-exceeded',
-                `Blueprint configures ${blueprint.productionLogistics.employees.length} employees, but the property supports ${propertyEmployeeCapacity}`
-            ));
-        }
-        const employees = blueprint.productionLogistics.employees.map((employee) => {
-            const role = roleByType.get(employee.employeeType);
-            const assignedPlacementIds = employee.employeeType === 'Botanist'
-                ? employee.assignedPotPlacementIds
-                : employee.assignedStationPlacementIds;
-            if (role === undefined) {
-                issues.push(logisticsIssue(
-                    'employee-role-unavailable',
-                    `Employee ${JSON.stringify(employee.id)} uses unavailable role ${JSON.stringify(employee.employeeType)}`,
-                    employee.id
-                ));
-            } else if (assignedPlacementIds.length > role.assignedStationLimit) {
-                issues.push(logisticsIssue(
-                    'assigned-station-limit-exceeded',
-                    `Employee ${JSON.stringify(employee.id)} has ${assignedPlacementIds.length} assignments, but ${employee.employeeType} supports ${role.assignedStationLimit}`,
-                    employee.id,
-                    assignedPlacementIds
-                ));
-            }
-            const movementKind = employee.employeeType === 'Handler'
-                ? 'assigned-station-supply' as const
-                : 'station-specific' as const;
-            const stationMovements = assignedPlacementIds.map((placementId) => {
-                const previousOwner = stationOwner.get(placementId);
-                if (previousOwner !== undefined) {
-                    issues.push(logisticsIssue(
-                        'station-assigned-more-than-once',
-                        `Placement ${JSON.stringify(placementId)} is assigned to both ${JSON.stringify(previousOwner)} and ${JSON.stringify(employee.id)}`,
-                        employee.id,
-                        [placementId]
-                    ));
-                } else {
-                    stationOwner.set(placementId, employee.id);
+        plan: ProductionBatchPlan,
+        schedule: readonly BlueprintProductionScheduledStep[],
+        routes: readonly IndexedRoute[],
+        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>
+    ): BlueprintProductionPurchasedInputRequirement[] {
+        const scheduledByStep = new Map(schedule.map((step) => [step.stepIndex, step]));
+        return plan.purchases.flatMap((purchase) => {
+            const consumers = plan.productionSteps.flatMap((step, consumerStepIndex) => {
+                const matchingInputs = step.inputs.filter((input) => input.itemId === purchase.itemId);
+                if (matchingInputs.length === 0) return [];
+                const quantityPerBatch = matchingInputs.reduce(
+                    (sum, input) => addFinite(sum, input.quantityPerBatch, 'Purchased input quantity per batch'),
+                    0
+                );
+                const requiredQuantity = matchingInputs.reduce(
+                    (sum, input) => addFinite(sum, input.totalQuantity, 'Purchased input required quantity'),
+                    0
+                );
+                const scheduled = scheduledByStep.get(consumerStepIndex);
+                if (scheduled === undefined) {
+                    throw new Error(`Production schedule is missing consumer step ${consumerStepIndex}`);
                 }
-                const placement = placementById.get(placementId);
-                if (placement === undefined) {
-                    issues.push(logisticsIssue(
-                        'assigned-placement-unavailable',
-                        `Employee ${JSON.stringify(employee.id)} references unavailable placement ${JSON.stringify(placementId)}`,
-                        employee.id,
-                        [placementId]
-                    ));
-                } else if (!stationByItemId.has(placement.itemId)) {
-                    issues.push(logisticsIssue(
-                        'assigned-station-topology-unavailable',
-                        `Placement ${JSON.stringify(placementId)} has no normalized production-logistics station topology`,
-                        employee.id,
-                        [placementId]
-                    ));
-                }
-                return {
-                    employeeId: employee.id,
-                    employeeType: employee.employeeType,
-                    placementId,
-                    movementKind,
-                    configuredHandlerRoute: false as const,
-                };
+                return [{ consumerStepIndex, quantityPerBatch, requiredQuantity, scheduled }];
             });
-            const supply = this.#supply(employee, placementById, issues);
-            const configuredRoutes = this.#configuredRoutes(employee, role, placementById, issues);
-            return {
-                employeeId: employee.id,
-                employeeType: employee.employeeType,
-                dailyWage: role?.dailyWage ?? null,
-                baseWorkSpeed: role?.baseWorkSpeed ?? null,
-                inventorySlotCount: role?.inventorySlotCount ?? null,
-                assignmentKind: role?.assignmentKind ?? null,
-                assignedStationLimit: role?.assignedStationLimit ?? null,
-                configuredRouteLimit: role?.configuredRouteLimit ?? null,
-                stationCompatibility: 'not-evaluated' as const,
-                stationMovements,
-                supply,
-                configuredRoutes,
-            };
+            if (consumers.length === 0) return [];
+            const requiredQuantity = consumers.reduce(
+                (sum, consumer) => addFinite(sum, consumer.requiredQuantity, 'Purchased input total requirement'),
+                0
+            );
+            requireSameNumber(
+                purchase.requiredQuantity,
+                requiredQuantity,
+                `Purchased input ${purchase.itemId} requirement`
+            );
+            const destinationAssignments = consumers.flatMap((consumer) =>
+                consumer.scheduled.assignments.map((assignment) => ({
+                    consumerStepIndex: consumer.consumerStepIndex,
+                    placementId: assignment.placementId,
+                    batchCount: assignment.batchCount,
+                    requiredQuantity: multiplyFinite(
+                        assignment.batchCount,
+                        consumer.quantityPerBatch,
+                        `Purchased input ${purchase.itemId} destination quantity`
+                    ),
+                }))
+            );
+            requireSameNumber(
+                destinationAssignments.reduce(
+                    (sum, assignment) => addFinite(
+                        sum,
+                        assignment.requiredQuantity,
+                        `Purchased input ${purchase.itemId} destination total`
+                    ),
+                    0
+                ),
+                requiredQuantity,
+                `Purchased input ${purchase.itemId} destination assignments`
+            );
+            const supplies = blueprint.productionLogistics.supplies.filter(
+                (supply) => supply.itemId === purchase.itemId
+            );
+            const plannedSupplyQuantity = supplies.reduce(
+                (sum, supply) => addFinite(sum, supply.quantity, 'Planned input supply quantity'),
+                0
+            );
+            const supplyPairs = supplies.flatMap((supply) =>
+                destinationAssignments.map((destination) => this.#inputSupplyPair(
+                    blueprint,
+                    supply,
+                    destination,
+                    routes,
+                    placementById
+                ))
+            );
+            return [{
+                itemId: purchase.itemId,
+                requiredQuantity,
+                purchaseQuantity: purchase.purchaseQuantity,
+                plannedSupplyQuantity,
+                supplyQuantityCoverage:
+                    plannedSupplyQuantity >= requiredQuantity ? 'sufficient' as const : 'insufficient' as const,
+                destinationAssignments,
+                supplyPairs,
+            }];
         });
-        return {
-            valid: issues.length === 0,
-            propertyEmployeeCapacity,
-            employeeCount: employees.length,
-            assignmentOwnership: 'exclusive',
-            routeSelection: this.#catalog.routeRules.selection,
-            stationMovementScope: 'employee-specific-not-configured-handler-routes',
-            employees,
-            issues,
-        };
     }
 
-    #supply(
-        employee: BlueprintEmployeeAssignment,
-        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>,
-        issues: BlueprintProductionLogisticsIssue[]
-    ): BlueprintProductionSupplyAssignment | null {
-        if (employee.employeeType !== 'Botanist') return null;
-        if (employee.supplyPlacementId === null) return null;
-        const placement = placementById.get(employee.supplyPlacementId);
-        if (placement === undefined) {
-            issues.push(logisticsIssue(
-                'supply-placement-unavailable',
-                `Employee ${JSON.stringify(employee.id)} references unavailable supplies placement ${JSON.stringify(employee.supplyPlacementId)}`,
-                employee.id,
-                [employee.supplyPlacementId]
-            ));
+    #inputSupplyPair(
+        blueprint: BlueprintDocument,
+        supply: BlueprintProductionSupply,
+        destination: BlueprintProductionInputDestinationAssignment,
+        routes: readonly IndexedRoute[],
+        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>
+    ): BlueprintProductionInputSupplyPair {
+        const item = this.#itemById.get(supply.itemId);
+        if (item === undefined) {
+            throw new Error(`Blueprint supply references unavailable item ${JSON.stringify(supply.itemId)}`);
         }
-        const storage = placement === undefined
-            ? null
-            : this.#buildableByItemId.get(placement.itemId)?.storage ?? null;
-        if (placement !== undefined && storage === null) {
-            issues.push(logisticsIssue(
-                'supply-storage-unavailable',
-                `Supplies placement ${JSON.stringify(employee.supplyPlacementId)} has no normalized storage`,
-                employee.id,
-                [employee.supplyPlacementId]
-            ));
-        }
-        return {
-            employeeId: employee.id,
-            placementId: employee.supplyPlacementId,
-            storageSlotCount: storage?.slotCount ?? null,
-            capacityBasis: 'storage-slots-times-item-stack-limit',
-            currentContents: 'not-evaluated',
-        };
-    }
-
-    #configuredRoutes(
-        employee: BlueprintEmployeeAssignment,
-        role: ProductionLogisticsEmployeeRole | undefined,
-        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>,
-        issues: BlueprintProductionLogisticsIssue[]
-    ): BlueprintProductionConfiguredRoute[] {
-        if (employee.employeeType !== 'Handler') return [];
-        if (role?.configuredRouteLimit !== null && role?.configuredRouteLimit !== undefined &&
-            employee.handlerRoutes.length > role.configuredRouteLimit) {
-            issues.push(logisticsIssue(
-                'handler-route-limit-exceeded',
-                `Employee ${JSON.stringify(employee.id)} has ${employee.handlerRoutes.length} routes, but ${employee.employeeType} supports ${role.configuredRouteLimit}`,
-                employee.id
-            ));
-        }
-        return employee.handlerRoutes.map((route, storedOrderIndex) => {
-            this.#validateRouteEndpoint(employee, route, 'source', placementById, issues);
-            this.#validateRouteEndpoint(employee, route, 'destination', placementById, issues);
-            for (const itemId of route.filter.itemIds) {
-                if (!this.#itemById.has(itemId)) {
-                    issues.push(logisticsIssue(
-                        'route-filter-item-unavailable',
-                        `Route ${JSON.stringify(route.id)} references unavailable filter item ${JSON.stringify(itemId)}`,
-                        employee.id,
-                        [],
-                        route.id,
-                        itemId
-                    ));
+        const employeeCandidates = blueprint.productionLogistics.employees.flatMap(
+            (employee): BlueprintProductionInputMovementCandidate[] => {
+                const role = this.#catalog.employeeRoles.find(
+                    (candidate) => candidate.employeeType === employee.employeeType
+                );
+                if (role === undefined) return [];
+                if (employee.employeeType === 'Botanist') {
+                    if (employee.supplyPlacementId !== supply.sourcePlacementId ||
+                        !employee.assignedPotPlacementIds.includes(destination.placementId)) return [];
+                    return [{
+                        kind: 'botanist-station-specific',
+                        employeeId: employee.id,
+                        networkRouteCandidateStatus: 'not-applicable-same-employee-assignment',
+                        capacity: this.#capacity(
+                            item,
+                            supply.quantity,
+                            destination.requiredQuantity,
+                            role,
+                            destination.placementId,
+                            placementById
+                        ),
+                    }];
                 }
+                if (employee.employeeType !== 'Handler') return [];
+                return routes.flatMap((entry) => {
+                    if (entry.employee.id !== employee.id ||
+                        entry.route.sourcePlacementId !== supply.sourcePlacementId ||
+                        entry.route.destinationPlacementId !== destination.placementId ||
+                        !routeAllowsItem(entry.route, supply.itemId)) return [];
+                    return [{
+                        kind: 'configured-handler-route' as const,
+                        employeeId: employee.id,
+                        routeId: entry.route.id,
+                        storedOrderIndex: entry.storedOrderIndex,
+                        networkRouteCandidateStatus: 'not-evaluated' as const,
+                        capacity: this.#capacity(
+                            item,
+                            supply.quantity,
+                            destination.requiredQuantity,
+                            role,
+                            destination.placementId,
+                            placementById
+                        ),
+                    }];
+                });
             }
-            return {
-                employeeId: employee.id,
-                routeId: route.id,
-                storedOrderIndex,
-                sourcePlacementId: route.sourcePlacementId,
-                destinationPlacementId: route.destinationPlacementId,
-                filterMode: route.filter.mode,
-                filterItemIds: [...route.filter.itemIds],
-                selection: this.#catalog.routeRules.selection,
-                accessPointSelection: this.#catalog.routeRules.accessPointSelection,
-            };
-        });
+        );
+        const movementCandidates: BlueprintProductionInputMovementCandidate[] = employeeCandidates;
+        return {
+            supplyId: supply.id,
+            sourcePlacementId: supply.sourcePlacementId,
+            sourceQuantity: supply.quantity,
+            consumerStepIndex: destination.consumerStepIndex,
+            destinationPlacementId: destination.placementId,
+            destinationRequiredQuantity: destination.requiredQuantity,
+            movementCoverage: movementCandidates.length > 0 ? 'configured' : 'unconfigured',
+            movementCandidates,
+        };
     }
 
-    #validateRouteEndpoint(
-        employee: BlueprintEmployeeAssignment,
-        route: BlueprintHandlerRoute,
-        endpoint: 'source' | 'destination',
-        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>,
-        issues: BlueprintProductionLogisticsIssue[]
-    ): void {
-        const placementId = endpoint === 'source'
-            ? route.sourcePlacementId
-            : route.destinationPlacementId;
-        const placement = placementById.get(placementId);
-        if (placement === undefined) {
-            issues.push(logisticsIssue(
-                endpoint === 'source' ? 'route-source-unavailable' : 'route-destination-unavailable',
-                `Route ${JSON.stringify(route.id)} references unavailable ${endpoint} placement ${JSON.stringify(placementId)}`,
-                employee.id,
-                [placementId],
-                route.id
-            ));
-            return;
-        }
-        if (this.#buildableByItemId.get(placement.itemId)?.isTransitEntity !== true) {
-            issues.push(logisticsIssue(
-                endpoint === 'source'
-                    ? 'route-source-not-transit-entity'
-                    : 'route-destination-not-transit-entity',
-                `Route ${JSON.stringify(route.id)} ${endpoint} placement ${JSON.stringify(placementId)} is not a normalized transit entity`,
-                employee.id,
-                [placementId],
-                route.id
-            ));
-        }
-    }
 
     #indexedRoutes(blueprint: BlueprintDocument): IndexedRoute[] {
         const roleByType = new Map(this.#catalog.employeeRoles.map((role) => [role.employeeType, role]));
@@ -493,7 +322,14 @@ export class BlueprintProductionLogisticsAnalyzer {
                 routeId: entry.route.id,
                 storedOrderIndex: entry.storedOrderIndex,
                 networkRouteCandidateStatus: pair.networkRouteCandidateStatus,
-                capacity: this.#capacity(item, pair, entry.role, placementById),
+                capacity: this.#capacity(
+                    item,
+                    pair.sourceProducedQuantity,
+                    pair.destinationRequiredQuantity,
+                    entry.role,
+                    pair.destinationPlacementId,
+                    placementById
+                ),
             }];
         });
         return {
@@ -507,11 +343,13 @@ export class BlueprintProductionLogisticsAnalyzer {
 
     #capacity(
         item: Item,
-        pair: BlueprintProductionTransferAssignmentPair,
+        sourceAvailableQuantity: number,
+        requestedDestinationQuantity: number,
         role: ProductionLogisticsEmployeeRole,
+        destinationPlacementId: string,
         placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>
     ): BlueprintProductionTransferCapacity {
-        const destinationPlacement = placementById.get(pair.destinationPlacementId);
+        const destinationPlacement = placementById.get(destinationPlacementId);
         const destinationBuildable = destinationPlacement === undefined
             ? undefined
             : this.#buildableByItemId.get(destinationPlacement.itemId);
@@ -524,16 +362,16 @@ export class BlueprintProductionLogisticsAnalyzer {
             'Employee inventory capacity'
         );
         const limits = [
-            pair.sourceProducedQuantity,
-            pair.destinationRequiredQuantity,
+            sourceAvailableQuantity,
+            requestedDestinationQuantity,
             employeeInventoryCapacity,
         ];
         if (destinationCapacity.quantity !== null) limits.push(destinationCapacity.quantity);
         return {
             itemId: item.id,
             itemStackLimit: item.stackLimit,
-            sourceProducedQuantity: pair.sourceProducedQuantity,
-            requestedDestinationQuantity: pair.destinationRequiredQuantity,
+            sourceAvailableQuantity,
+            requestedDestinationQuantity,
             employeeInventoryCapacity,
             destinationEmptyCapacity: destinationCapacity.quantity,
             destinationCapacityStatus: destinationCapacity.status,
@@ -614,15 +452,23 @@ function multiplyCapacity(left: number, right: number, label: string): number {
     return value;
 }
 
-function logisticsIssue(
-    code: BlueprintProductionLogisticsIssueCode,
-    message: string,
-    employeeId: string | null = null,
-    placementIds: readonly string[] = [],
-    routeId: string | null = null,
-    itemId: string | null = null
-): BlueprintProductionLogisticsIssue {
-    return { code, message, employeeId, placementIds, routeId, itemId };
+function multiplyFinite(left: number, right: number, label: string): number {
+    const value = left * right;
+    if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
+    return value;
+}
+
+function addFinite(left: number, right: number, label: string): number {
+    const value = left + right;
+    if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
+    return value;
+}
+
+function requireSameNumber(actual: number, expected: number, label: string): void {
+    const tolerance = 1e-9 * Math.max(1, Math.abs(actual), Math.abs(expected));
+    if (!Number.isFinite(actual) || Math.abs(actual - expected) > tolerance) {
+        throw new Error(`${label} is inconsistent`);
+    }
 }
 
 function indexUnique<T>(

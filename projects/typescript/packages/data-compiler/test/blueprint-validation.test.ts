@@ -277,17 +277,35 @@ describe('blueprint validation', () => {
 
         expect(() => validator.validate({
             ...blueprint([]),
-            productionLogistics: { employees: [employee, employee] },
+            productionLogistics: { employees: [employee, employee], supplies: [] },
         })).toThrow('duplicate employee ID "worker-1"');
         expect(() => validator.validate({
             ...blueprint([]),
             productionLogistics: {
+                supplies: [],
                 employees: [{
                     ...employee,
                     handlerRoutes: [employee.handlerRoutes[0]!, employee.handlerRoutes[0]!],
                 }],
             },
         })).toThrow('duplicate route ID "route-1"');
+        const supply = {
+            id: 'supply-1',
+            itemId: 'raw',
+            sourcePlacementId: 'storage',
+            quantity: 1,
+        };
+        expect(() => validator.validate({
+            ...blueprint([]),
+            productionLogistics: { employees: [], supplies: [supply, supply] },
+        })).toThrow('duplicate supply ID "supply-1"');
+        expect(() => validator.validate({
+            ...blueprint([]),
+            productionLogistics: {
+                employees: [],
+                supplies: [{ ...supply, quantity: 0 }],
+            },
+        })).toThrow('supply quantity at index 0 must be positive');
     });
 
     it('rejects ambiguous normalized dataset indexes', () => {
@@ -340,11 +358,11 @@ function datasetWithCompleteGrid(): BlueprintDataset {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-2',
+        schema: 'neonschedule1-blueprint-3',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
-        productionLogistics: { employees: [] },
+        productionLogistics: { employees: [], supplies: [] },
         placements,
     };
 }

@@ -102,11 +102,11 @@ function analyzer(input: { readonly fixedShape?: ColliderShape } = {}): Blueprin
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-2',
+        schema: 'neonschedule1-blueprint-3',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
-        productionLogistics: { employees: [] },
+        productionLogistics: { employees: [], supplies: [] },
         placements,
     };
 }

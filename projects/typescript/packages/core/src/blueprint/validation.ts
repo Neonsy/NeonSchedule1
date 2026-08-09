@@ -446,10 +446,30 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
             handlerRoutes,
         };
     });
+    const supplyIds = new Set<string>();
+    const supplies = document.productionLogistics.supplies.map((supply, supplyIndex) => {
+        requireNonBlank(supply.id, `Blueprint supply ID at index ${supplyIndex}`);
+        if (supplyIds.has(supply.id)) {
+            throw new TypeError(
+                `Blueprint contains duplicate supply ID ${JSON.stringify(supply.id)}`
+            );
+        }
+        supplyIds.add(supply.id);
+        requireNonBlank(supply.itemId, `Blueprint supply item ID at index ${supplyIndex}`);
+        requireNonBlank(
+            supply.sourcePlacementId,
+            `Blueprint supply source placement ID at index ${supplyIndex}`
+        );
+        requireSafeInteger(supply.quantity, `Blueprint supply quantity at index ${supplyIndex}`);
+        if (supply.quantity <= 0) {
+            throw new RangeError(`Blueprint supply quantity at index ${supplyIndex} must be positive`);
+        }
+        return { ...supply };
+    });
     return {
         ...document,
         placements,
-        productionLogistics: { employees },
+        productionLogistics: { employees, supplies },
     };
 }
 

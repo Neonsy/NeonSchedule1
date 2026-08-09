@@ -138,11 +138,11 @@ function dataset(): BlueprintDataset {
 
 function blueprint(): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-2',
+        schema: 'neonschedule1-blueprint-3',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
-        productionLogistics: { employees: [] },
+        productionLogistics: { employees: [], supplies: [] },
         placements: [{
             id: 'bench-1',
             kind: 'grid',
