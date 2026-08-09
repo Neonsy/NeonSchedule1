@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -11,7 +10,6 @@ import {
 } from '#solver/precompute-index-binary';
 import { verifyRecipeCorpusIndexArtifact } from '#solver/precompute-index-artifact';
 import type { RecipeCorpusIndex } from '#solver/precompute-index';
-import { RuntimeRecipeCorpusIndex } from '#solver/runtime-index';
 
 describe('recipe corpus binary index', () => {
     it('round-trips verified runtime columns', async () => {
@@ -36,34 +34,22 @@ describe('recipe corpus binary index', () => {
         }
     });
 
-    it('loads the previous JSON artifact contract for rollback', async () => {
-        const directory = await mkdtemp(path.join(tmpdir(), 'neonschedule1-json-index-'));
+    it.each([
+        ['manifest-1 with lookup.json', 'neonschedule1-recipe-corpus-index-manifest-1', 'lookup.json'],
+        ['manifest-2 with lookup.bin', 'neonschedule1-recipe-corpus-index-manifest-2', 'lookup.bin'],
+    ])('rejects stale %s artifacts clearly', async (_label, schema, fileName) => {
+        const directory = await mkdtemp(path.join(tmpdir(), 'neonschedule1-stale-index-'));
         try {
-            const source = index();
-            const lookup = Buffer.from(`${JSON.stringify(source)}\n`, 'utf8');
-            const file = {
-                path: 'lookup.json' as const,
-                sha256: sha256(lookup),
-                byteLength: lookup.byteLength,
-            };
-            const body = {
-                algorithmVersion: '1',
-                corpus: source.corpus,
-                counts: { recipes: 2, products: 1, effects: 1 },
-                file,
-            };
             const manifest = {
-                schema: 'neonschedule1-recipe-corpus-index-manifest-1',
-                artifactSha256: sha256(Buffer.from(JSON.stringify(body), 'utf8')),
-                ...body,
+                schema,
+                file: { path: fileName },
             };
-            await writeFile(path.join(directory, file.path), lookup);
+            await writeFile(path.join(directory, fileName), '{}\n');
             await writeFile(path.join(directory, 'manifest.json'), `${JSON.stringify(manifest)}\n`);
 
-            const verified = await verifyRecipeCorpusIndexArtifact(directory);
-
-            expect(verified.manifest.schema).toBe(manifest.schema);
-            expect(verified.index).not.toBeInstanceOf(RuntimeRecipeCorpusIndex);
+            await expect(verifyRecipeCorpusIndexArtifact(directory)).rejects.toThrow(
+                'Recipe index artifact is stale or unsupported; expected manifest with lookup.bin'
+            );
         } finally {
             await rm(directory, { recursive: true, force: true });
         }
@@ -92,8 +78,4 @@ function index(): RecipeCorpusIndex {
         rankings: { productValue: [1, 0], netValue: [0, 1] },
         totalCostOrder: [0, 1],
     };
-}
-
-function sha256(content: Uint8Array): string {
-    return createHash('sha256').update(content).digest('hex');
 }

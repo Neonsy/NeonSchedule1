@@ -456,6 +456,11 @@ describe('recipe corpus artifact', () => {
         const indexRoot = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-index-'));
         temporaryDirectories.push(indexRoot);
         const indexed = await writeRecipeCorpusIndexArtifact(indexRoot, artifact.directory);
+        const { artifactSha256, ...identity } = indexed.manifest;
+        expect(indexed.manifest.schema).toBe('neonschedule1-recipe-corpus-index-manifest');
+        expect(createHash('sha256').update(JSON.stringify(identity)).digest('hex')).toBe(
+            artifactSha256
+        );
         const lookup = await RecipeCorpusLookup.load(artifact.directory, indexed.directory);
 
         const mixed = await lookup.query({ requiredEffectIds: ['mixed-effect'], limit: 1 });
