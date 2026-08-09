@@ -13,6 +13,7 @@ import {
 import { validateCustomerOfferOracles } from '#data-compiler/normalize/customer-offers';
 import { normalizeBuildables } from '#data-compiler/normalize/buildables';
 import { normalizeEffects } from '#data-compiler/normalize/effects';
+import { validateEmployeeRoutes } from '#data-compiler/normalize/employee-routes';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeMixing } from '#data-compiler/normalize/mixing';
 import { normalizePeople } from '#data-compiler/normalize/people';
@@ -25,7 +26,7 @@ import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.27';
+export const NORMALIZER_VERSION = '0.0.28';
 
 const deferredDomains = [] as const;
 
@@ -71,6 +72,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         new Set(shops.map((shop) => shop.code)),
         integrity
     );
+    validateEmployeeRoutes(world.navigation, properties, propertyLayouts, integrity);
 
     integrity.throwIfInvalid();
 
