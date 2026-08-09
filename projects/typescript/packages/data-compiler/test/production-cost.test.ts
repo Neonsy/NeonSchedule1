@@ -7,6 +7,8 @@ import {
     type ProductionCatalog,
 } from '@neonschedule1/core';
 
+const productionDataset = { gameVersion: 'test', datasetSha256: 'a'.repeat(64) };
+
 describe('production material costs', () => {
     it('derives nested unit costs and selects the cheapest accepted input', () => {
         const items = [
@@ -186,7 +188,8 @@ describe('production batch plans', () => {
             }
         );
 
-        expect(new ProductionBatchPlanner(costs).plan('cocaine', 100)).toEqual({
+        expect(new ProductionBatchPlanner(costs, productionDataset).plan('cocaine', 100)).toEqual({
+            dataset: productionDataset,
             targetItemId: 'cocaine',
             targetQuantity: 100,
             productionSteps: [
@@ -317,7 +320,7 @@ describe('production batch plans', () => {
             { growContainerItemId: 'tent' }
         );
 
-        expect(new ProductionBatchPlanner(costs).plan('leaf', 100)).toMatchObject({
+        expect(new ProductionBatchPlanner(costs, productionDataset).plan('leaf', 100)).toMatchObject({
             totalProcessMinutes: 585,
             requiredMaterialCost: 1_430,
             purchaseCost: 1_430,
@@ -367,7 +370,7 @@ describe('production batch plans', () => {
             growLightItemId: 'light',
         });
 
-        expect(new ProductionBatchPlanner(costs).plan('leaf', 100)).toMatchObject({
+        expect(new ProductionBatchPlanner(costs, productionDataset).plan('leaf', 100)).toMatchObject({
             totalProcessMinutes: 423,
             requiredMaterialCost: 990,
             purchaseCost: 990,

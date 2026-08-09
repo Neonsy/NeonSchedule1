@@ -8,6 +8,8 @@ import {
     type ProductionCatalog,
 } from '@neonschedule1/core';
 
+const productionDataset = { gameVersion: 'test', datasetSha256: 'a'.repeat(64) };
+
 describe('plant production additives', () => {
     it('charges one of each additive per batch and applies their stacked grow effects', () => {
         const { catalog, itemsById } = fixture();
@@ -30,7 +32,7 @@ describe('plant production additives', () => {
                 { itemId: 'speedgrow', quantity: 1, totalCost: 30 },
             ],
         });
-        expect(new ProductionBatchPlanner(costs).plan('leaf', 100)).toMatchObject({
+        expect(new ProductionBatchPlanner(costs, productionDataset).plan('leaf', 100)).toMatchObject({
             totalProcessMinutes: 180,
             requiredMaterialCost: 1_020,
             purchaseCost: 1_020,

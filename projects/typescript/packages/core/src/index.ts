@@ -51,3 +51,4 @@ export * from '#core/blueprint/construction';
 export * from '#core/blueprint/item-cost';
 export * from '#core/blueprint/temperature';
 export * from '#core/blueprint/production-capacity';
+export * from '#core/blueprint/production-schedule';

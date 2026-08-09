@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import {
     BlueprintProductionCapacityAnalyzer,
+    BlueprintProductionScheduleAnalyzer,
+    ProductionBatchPlanner,
+    ProductionMaterialCostEvaluator,
     type BlueprintDocument,
     type BlueprintProductionCapacityDataset,
     type Buildable,
     type Collider,
+    type Item,
+    type ProductionBatchPlan,
     type ProductionCatalog,
     type Property,
     type PropertyLayout,
@@ -129,7 +134,7 @@ describe('blueprint production capacity', () => {
                 kind: 'station-recipe',
                 outputItemId: 'liquid',
                 recordedOutputQuantity: 1,
-                recordedDuration: { kind: 'fixed', minutes: 360 },
+                recordedDuration: { kind: 'fixed', minutes: 10 },
                 temperatureRule: {
                     kind: 'internal-cook-setpoint',
                     temperature: 180,
@@ -222,7 +227,232 @@ describe('blueprint production capacity', () => {
             },
         })).toThrow('Grow-container minimum temperature must not exceed its maximum');
     });
+
+    it('schedules whole batches across installed units within each production step', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot-b', 'pot', 1),
+                placement('chemistry', 'chemistry', 2),
+                placement('pot-a', 'pot', 0),
+            ]),
+            schedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result).toMatchObject({
+            durationBasis: 'production-batch-plan',
+            parallelScheduling: 'whole-batches-within-each-production-step',
+            crossStepConcurrency: 'not-evaluated',
+            batchPipelining: 'not-evaluated',
+            routing: 'not-evaluated',
+            lightingCoverage: 'not-evaluated',
+            effectiveTemperature: 'not-evaluated',
+            serialProcessMinutes: 350,
+            scheduledElapsedMinutes: 230,
+            parallelTimeSavedMinutes: 120,
+            schedule: [
+                {
+                    stepIndex: 0,
+                    itemId: 'leaf',
+                    equipmentItemId: 'pot',
+                    installedUnitCount: 2,
+                    usedUnitCount: 2,
+                    batchCount: 5,
+                    durationMinutesPerBatch: 60,
+                    waveCount: 3,
+                    startMinute: 0,
+                    endMinute: 180,
+                    elapsedMinutes: 180,
+                    assignments: [
+                        {
+                            placementId: 'pot-a',
+                            firstBatchNumber: 1,
+                            lastBatchNumber: 3,
+                            batchCount: 3,
+                            startMinute: 0,
+                            endMinute: 180,
+                        },
+                        {
+                            placementId: 'pot-b',
+                            firstBatchNumber: 4,
+                            lastBatchNumber: 5,
+                            batchCount: 2,
+                            startMinute: 0,
+                            endMinute: 120,
+                        },
+                    ],
+                },
+                {
+                    stepIndex: 1,
+                    itemId: 'liquid',
+                    equipmentItemId: 'chemistry',
+                    installedUnitCount: 1,
+                    usedUnitCount: 1,
+                    batchCount: 5,
+                    waveCount: 5,
+                    startMinute: 180,
+                    endMinute: 230,
+                },
+            ],
+        });
+    });
+
+    it('preserves blueprint rejection without producing a schedule', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 99),
+                placement('chemistry', 'chemistry', 1),
+            ]),
+            schedulePlan()
+        );
+
+        expect(result.kind).toBe('rejected');
+        expect(result.schedule).toEqual([]);
+    });
+
+    it('returns no partial schedule when compatible equipment is missing', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([placement('pot', 'pot', 0)]),
+            schedulePlan()
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.schedule).toEqual([]);
+        expect(result.issues).toEqual([{
+            code: 'missing-compatible-equipment',
+            stepIndex: 1,
+            itemId: 'liquid',
+            routeId: 'recipe:liquid',
+            acceptedEquipmentItemIds: ['chemistry'],
+            selectedEquipmentItemId: 'chemistry',
+            compatibleInstalledEquipmentItemIds: [],
+        }]);
+    });
+
+    it('requires an equipment choice instead of combining heterogeneous station types', () => {
+        const source = dataset();
+        const recipe = source.production.stationRecipes[0]!;
+        const plan = schedulePlan();
+        const liquid = plan.productionSteps[1]!;
+        const result = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            buildables: [...source.buildables, buildable('chemistry-mk2')],
+            production: {
+                ...source.production,
+                stationRecipes: [{
+                    ...recipe,
+                    acceptedEquipmentItemIds: ['chemistry', 'chemistry-mk2'],
+                }],
+            },
+        }).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry', 'chemistry', 1),
+                placement('chemistry-mk2', 'chemistry-mk2', 2),
+            ]),
+            {
+                ...plan,
+                productionSteps: [
+                    plan.productionSteps[0]!,
+                    {
+                        ...liquid,
+                        acceptedEquipmentItemIds: ['chemistry', 'chemistry-mk2'],
+                        equipmentItemId: null,
+                    },
+                ],
+            }
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.issues).toEqual([{
+            code: 'equipment-selection-required',
+            stepIndex: 1,
+            itemId: 'liquid',
+            routeId: 'recipe:liquid',
+            acceptedEquipmentItemIds: ['chemistry', 'chemistry-mk2'],
+            selectedEquipmentItemId: null,
+            compatibleInstalledEquipmentItemIds: ['chemistry', 'chemistry-mk2'],
+        }]);
+    });
+
+    it('rejects a batch plan whose produced dependency appears after its consumer', () => {
+        const plan = schedulePlan();
+
+        expect(() => new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry', 'chemistry', 1),
+            ]),
+            {
+                ...plan,
+                targetItemId: 'leaf',
+                productionSteps: [...plan.productionSteps].reverse(),
+            }
+        )).toThrow('Production step "recipe:liquid" depends on later step item "leaf"');
+    });
+
+    it('rejects a batch plan from a different normalized dataset', () => {
+        const plan = schedulePlan();
+
+        expect(() => new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry', 'chemistry', 1),
+            ]),
+            {
+                ...plan,
+                dataset: { ...plan.dataset, datasetSha256: 'b'.repeat(64) },
+            }
+        )).toThrow('Production plan belongs to a different normalized dataset');
+    });
+
+    it('does not treat a different process route with the same output as compatible', () => {
+        const plan = schedulePlan();
+        const liquid = plan.productionSteps[1]!;
+        const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('chemistry', 'chemistry', 1),
+            ]),
+            {
+                ...plan,
+                productionSteps: [
+                    plan.productionSteps[0]!,
+                    { ...liquid, routeId: 'recipe:other' },
+                ],
+            }
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.issues).toEqual([{
+            code: 'missing-compatible-equipment',
+            stepIndex: 1,
+            itemId: 'liquid',
+            routeId: 'recipe:other',
+            acceptedEquipmentItemIds: ['chemistry'],
+            selectedEquipmentItemId: 'chemistry',
+            compatibleInstalledEquipmentItemIds: [],
+        }]);
+    });
 });
+
+function schedulePlan(): ProductionBatchPlan {
+    const items = ['seed', 'soil', 'leaf', 'liquid', 'pot', 'chemistry']
+        .map((itemId) => item(itemId, ['seed', 'soil'].includes(itemId) ? 1 : null));
+    const catalog = production();
+    const costs = new ProductionMaterialCostEvaluator(
+        new Map(items.map((entry) => [entry.id, entry])),
+        { ...catalog, shrooms: [] }
+    );
+    return new ProductionBatchPlanner(
+        costs,
+        { gameVersion, datasetSha256 }
+    ).plan('liquid', 5);
+}
 
 function analyzer(): BlueprintProductionCapacityAnalyzer {
     return new BlueprintProductionCapacityAnalyzer(dataset());
@@ -280,12 +510,12 @@ function production(): ProductionCatalog {
             schema: 'neonschedule1-station-recipe-2',
             id: 'liquid',
             title: 'Liquid',
-            cookTimeMinutes: 360,
+            cookTimeMinutes: 10,
             cookTemperature: 180,
             cookTemperatureTolerance: 25,
             qualityCalculationMethod: 'Additive',
             acceptedEquipmentItemIds: ['chemistry'],
-            ingredients: [{ quantity: 1, acceptedItemIds: ['ingredient'] }],
+            ingredients: [{ quantity: 10, acceptedItemIds: ['leaf'] }],
             outputItemId: 'liquid',
             outputQuantity: 1,
         }],
@@ -400,6 +630,34 @@ function buildable(
         transitAccessPoints: [],
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
+    };
+}
+
+function item(id: string, basePurchasePrice: number | null): Item {
+    return {
+        schema: 'neonschedule1-item-3',
+        id,
+        name: id,
+        category: 'Test',
+        isRuntimeOnly: false,
+        stackLimit: 20,
+        isStorable: true,
+        basePurchasePrice,
+        resellMultiplier: 1,
+        requiredRank: null,
+        requiredRankTier: null,
+        product: null,
+        packaging: null,
+        additive: null,
+        soil: id === 'soil' ? { quality: 'Test', uses: 1 } : null,
+        mixingIngredient: null,
+        presentation: {
+            description: '',
+            iconFileId: null,
+            visualKind: 'none',
+            fallbackMeshIds: [],
+            fallbackMaterialIds: [],
+        },
     };
 }
 

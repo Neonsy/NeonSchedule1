@@ -42,7 +42,13 @@ export interface ProductionPurchase {
     readonly purchaseCost: number;
 }
 
+export interface ProductionPlanDataset {
+    readonly gameVersion: string;
+    readonly datasetSha256: string;
+}
+
 export interface ProductionBatchPlan {
+    readonly dataset: ProductionPlanDataset;
     readonly targetItemId: string;
     readonly targetQuantity: number;
     readonly productionSteps: readonly ProductionBatchStep[];
@@ -59,9 +65,16 @@ interface IndexedCosts {
 
 export class ProductionBatchPlanner {
     readonly #costs: ProductionMaterialCostEvaluator;
+    readonly #dataset: ProductionPlanDataset;
 
-    constructor(costs: ProductionMaterialCostEvaluator) {
+    constructor(costs: ProductionMaterialCostEvaluator, dataset: ProductionPlanDataset) {
+        requireNonBlank(dataset.gameVersion, 'Production dataset game version');
+        requireSha256(dataset.datasetSha256, 'Production dataset identity');
         this.#costs = costs;
+        this.#dataset = {
+            gameVersion: dataset.gameVersion,
+            datasetSha256: dataset.datasetSha256,
+        };
     }
 
     plan(targetItemId: string, targetQuantity: number): ProductionBatchPlan {
@@ -75,6 +88,7 @@ export class ProductionBatchPlanner {
             .sort((left, right) => left.itemId.localeCompare(right.itemId));
 
         return {
+            dataset: { ...this.#dataset },
             targetItemId,
             targetQuantity,
             productionSteps: [...expansion.steps].reverse(),
@@ -215,4 +229,16 @@ function requirePositive(value: number, label: string): void {
 
 function requirePositiveInteger(value: number, label: string): void {
     if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`);
+}
+
+function requireNonBlank(value: string, label: string): void {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new TypeError(`${label} must not be blank`);
+    }
+}
+
+function requireSha256(value: string, label: string): void {
+    if (!/^[a-f0-9]{64}$/u.test(value)) {
+        throw new TypeError(`${label} must be a lowercase SHA-256 digest`);
+    }
 }
