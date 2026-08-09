@@ -53,3 +53,4 @@ export * from '#core/blueprint/temperature';
 export * from '#core/blueprint/production-capacity';
 export * from '#core/blueprint/production-schedule';
 export * from '#core/blueprint/production-routing-inputs';
+export * from '#core/blueprint/production-endpoint-access';
