@@ -49,6 +49,7 @@ export * from '#core/production/inventory';
 export * from '#core/production/packaging';
 export * from '#core/production/plan';
 export * from '#core/production/property-transfers';
+export * from '#core/production/shopping-routes';
 export * from '#core/production/time';
 export * from '#core/progression/availability';
 export * from '#core/relationship/graph';
