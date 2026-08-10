@@ -31,7 +31,7 @@ import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.32';
+export const NORMALIZER_VERSION = '0.0.33';
 
 const deferredDomains = [] as const;
 
@@ -45,6 +45,9 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     validateItemRankRequirements(items, ranks, integrity);
     const mixing = normalizeMixing(acquisition.report, effects, items, integrity);
     const itemIds = new Set(items.map((item) => item.id));
+    const additiveItemIds = new Set(
+        items.filter((item) => item.additive !== null).map((item) => item.id)
+    );
     const productIds = new Set(
         acquisition.report.products.map((product, index) =>
             stringField(product, 'id', `report.products[${index}]`)
@@ -58,7 +61,12 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     );
     validateCustomerEnjoymentOracles(acquisition.report, customers, items, integrity);
     validateCustomerOfferOracles(acquisition.report, customers, items, integrity);
-    const production = normalizeProduction(acquisition.report, itemIds, integrity);
+    const production = normalizeProduction(
+        acquisition.report,
+        itemIds,
+        additiveItemIds,
+        integrity
+    );
     const productionLogistics = normalizeProductionLogistics(
         acquisition.report,
         itemIds,

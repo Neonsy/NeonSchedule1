@@ -50,6 +50,7 @@ const dryingMaximumQualityTier = 'Heavenly';
 export function normalizeProduction(
     report: RawReport,
     itemIds: ReadonlySet<string>,
+    additiveItemIds: ReadonlySet<string>,
     integrity: Integrity
 ): ProductionCatalog {
     const seeds = indexUnique(report.seeds, 'itemId', 'report.seeds', integrity);
@@ -62,7 +63,9 @@ export function normalizeProduction(
         integrity
     );
     const normalizedStations = [...stations.entries()]
-        .map(([itemId, raw]) => normalizeStation(itemId, raw, itemIds, integrity))
+        .map(([itemId, raw]) =>
+            normalizeStation(itemId, raw, itemIds, additiveItemIds, integrity)
+        )
         .filter((station): station is ProductionStation => station !== null)
         .sort((left, right) => left.itemId.localeCompare(right.itemId));
     const soils = productionSoils(report, normalizedStations, itemIds, integrity);
@@ -309,6 +312,7 @@ function normalizeStation(
     itemId: string,
     raw: JsonObject,
     itemIds: ReadonlySet<string>,
+    additiveItemIds: ReadonlySet<string>,
     integrity: Integrity
 ): ProductionStation | null {
     const path = `report.productionStations[${JSON.stringify(itemId)}]`;
@@ -320,6 +324,13 @@ function normalizeStation(
         case 'grow-container': {
             const allowedSoilIds = referencedIds(raw, 'allowedSoilIds', path, itemIds, integrity);
             const allowedAdditiveIds = referencedIds(raw, 'allowedAdditiveIds', path, itemIds, integrity);
+            for (const additiveItemId of allowedAdditiveIds) {
+                integrity.check(
+                    `${path}.allowedAdditiveIds ${additiveItemId} has an additive definition`,
+                    additiveItemIds.has(additiveItemId),
+                    `${path}.allowedAdditiveIds references non-additive item ${JSON.stringify(additiveItemId)}`
+                );
+            }
             return {
                 ...base,
                 kind,

@@ -116,7 +116,6 @@ describe('finished recipe production plans', () => {
             },
         });
         expect(plan.evidence.unmodeledOperations).toEqual([
-            unmodeled('finished-product-additives'),
             unmodeled('drying', 'available-not-selected'),
             unmodeled('packaging', 'available-not-selected'),
             unmodeled('brick-pressing'),

@@ -56,6 +56,20 @@ export interface FinishedRecipeMixingStep {
     readonly requiresManualIngredientInsertion: boolean;
 }
 
+export interface FinishedRecipeGrowAdditiveStep {
+    readonly position: 'during-base-product-growth';
+    readonly productionItemId: string;
+    readonly growContainerItemId: string;
+    readonly additiveItemId: string;
+    readonly batchCount: number;
+    readonly applicationCount: number;
+    readonly materialQuantity: number;
+    readonly qualityChange: number;
+    readonly yieldMultiplier: number;
+    readonly instantGrowth: number;
+    readonly manualApplicationDuration: 'interactive-not-fixed';
+}
+
 export interface FinishedRecipeDryingStep {
     readonly position: 'after-ordered-mixing';
     readonly stationItemId: string;
@@ -76,7 +90,6 @@ export interface FinishedRecipeDryingStep {
 }
 
 export type FinishedRecipeUnmodeledOperation =
-    | 'finished-product-additives'
     | 'drying'
     | 'packaging'
     | 'brick-pressing'
@@ -127,6 +140,7 @@ export interface FinishedRecipeProductionPlan {
     readonly recipe: RecipeEvaluation;
     readonly finishedQuantity: number;
     readonly baseProductPlan: ProductionBatchPlan;
+    readonly growAdditiveSteps: readonly FinishedRecipeGrowAdditiveStep[];
     readonly ingredientDemands: readonly FinishedRecipeIngredientDemand[];
     readonly purchases: readonly ProductionPurchase[];
     readonly mixingSteps: readonly FinishedRecipeMixingStep[];
@@ -145,7 +159,6 @@ type MixingStation = Extract<
 type DryingRackStation = Extract<ProductionStation, { readonly kind: 'drying-rack' }>;
 
 const unmodeledOperationKinds: readonly FinishedRecipeUnmodeledOperation[] = [
-    'finished-product-additives',
     'drying',
     'packaging',
     'brick-pressing',
@@ -177,6 +190,11 @@ export class FinishedRecipeProductionPlanner {
         const ingredientDemands = this.#ingredientDemands(recipe, finishedQuantity);
         const baseProductPlan = this.#baseProducts.plan(recipe.productId, finishedQuantity);
         assertCompatibleCostBasis(recipe, baseProductPlan);
+        const growAdditiveSteps = finishedRecipeGrowAdditiveSteps(
+            this.#itemsById,
+            this.#catalog,
+            baseProductPlan
+        );
         const station = this.#mixingStation(options.mixingStationItemId);
         const needsMixing = recipe.ingredientIds.length > 0;
         const mixingSteps = station === null
@@ -237,6 +255,7 @@ export class FinishedRecipeProductionPlanner {
             recipe: cloneRecipe(recipe),
             finishedQuantity,
             baseProductPlan,
+            growAdditiveSteps,
             ingredientDemands,
             purchases: purchaseDemands,
             mixingSteps,
@@ -420,6 +439,64 @@ export class FinishedRecipeProductionPlanner {
         );
         return station;
     }
+}
+
+function finishedRecipeGrowAdditiveSteps(
+    itemsById: ReadonlyMap<string, Item>,
+    catalog: ProductionCatalog,
+    baseProductPlan: ProductionBatchPlan
+): FinishedRecipeGrowAdditiveStep[] {
+    return baseProductPlan.productionSteps.flatMap((productionStep) =>
+        productionStep.additiveItemIds.map((additiveItemId) => {
+            if (productionStep.method !== 'seed-harvest') {
+                throw new Error(
+                    `Production step ${JSON.stringify(productionStep.routeId)} applies grow additives outside seed harvest`
+                );
+            }
+            const growContainer = catalog.stations.find(
+                (station) => station.itemId === productionStep.equipmentItemId
+            );
+            if (growContainer?.kind !== 'grow-container') {
+                throw new Error(
+                    `Production step ${JSON.stringify(productionStep.routeId)} applies grow additives without a grow container`
+                );
+            }
+            if (!growContainer.allowedAdditiveIds.includes(additiveItemId)) {
+                throw new Error(
+                    `Grow container ${JSON.stringify(growContainer.itemId)} does not accept additive ${JSON.stringify(additiveItemId)}`
+                );
+            }
+            const additive = itemsById.get(additiveItemId)?.additive;
+            if (additive === null || additive === undefined) {
+                throw new Error(`Unknown grow additive ${JSON.stringify(additiveItemId)}`);
+            }
+            const input = productionStep.inputs.find(
+                (candidate) => candidate.itemId === additiveItemId
+            );
+            if (
+                input === undefined ||
+                input.quantityPerBatch !== 1 ||
+                input.totalQuantity !== productionStep.batchCount
+            ) {
+                throw new Error(
+                    `Grow additive ${JSON.stringify(additiveItemId)} material demand does not match one application per batch`
+                );
+            }
+            return {
+                position: 'during-base-product-growth',
+                productionItemId: productionStep.itemId,
+                growContainerItemId: growContainer.itemId,
+                additiveItemId,
+                batchCount: productionStep.batchCount,
+                applicationCount: productionStep.batchCount,
+                materialQuantity: input.totalQuantity,
+                qualityChange: additive.qualityChange,
+                yieldMultiplier: additive.yieldMultiplier,
+                instantGrowth: additive.instantGrowth,
+                manualApplicationDuration: 'interactive-not-fixed',
+            };
+        })
+    );
 }
 
 function modeledScope(

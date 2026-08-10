@@ -308,32 +308,29 @@ describe('domain normalization', () => {
         );
         const integrity = new Integrity();
 
-        const production = normalizeProduction(
-            report,
-            new Set([
-                'seed',
-                'product',
-                'soil',
-                'substrate',
-                'shroom',
-                'input',
-                'liquid',
-                'mixer',
-                'pot',
-                'growtent',
-                'cauldron',
-                'leaf',
-                'fuel',
-                'base',
-                'spawn-station',
-                'grain-bag',
-                'syringe',
-                'spawn',
-                'chemistrystation',
-                'mushroombed',
-            ]),
-            integrity
-        );
+        const itemIds = new Set([
+            'seed',
+            'product',
+            'soil',
+            'substrate',
+            'shroom',
+            'input',
+            'liquid',
+            'mixer',
+            'pot',
+            'growtent',
+            'cauldron',
+            'leaf',
+            'fuel',
+            'base',
+            'spawn-station',
+            'grain-bag',
+            'syringe',
+            'spawn',
+            'chemistrystation',
+            'mushroombed',
+        ]);
+        const production = normalizeProduction(report, itemIds, new Set(), integrity);
 
         expect(integrity.errors).toEqual([]);
         expect(production.seeds[0]).toMatchObject({
@@ -427,6 +424,15 @@ describe('domain normalization', () => {
             workTimeMinutes: 6,
             sporeSyringes: [{ syringeQuantity: 1, outputSpawnQuantity: 1 }],
         });
+
+        const pot = report.productionStations.find((station) => station.itemId === 'pot');
+        if (pot === undefined) throw new Error('Missing pot fixture');
+        pot.allowedAdditiveIds = ['soil'];
+        const invalidAdditiveIntegrity = new Integrity();
+        normalizeProduction(report, itemIds, new Set(), invalidAdditiveIntegrity);
+        expect(invalidAdditiveIntegrity.errors).toContain(
+            'report.productionStations["pot"].allowedAdditiveIds references non-additive item "soil"'
+        );
     });
 
     it('classifies intentional iconless definitions and reports unexplained ones', () => {

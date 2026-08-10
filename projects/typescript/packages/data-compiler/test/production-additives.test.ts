@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    FinishedRecipeProductionPlanner,
     PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
     ProductionMaterialCostEvaluator,
     type Additive,
     type Item,
     type ProductionCatalog,
+    type RecipeEvaluation,
 } from '@neonschedule1/core';
 
 const productionDataset = { gameVersion: 'test', datasetSha256: 'a'.repeat(64) };
@@ -89,6 +91,73 @@ describe('plant production additives', () => {
         });
     });
 
+    it('composes selected grow additives as base-growth operations', () => {
+        const { catalog, itemsById } = fixture();
+        const costs = new ProductionMaterialCostEvaluator(itemsById, catalog, {
+            growContainerItemId: 'tent',
+            additiveItemIds: ['speedgrow', 'pgr'],
+        });
+        const baseProductCost = costs.evaluate('leaf').unitCost;
+        const recipe: RecipeEvaluation = {
+            ruleProfile: { kind: 'standard' },
+            productId: 'leaf',
+            ingredientIds: [],
+            effectIds: [],
+            productValue: 100,
+            baseProductCost,
+            baseProductCostBasis: 'production-materials',
+            ingredientCost: 0,
+            totalCost: baseProductCost,
+            netValue: 100 - baseProductCost,
+            ingredientCount: 0,
+        };
+        const planner = new FinishedRecipeProductionPlanner(
+            new ProductionBatchPlanner(costs, productionDataset),
+            itemsById,
+            catalog
+        );
+
+        const plan = planner.plan(recipe, 100);
+
+        expect(plan.growAdditiveSteps).toEqual([
+            {
+                position: 'during-base-product-growth',
+                productionItemId: 'leaf',
+                growContainerItemId: 'tent',
+                additiveItemId: 'pgr',
+                batchCount: 6,
+                applicationCount: 6,
+                materialQuantity: 6,
+                qualityChange: -0.2,
+                yieldMultiplier: 1.5,
+                instantGrowth: 0,
+                manualApplicationDuration: 'interactive-not-fixed',
+            },
+            {
+                position: 'during-base-product-growth',
+                productionItemId: 'leaf',
+                growContainerItemId: 'tent',
+                additiveItemId: 'speedgrow',
+                batchCount: 6,
+                applicationCount: 6,
+                materialQuantity: 6,
+                qualityChange: -0.2,
+                yieldMultiplier: 1,
+                instantGrowth: 0.5,
+                manualApplicationDuration: 'interactive-not-fixed',
+            },
+        ]);
+        expect(plan.purchases).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ itemId: 'pgr', requiredQuantity: 6 }),
+                expect.objectContaining({ itemId: 'speedgrow', requiredQuantity: 6 }),
+            ])
+        );
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'finished-product-additives'
+        );
+    });
+
     it('rejects additive selections the game would not accept', () => {
         const { catalog, itemsById } = fixture();
 
@@ -139,7 +208,7 @@ function fixture(): {
 } {
     const items = [
         item('seed', 100),
-        item('leaf'),
+        productItem('leaf'),
         item('soil', 10, undefined, 1),
         item('tent'),
         item('pgr', 30, { qualityChange: -0.2, yieldMultiplier: 1.5, instantGrowth: 0 }),
@@ -227,6 +296,20 @@ function item(
             visualKind: 'none',
             fallbackMeshIds: [],
             fallbackMaterialIds: [],
+        },
+    };
+}
+
+function productItem(id: string): Item {
+    return {
+        ...item(id),
+        product: {
+            drugType: 'Marijuana',
+            basePrice: 100,
+            marketValue: 100,
+            baseAddictiveness: 0,
+            effectIds: [],
+            validPackagingIds: [],
         },
     };
 }
