@@ -93,6 +93,7 @@ describe('finished recipe production plans', () => {
             duration: {
                 baseProductProcessMinutes: 20,
                 mixingProcessMinutes: 54,
+                dryingProcessMinutes: null,
                 knownProcessMinutes: 74,
                 modeledTotalProcessMinutes: 74,
             },
@@ -109,17 +110,83 @@ describe('finished recipe production plans', () => {
                 modeledDurationProof: 'complete',
                 finishedLifecycleProof: 'partial',
                 missingFacts: [],
+                dryingApplicability: 'available-not-selected',
             },
         });
         expect(plan.evidence.unmodeledOperations).toEqual([
             unmodeled('finished-product-additives'),
-            unmodeled('drying'),
+            unmodeled('drying', 'available-not-selected'),
             unmodeled('packaging'),
             unmodeled('brick-pressing'),
             unmodeled('equipment-purchase'),
             unmodeled('transport'),
         ]);
         expect(planner.plan(recipe, 3, { mixingStationItemId: 'mixer' })).toEqual(plan);
+    });
+
+    it('adds a selected same-item drying quality upgrade after ordered mixing', () => {
+        const { planner, recipe } = fixture();
+
+        const plan = planner.plan(recipe, 3, {
+            mixingStationItemId: 'mixer',
+            drying: {
+                stationItemId: 'dryer',
+                startingQuality: 'Standard',
+                targetQuality: 'Heavenly',
+                averageTemperature: 40,
+            },
+        });
+
+        expect(plan.dryingStep).toEqual({
+            position: 'after-ordered-mixing',
+            stationItemId: 'dryer',
+            itemId: 'product',
+            startingQuality: 'Standard',
+            targetQuality: 'Heavenly',
+            qualityTierCount: 2,
+            capacityPerBatch: 2,
+            batchQuantities: [2, 1],
+            inputQuantity: 3,
+            outputQuantity: 3,
+            averageTemperature: 40,
+            processMultiplier: 2.5,
+            baseMinutesPerTier: 720,
+            effectiveMinutesPerTier: 288,
+            minutesPerBatch: 576,
+            totalProcessMinutes: 1_152,
+        });
+        expect(plan.duration).toEqual({
+            baseProductProcessMinutes: 20,
+            mixingProcessMinutes: 54,
+            dryingProcessMinutes: 1_152,
+            knownProcessMinutes: 1_226,
+            modeledTotalProcessMinutes: 1_226,
+        });
+        expect(plan.evidence).toMatchObject({
+            modeledScope: 'base-product-ordered-mixing-and-selected-drying',
+            dryingApplicability: 'selected',
+            finishedLifecycleProof: 'partial',
+        });
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'drying'
+        );
+
+        expect(
+            planner.plan(recipe, 3, {
+                mixingStationItemId: 'mixer',
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Premium',
+                    averageTemperature: 20,
+                },
+            }).dryingStep
+        ).toMatchObject({
+            qualityTierCount: 1,
+            processMultiplier: 1,
+            effectiveMinutesPerTier: 720,
+            totalProcessMinutes: 1_440,
+        });
     });
 
     it('returns partial modeled duration when no mixing-station fact is supplied', () => {
@@ -130,6 +197,7 @@ describe('finished recipe production plans', () => {
             duration: {
                 baseProductProcessMinutes: 20,
                 mixingProcessMinutes: null,
+                dryingProcessMinutes: null,
                 knownProcessMinutes: 20,
                 modeledTotalProcessMinutes: null,
             },
@@ -156,11 +224,58 @@ describe('finished recipe production plans', () => {
             duration: {
                 baseProductProcessMinutes: 0,
                 mixingProcessMinutes: 0,
+                dryingProcessMinutes: null,
                 knownProcessMinutes: 0,
                 modeledTotalProcessMinutes: 0,
             },
-            evidence: { modeledDurationProof: 'complete', missingFacts: [] },
+            evidence: {
+                modeledDurationProof: 'complete',
+                missingFacts: [],
+                dryingApplicability: 'available-not-selected',
+            },
         });
+    });
+
+    it('marks excluded product drug types as not dryable', () => {
+        const product = item('product', 8, 'product', 'Shrooms');
+        const rack = item('dryer');
+        const catalog: ProductionCatalog = {
+            ...emptyCatalog(),
+            stations: [{
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'dryer',
+                kind: 'drying-rack',
+                capacity: 20,
+                maxProcessMultiplier: 1.5,
+                processMinutesPerTier: 720,
+                minimumTemperatureThreshold: 20,
+                maximumTemperatureThreshold: 40,
+            }],
+        };
+        const itemsById = new Map([product, rack].map((entry) => [entry.id, entry]));
+        const costs = new ProductionMaterialCostEvaluator(itemsById, catalog);
+        const planner = new FinishedRecipeProductionPlanner(
+            new ProductionBatchPlanner(costs, dataset),
+            itemsById,
+            catalog
+        );
+        const evaluated = recipe([], 8, 'base-purchase-price');
+
+        const plan = planner.plan(evaluated, 1);
+        expect(plan.evidence.dryingApplicability).toBe('not-applicable');
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'drying'
+        );
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Heavenly',
+                    averageTemperature: 20,
+                },
+            })
+        ).toThrow('Product "product" is not dryable');
     });
 
     it('rejects invalid quantities, stations, recipes, and missing material routes', () => {
@@ -173,6 +288,26 @@ describe('finished recipe production plans', () => {
         expect(() => planner.plan(evaluated, 1, { mixingStationItemId: 'pot' })).toThrow(
             'Unknown mixing station "pot"'
         );
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                drying: {
+                    stationItemId: 'pot',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Heavenly',
+                    averageTemperature: 20,
+                },
+            })
+        ).toThrow('Unknown drying rack "pot"');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Heavenly',
+                    targetQuality: 'Standard',
+                    averageTemperature: 20,
+                },
+            })
+        ).toThrow('Drying target quality must be higher than starting quality');
         expect(() => planner.plan({ ...evaluated, ingredientCost: 1 }, 1)).toThrow(
             'Recipe ingredient cost is incompatible with normalized item prices'
         );
@@ -212,6 +347,7 @@ function fixture(): {
         item('cuke', 3, 'ingredient'),
         item('pot'),
         item('mixer'),
+        item('dryer'),
     ];
     const itemsById = new Map(items.map((entry) => [entry.id, entry]));
     const catalog: ProductionCatalog = {
@@ -249,6 +385,16 @@ function fixture(): {
                 capacity: 2,
                 timePerItem: 6,
                 requiresManualIngredientInsertion: true,
+            },
+            {
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'dryer',
+                kind: 'drying-rack',
+                capacity: 2,
+                maxProcessMultiplier: 1.5,
+                processMinutesPerTier: 720,
+                minimumTemperatureThreshold: 20,
+                maximumTemperatureThreshold: 40,
             },
         ],
     };
@@ -293,23 +439,47 @@ function recipe(
     };
 }
 
-function unmodeled(operation: string): unknown {
+function unmodeled(
+    operation: string,
+    applicability: 'not-established' | 'available-not-selected' = 'not-established'
+): unknown {
     return {
         operation,
-        applicability: 'not-established',
+        applicability,
         materialCost: null,
         processMinutes: null,
     };
 }
 
+function dryingRules(): ProductionCatalog['drying'] {
+    return {
+        schema: 'neonschedule1-drying-operation-rules-1',
+        requiresUnpackagedProduct: true,
+        acceptedProductDrugTypes: ['Cocaine', 'Marijuana', 'Methamphetamine'],
+        specialQualityItemIdSubstring: 'cocaleaf',
+        specialItemRequiresQualityInstance: true,
+        maximumQualityTier: 'Heavenly',
+        itemIdTransformation: 'preserved',
+        quantityTransformation: 'preserved',
+        qualityTierIncrement: 1,
+    };
+}
+
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-5',
+        schema: 'neonschedule1-production-catalog-6',
+        drying: dryingRules(),
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,
             customerQualityMaxEffect: 0.3,
-            tiers: [{ name: 'Standard', minimumLevelExclusive: null, customerScalar: 0.5 }],
+            tiers: [
+                { name: 'Trash', minimumLevelExclusive: null, customerScalar: 0 },
+                { name: 'Poor', minimumLevelExclusive: 0.25, customerScalar: 0.25 },
+                { name: 'Standard', minimumLevelExclusive: 0.4, customerScalar: 0.5 },
+                { name: 'Premium', minimumLevelExclusive: 0.75, customerScalar: 0.75 },
+                { name: 'Heavenly', minimumLevelExclusive: 0.9, customerScalar: 1 },
+            ],
         },
         seeds: [],
         shrooms: [],
@@ -322,7 +492,8 @@ function emptyCatalog(): ProductionCatalog {
 function item(
     id: string,
     basePurchasePrice: number | null = null,
-    role?: 'ingredient' | 'product' | 'soil'
+    role?: 'ingredient' | 'product' | 'soil',
+    drugType = 'Marijuana'
 ): Item {
     return {
         schema: 'neonschedule1-item-3',
@@ -339,7 +510,7 @@ function item(
         product:
             role === 'product'
                 ? {
-                      drugType: 'Test',
+                      drugType,
                       basePrice: 20,
                       marketValue: 20,
                       baseAddictiveness: 0,

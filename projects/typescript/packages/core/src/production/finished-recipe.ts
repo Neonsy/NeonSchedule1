@@ -10,6 +10,14 @@ import {
 
 export interface FinishedRecipeProductionOptions {
     readonly mixingStationItemId?: string;
+    readonly drying?: FinishedRecipeDryingOptions;
+}
+
+export interface FinishedRecipeDryingOptions {
+    readonly stationItemId: string;
+    readonly startingQuality: string;
+    readonly targetQuality: string;
+    readonly averageTemperature: number;
 }
 
 export interface FinishedRecipeIngredientDemand {
@@ -35,6 +43,25 @@ export interface FinishedRecipeMixingStep {
     readonly requiresManualIngredientInsertion: boolean;
 }
 
+export interface FinishedRecipeDryingStep {
+    readonly position: 'after-ordered-mixing';
+    readonly stationItemId: string;
+    readonly itemId: string;
+    readonly startingQuality: string;
+    readonly targetQuality: string;
+    readonly qualityTierCount: number;
+    readonly capacityPerBatch: number;
+    readonly batchQuantities: readonly number[];
+    readonly inputQuantity: number;
+    readonly outputQuantity: number;
+    readonly averageTemperature: number;
+    readonly processMultiplier: number;
+    readonly baseMinutesPerTier: number;
+    readonly effectiveMinutesPerTier: number;
+    readonly minutesPerBatch: number;
+    readonly totalProcessMinutes: number;
+}
+
 export type FinishedRecipeUnmodeledOperation =
     | 'finished-product-additives'
     | 'drying'
@@ -45,24 +72,28 @@ export type FinishedRecipeUnmodeledOperation =
 
 export interface FinishedRecipeUnmodeledOperationEvidence {
     readonly operation: FinishedRecipeUnmodeledOperation;
-    readonly applicability: 'not-established';
+    readonly applicability: 'not-established' | 'available-not-selected';
     readonly materialCost: null;
     readonly processMinutes: null;
 }
 
 export interface FinishedRecipeProductionEvidence {
-    readonly modeledScope: 'base-product-and-ordered-mixing';
+    readonly modeledScope:
+        | 'base-product-and-ordered-mixing'
+        | 'base-product-ordered-mixing-and-selected-drying';
     readonly modeledQuantityProof: 'exact';
     readonly materialCostCoverage: 'modeled-materials-only';
     readonly modeledDurationProof: 'complete' | 'partial';
     readonly finishedLifecycleProof: 'partial';
     readonly missingFacts: readonly 'mixing-station'[];
+    readonly dryingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
     readonly unmodeledOperations: readonly FinishedRecipeUnmodeledOperationEvidence[];
 }
 
 export interface FinishedRecipeProductionDuration {
     readonly baseProductProcessMinutes: number;
     readonly mixingProcessMinutes: number | null;
+    readonly dryingProcessMinutes: number | null;
     readonly knownProcessMinutes: number;
     readonly modeledTotalProcessMinutes: number | null;
 }
@@ -82,6 +113,7 @@ export interface FinishedRecipeProductionPlan {
     readonly ingredientDemands: readonly FinishedRecipeIngredientDemand[];
     readonly purchases: readonly ProductionPurchase[];
     readonly mixingSteps: readonly FinishedRecipeMixingStep[];
+    readonly dryingStep: FinishedRecipeDryingStep | null;
     readonly duration: FinishedRecipeProductionDuration;
     readonly cost: FinishedRecipeProductionCost;
     readonly evidence: FinishedRecipeProductionEvidence;
@@ -92,6 +124,8 @@ type MixingStation = Extract<
     { readonly kind: 'mixing' | 'mixing-mk2' }
 >;
 
+type DryingRackStation = Extract<ProductionStation, { readonly kind: 'drying-rack' }>;
+
 const unmodeledOperationKinds: readonly FinishedRecipeUnmodeledOperation[] = [
     'finished-product-additives',
     'drying',
@@ -100,14 +134,6 @@ const unmodeledOperationKinds: readonly FinishedRecipeUnmodeledOperation[] = [
     'equipment-purchase',
     'transport',
 ];
-
-const unmodeledOperations: readonly FinishedRecipeUnmodeledOperationEvidence[] =
-    unmodeledOperationKinds.map((operation) => ({
-        operation,
-        applicability: 'not-established',
-        materialCost: null,
-        processMinutes: null,
-    }));
 
 export class FinishedRecipeProductionPlanner {
     readonly #baseProducts: ProductionBatchPlanner;
@@ -143,6 +169,16 @@ export class FinishedRecipeProductionPlanner {
         const mixingProcessMinutes = needsMixing && station === null
             ? null
             : mixingSteps.reduce((total, step) => total + step.totalProcessMinutes, 0);
+        const dryingAvailable = this.#isDryingAvailable(recipe.productId);
+        const dryingStep = options.drying === undefined
+            ? null
+            : this.#dryingStep(recipe.productId, finishedQuantity, options.drying);
+        const dryingApplicability = dryingStep !== null
+            ? 'selected'
+            : dryingAvailable
+              ? 'available-not-selected'
+              : 'not-applicable';
+        const dryingProcessMinutes = dryingStep?.totalProcessMinutes ?? null;
         const purchaseDemands = mergePurchases(baseProductPlan.purchases, ingredientDemands);
         const requiredMaterialCost = purchaseDemands.reduce(
             (total, purchase) => total + purchase.requiredCost,
@@ -153,7 +189,9 @@ export class FinishedRecipeProductionPlanner {
             0
         );
         const knownProcessMinutes =
-            baseProductPlan.totalProcessMinutes + (mixingProcessMinutes ?? 0);
+            baseProductPlan.totalProcessMinutes +
+            (mixingProcessMinutes ?? 0) +
+            (dryingProcessMinutes ?? 0);
 
         return {
             dataset: { ...baseProductPlan.dataset },
@@ -163,9 +201,11 @@ export class FinishedRecipeProductionPlanner {
             ingredientDemands,
             purchases: purchaseDemands,
             mixingSteps,
+            dryingStep,
             duration: {
                 baseProductProcessMinutes: baseProductPlan.totalProcessMinutes,
                 mixingProcessMinutes,
+                dryingProcessMinutes,
                 knownProcessMinutes,
                 modeledTotalProcessMinutes:
                     mixingProcessMinutes === null ? null : knownProcessMinutes,
@@ -177,13 +217,29 @@ export class FinishedRecipeProductionPlanner {
                 purchaseCost,
             },
             evidence: {
-                modeledScope: 'base-product-and-ordered-mixing',
+                modeledScope: dryingStep === null
+                    ? 'base-product-and-ordered-mixing'
+                    : 'base-product-ordered-mixing-and-selected-drying',
                 modeledQuantityProof: 'exact',
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: mixingProcessMinutes === null ? 'partial' : 'complete',
                 finishedLifecycleProof: 'partial',
                 missingFacts: mixingProcessMinutes === null ? ['mixing-station'] : [],
-                unmodeledOperations: unmodeledOperations.map((operation) => ({ ...operation })),
+                dryingApplicability,
+                unmodeledOperations: unmodeledOperationKinds
+                    .filter(
+                        (operation) =>
+                            operation !== 'drying' ||
+                            dryingApplicability === 'available-not-selected'
+                    )
+                    .map((operation) => ({
+                        operation,
+                        applicability: operation === 'drying'
+                            ? 'available-not-selected'
+                            : 'not-established',
+                        materialCost: null,
+                        processMinutes: null,
+                    })),
             },
         };
     }
@@ -259,6 +315,118 @@ export class FinishedRecipeProductionPlanner {
         );
         return station;
     }
+
+    #isDryingAvailable(productId: string): boolean {
+        const product = this.#itemsById.get(productId)?.product;
+        if (product === null || product === undefined) {
+            throw new Error(`Recipe product ${JSON.stringify(productId)} is not a product`);
+        }
+        return this.#catalog.drying.acceptedProductDrugTypes.includes(product.drugType);
+    }
+
+    #dryingStep(
+        productId: string,
+        quantity: number,
+        options: FinishedRecipeDryingOptions
+    ): FinishedRecipeDryingStep {
+        if (!this.#isDryingAvailable(productId)) {
+            throw new Error(`Product ${JSON.stringify(productId)} is not dryable`);
+        }
+        const station = this.#dryingStation(options.stationItemId);
+        const qualityTierCount = dryingTierCount(
+            this.#catalog,
+            options.startingQuality,
+            options.targetQuality
+        );
+        const processMultiplier = dryingProcessMultiplier(station, options.averageTemperature);
+        const effectiveMinutesPerTier = station.processMinutesPerTier / processMultiplier;
+        const batchQuantities = splitBatches(quantity, station.capacity);
+        const minutesPerBatch = qualityTierCount * effectiveMinutesPerTier;
+        return {
+            position: 'after-ordered-mixing',
+            stationItemId: station.itemId,
+            itemId: productId,
+            startingQuality: options.startingQuality,
+            targetQuality: options.targetQuality,
+            qualityTierCount,
+            capacityPerBatch: station.capacity,
+            batchQuantities,
+            inputQuantity: quantity,
+            outputQuantity: quantity,
+            averageTemperature: options.averageTemperature,
+            processMultiplier,
+            baseMinutesPerTier: station.processMinutesPerTier,
+            effectiveMinutesPerTier,
+            minutesPerBatch,
+            totalProcessMinutes: batchQuantities.length * minutesPerBatch,
+        };
+    }
+
+    #dryingStation(itemId: string): DryingRackStation {
+        const station = this.#catalog.stations.find((candidate) => candidate.itemId === itemId);
+        if (station?.kind !== 'drying-rack') {
+            throw new Error(`Unknown drying rack ${JSON.stringify(itemId)}`);
+        }
+        requirePositiveInteger(station.capacity, `Drying rack ${JSON.stringify(itemId)} capacity`);
+        requirePositive(
+            station.processMinutesPerTier,
+            `Drying rack ${JSON.stringify(itemId)} process minutes per tier`
+        );
+        requirePositive(
+            station.maxProcessMultiplier,
+            `Drying rack ${JSON.stringify(itemId)} maximum process multiplier`
+        );
+        return station;
+    }
+}
+
+function dryingTierCount(
+    catalog: ProductionCatalog,
+    startingQuality: string,
+    targetQuality: string
+): number {
+    const tiers = catalog.quality.tiers.map((tier) => tier.name);
+    const startingIndex = tiers.indexOf(startingQuality);
+    if (startingIndex < 0) {
+        throw new Error(`Unknown starting quality ${JSON.stringify(startingQuality)}`);
+    }
+    const targetIndex = tiers.indexOf(targetQuality);
+    if (targetIndex < 0) {
+        throw new Error(`Unknown target quality ${JSON.stringify(targetQuality)}`);
+    }
+    const maximumIndex = tiers.indexOf(catalog.drying.maximumQualityTier);
+    if (maximumIndex < 0) throw new Error('Drying maximum quality is not a normalized quality tier');
+    if (maximumIndex !== tiers.length - 1) {
+        throw new Error('Drying maximum quality must be the final normalized quality tier');
+    }
+    if (targetIndex > maximumIndex) {
+        throw new Error('Drying target quality exceeds the supported maximum');
+    }
+    if (targetIndex <= startingIndex) {
+        throw new Error('Drying target quality must be higher than starting quality');
+    }
+    return targetIndex - startingIndex;
+}
+
+function dryingProcessMultiplier(station: DryingRackStation, temperature: number): number {
+    if (!Number.isFinite(temperature)) throw new Error('Drying average temperature must be finite');
+    const minimum = station.minimumTemperatureThreshold;
+    const maximum = station.maximumTemperatureThreshold;
+    if (
+        !Number.isFinite(minimum) ||
+        !Number.isFinite(maximum) ||
+        minimum <= 0 ||
+        !close(maximum, minimum * 2)
+    ) {
+        throw new Error('Drying rack temperature thresholds are invalid');
+    }
+    if (temperature <= minimum) return 1;
+    const progress = Math.min(1, Math.max(0, (temperature - minimum) / minimum));
+    return 1 + progress * station.maxProcessMultiplier;
+}
+
+function close(left: number, right: number): boolean {
+    return Math.abs(left - right) <= Math.max(1, Math.abs(left), Math.abs(right)) * 1e-9;
 }
 
 function mixingStep(

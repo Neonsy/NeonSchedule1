@@ -355,6 +355,17 @@ describe('domain normalization', () => {
                 { name: 'Heavenly', minimumLevelExclusive: 0.9, customerScalar: 1 },
             ],
         });
+        expect(production.drying).toEqual({
+            schema: 'neonschedule1-drying-operation-rules-1',
+            requiresUnpackagedProduct: true,
+            acceptedProductDrugTypes: ['Cocaine', 'Marijuana', 'Methamphetamine'],
+            specialQualityItemIdSubstring: 'cocaleaf',
+            specialItemRequiresQualityInstance: true,
+            maximumQualityTier: 'Heavenly',
+            itemIdTransformation: 'preserved',
+            quantityTransformation: 'preserved',
+            qualityTierIncrement: 1,
+        });
         expect(production.shrooms[0]).toMatchObject({
             spawnItemId: 'spawn',
             soilItemIds: ['substrate'],

@@ -118,6 +118,20 @@ describe('plant production additives', () => {
     });
 });
 
+function dryingRules(): ProductionCatalog['drying'] {
+    return {
+        schema: 'neonschedule1-drying-operation-rules-1',
+        requiresUnpackagedProduct: true,
+        acceptedProductDrugTypes: ['Cocaine', 'Marijuana', 'Methamphetamine'],
+        specialQualityItemIdSubstring: 'cocaleaf',
+        specialItemRequiresQualityInstance: true,
+        maximumQualityTier: 'Heavenly',
+        itemIdTransformation: 'preserved',
+        quantityTransformation: 'preserved',
+        qualityTierIncrement: 1,
+    };
+}
+
 function fixture(): {
     readonly catalog: ProductionCatalog;
     readonly itemsById: ReadonlyMap<string, Item>;
@@ -134,7 +148,8 @@ function fixture(): {
     return {
         itemsById: new Map(items.map((entry) => [entry.id, entry])),
         catalog: {
-            schema: 'neonschedule1-production-catalog-5',
+            schema: 'neonschedule1-production-catalog-6',
+            drying: dryingRules(),
             quality: {
                 basePlantLevel: 0.5,
                 monetaryValueVariesByQuality: false,

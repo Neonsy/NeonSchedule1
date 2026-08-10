@@ -34,6 +34,13 @@ const mushroomSpawnOutputQuantity = 1;
 const mushroomSpawnWorkTimeMinutes = 6;
 const minutesPerHour = 60;
 
+// ItemFilter_Dryable accepts unpackaged, sub-Heavenly products for drug-type enum values other
+// than None and Shrooms. Its separate quality-item branch accepts sub-Heavenly coca-leaf IDs.
+// DryingOperation preserves item identity and quantity and advances one EQuality tier at a time.
+const dryingAcceptedProductDrugTypes = ['Cocaine', 'Marijuana', 'Methamphetamine'];
+const dryingSpecialQualityItemIdSubstring = 'cocaleaf';
+const dryingMaximumQualityTier = 'Heavenly';
+
 export function normalizeProduction(
     report: RawReport,
     itemIds: ReadonlySet<string>,
@@ -67,8 +74,19 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-5',
+        schema: 'neonschedule1-production-catalog-6',
         quality: normalizeProductionQuality(report, itemIds, integrity),
+        drying: {
+            schema: 'neonschedule1-drying-operation-rules-1',
+            requiresUnpackagedProduct: true,
+            acceptedProductDrugTypes: [...dryingAcceptedProductDrugTypes],
+            specialQualityItemIdSubstring: dryingSpecialQualityItemIdSubstring,
+            specialItemRequiresQualityInstance: true,
+            maximumQualityTier: dryingMaximumQualityTier,
+            itemIdTransformation: 'preserved',
+            quantityTransformation: 'preserved',
+            qualityTierIncrement: 1,
+        },
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),

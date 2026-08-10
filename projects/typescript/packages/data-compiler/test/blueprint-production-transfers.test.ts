@@ -800,9 +800,24 @@ function item(id: string, stackLimit: number): BlueprintProductionLogisticsDatas
     };
 }
 
+function dryingRules(): ProductionCatalog['drying'] {
+    return {
+        schema: 'neonschedule1-drying-operation-rules-1',
+        requiresUnpackagedProduct: true,
+        acceptedProductDrugTypes: ['Cocaine', 'Marijuana', 'Methamphetamine'],
+        specialQualityItemIdSubstring: 'cocaleaf',
+        specialItemRequiresQualityInstance: true,
+        maximumQualityTier: 'Heavenly',
+        itemIdTransformation: 'preserved',
+        quantityTransformation: 'preserved',
+        qualityTierIncrement: 1,
+    };
+}
+
 function production(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-5',
+        schema: 'neonschedule1-production-catalog-6',
+        drying: dryingRules(),
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,

@@ -30,6 +30,19 @@ export const ProductionQualityRulesSchema = type({
 });
 export type ProductionQualityRules = typeof ProductionQualityRulesSchema.infer;
 
+export const DryingOperationRulesSchema = type({
+    schema: "'neonschedule1-drying-operation-rules-1'",
+    requiresUnpackagedProduct: 'true',
+    acceptedProductDrugTypes: 'string[]',
+    specialQualityItemIdSubstring: 'string',
+    specialItemRequiresQualityInstance: 'true',
+    maximumQualityTier: 'string',
+    itemIdTransformation: "'preserved'",
+    quantityTransformation: "'preserved'",
+    qualityTierIncrement: '1',
+});
+export type DryingOperationRules = typeof DryingOperationRulesSchema.infer;
+
 export const ShroomProductionSchema = type({
     schema: "'neonschedule1-shroom-production-3'",
     spawnItemId: 'string',
@@ -179,8 +192,9 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-5'",
+    schema: "'neonschedule1-production-catalog-6'",
     quality: ProductionQualityRulesSchema,
+    drying: DryingOperationRulesSchema,
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),
