@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
     ProductionMaterialCostEvaluator,
     type Additive,
@@ -148,8 +149,9 @@ function fixture(): {
     return {
         itemsById: new Map(items.map((entry) => [entry.id, entry])),
         catalog: {
-            schema: 'neonschedule1-production-catalog-6',
+            schema: 'neonschedule1-production-catalog-7',
             drying: dryingRules(),
+            packaging: { ...PACKAGING_OPERATION_RULES },
             quality: {
                 basePlantLevel: 0.5,
                 monetaryValueVariesByQuality: false,

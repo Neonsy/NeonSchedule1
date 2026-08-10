@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     FinishedRecipeProductionPlanner,
+    PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
     ProductionMaterialCostEvaluator,
     type Item,
@@ -111,12 +112,13 @@ describe('finished recipe production plans', () => {
                 finishedLifecycleProof: 'partial',
                 missingFacts: [],
                 dryingApplicability: 'available-not-selected',
+                packagingApplicability: 'available-not-selected',
             },
         });
         expect(plan.evidence.unmodeledOperations).toEqual([
             unmodeled('finished-product-additives'),
             unmodeled('drying', 'available-not-selected'),
-            unmodeled('packaging'),
+            unmodeled('packaging', 'available-not-selected'),
             unmodeled('brick-pressing'),
             unmodeled('equipment-purchase'),
             unmodeled('transport'),
@@ -159,6 +161,7 @@ describe('finished recipe production plans', () => {
             baseProductProcessMinutes: 20,
             mixingProcessMinutes: 54,
             dryingProcessMinutes: 1_152,
+            packagingEmployeeRealSeconds: null,
             knownProcessMinutes: 1_226,
             modeledTotalProcessMinutes: 1_226,
         });
@@ -187,6 +190,92 @@ describe('finished recipe production plans', () => {
             effectiveMinutesPerTier: 720,
             totalProcessMinutes: 1_440,
         });
+    });
+
+    it('packages the largest supported whole quantity with exact material and employee time', () => {
+        const { planner, recipe } = fixture();
+
+        const plan = planner.plan(recipe, 21, {
+            mixingStationItemId: 'mixer',
+            packaging: {
+                stationItemId: 'packager-mk2',
+                packagingItemId: 'jar',
+                employeePackagingSpeedMultiplier: 1.25,
+                employeeCurrentWorkSpeed: 0.8,
+            },
+        });
+
+        expect(plan.packagingStep).toEqual({
+            position: 'after-optional-drying',
+            stationItemId: 'packager-mk2',
+            stationKind: 'packaging-mk2',
+            productItemId: 'product',
+            packagingItemId: 'jar',
+            inputProductState: 'unpackaged',
+            outputProductState: 'packaged',
+            inputProductQuantity: 21,
+            productQuantityPerPackage: 5,
+            packageCount: 4,
+            packagedProductQuantity: 20,
+            unpackagedRemainderQuantity: 1,
+            packagingMaterialQuantity: 4,
+            outputSlotCapacityPackages: 20,
+            outputBatchPackageCounts: [4],
+            employeeBaseSecondsPerPackage: 5,
+            employeePackagingSpeedMultiplier: 1.25,
+            stationEmployeeSpeedMultiplier: 2,
+            employeeCurrentWorkSpeed: 0.8,
+            employeeSecondsPerPackage: 2.5,
+            totalEmployeeRealSeconds: 10,
+        });
+        expect(plan.purchases).toContainEqual(
+            expect.objectContaining({
+                itemId: 'jar',
+                requiredQuantity: 4,
+                purchaseQuantity: 4,
+                requiredCost: 12,
+                purchaseCost: 12,
+            })
+        );
+        expect(plan.duration.packagingEmployeeRealSeconds).toBe(10);
+        expect(plan.evidence).toMatchObject({
+            modeledScope: 'base-product-ordered-mixing-and-selected-packaging',
+            packagingApplicability: 'selected',
+        });
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'packaging'
+        );
+        expect(
+            planner.plan(recipe, 21, {
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'baggie',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            }).packagingStep
+        ).toMatchObject({
+            packageCount: 21,
+            packagedProductQuantity: 21,
+            unpackagedRemainderQuantity: 0,
+            outputBatchPackageCounts: [20, 1],
+        });
+        expect(
+            planner.plan(recipe, 3, {
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Premium',
+                    averageTemperature: 20,
+                },
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'baggie',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            }).evidence.modeledScope
+        ).toBe('base-product-ordered-mixing-selected-drying-and-packaging');
     });
 
     it('returns partial modeled duration when no mixing-station fact is supplied', () => {
@@ -308,6 +397,46 @@ describe('finished recipe production plans', () => {
                 },
             })
         ).toThrow('Drying target quality must be higher than starting quality');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                packaging: {
+                    stationItemId: 'pot',
+                    packagingItemId: 'baggie',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Unknown packaging station "pot"');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'brick',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Packaging item "brick" is not valid for product "product"');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'jar',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Product quantity is insufficient for one "jar" package');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'baggie',
+                    employeePackagingSpeedMultiplier: 0,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Employee packaging speed multiplier must be positive');
         expect(() => planner.plan({ ...evaluated, ingredientCost: 1 }, 1)).toThrow(
             'Recipe ingredient cost is incompatible with normalized item prices'
         );
@@ -342,12 +471,15 @@ function fixture(): {
     const items = [
         item('seed', 5),
         item('soil', 1, 'soil'),
-        item('product', null, 'product'),
+        item('product', null, 'product', 'Marijuana', ['baggie', 'jar']),
         item('banana', 2, 'ingredient'),
         item('cuke', 3, 'ingredient'),
         item('pot'),
         item('mixer'),
         item('dryer'),
+        packagingItem('baggie', 1, 1),
+        packagingItem('jar', 5, 3),
+        packagingItem('brick', 20, 1),
     ];
     const itemsById = new Map(items.map((entry) => [entry.id, entry]));
     const catalog: ProductionCatalog = {
@@ -395,6 +527,12 @@ function fixture(): {
                 processMinutesPerTier: 720,
                 minimumTemperatureThreshold: 20,
                 maximumTemperatureThreshold: 40,
+            },
+            {
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'packager-mk2',
+                kind: 'packaging-mk2',
+                employeeSpeedMultiplier: 2,
             },
         ],
     };
@@ -467,8 +605,9 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-6',
+        schema: 'neonschedule1-production-catalog-7',
         drying: dryingRules(),
+        packaging: { ...PACKAGING_OPERATION_RULES },
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,
@@ -493,7 +632,8 @@ function item(
     id: string,
     basePurchasePrice: number | null = null,
     role?: 'ingredient' | 'product' | 'soil',
-    drugType = 'Marijuana'
+    drugType = 'Marijuana',
+    validPackagingIds: readonly string[] = []
 ): Item {
     return {
         schema: 'neonschedule1-item-3',
@@ -515,7 +655,7 @@ function item(
                       marketValue: 20,
                       baseAddictiveness: 0,
                       effectIds: [],
-                      validPackagingIds: [],
+                      validPackagingIds: [...validPackagingIds],
                   }
                 : null,
         packaging: null,
@@ -529,5 +669,12 @@ function item(
             fallbackMeshIds: [],
             fallbackMaterialIds: [],
         },
+    };
+}
+
+function packagingItem(id: string, quantity: number, price: number): Item {
+    return {
+        ...item(id, price),
+        packaging: { quantity, basePurchasePrice: price },
     };
 }

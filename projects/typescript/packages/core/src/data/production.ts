@@ -43,6 +43,40 @@ export const DryingOperationRulesSchema = type({
 });
 export type DryingOperationRules = typeof DryingOperationRulesSchema.infer;
 
+export const PackagingOperationRulesSchema = type({
+    schema: "'neonschedule1-packaging-operation-rules-1'",
+    requiresUnpackagedProduct: 'true',
+    packagingMaterialQuantityPerOperation: '1',
+    packagedItemQuantityPerOperation: '1',
+    productQuantitySource: "'packaging-definition-quantity'",
+    itemIdTransformation: "'preserved'",
+    productStateTransformation: "'unpackaged-to-packaged'",
+    insufficientProductRemainder: "'left-unpackaged'",
+    employeeBaseSecondsPerOperation: '5',
+    employeeDurationFormula:
+        "'base-seconds / employee-packaging-speed-multiplier / station-employee-speed-multiplier / employee-current-work-speed'",
+    manualDuration: "'interactive-not-fixed'",
+});
+export type PackagingOperationRules = typeof PackagingOperationRulesSchema.infer;
+
+// Current native PackagingStation.PackSingleInstance consumes one packaging definition and its
+// contained product quantity. The employee behaviour waits five real seconds divided by the
+// employee proficiency, station multiplier, and current work-speed multipliers.
+export const PACKAGING_OPERATION_RULES = {
+    schema: 'neonschedule1-packaging-operation-rules-1',
+    requiresUnpackagedProduct: true,
+    packagingMaterialQuantityPerOperation: 1,
+    packagedItemQuantityPerOperation: 1,
+    productQuantitySource: 'packaging-definition-quantity',
+    itemIdTransformation: 'preserved',
+    productStateTransformation: 'unpackaged-to-packaged',
+    insufficientProductRemainder: 'left-unpackaged',
+    employeeBaseSecondsPerOperation: 5,
+    employeeDurationFormula:
+        'base-seconds / employee-packaging-speed-multiplier / station-employee-speed-multiplier / employee-current-work-speed',
+    manualDuration: 'interactive-not-fixed',
+} as const satisfies PackagingOperationRules;
+
 export const ShroomProductionSchema = type({
     schema: "'neonschedule1-shroom-production-3'",
     spawnItemId: 'string',
@@ -192,9 +226,10 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-6'",
+    schema: "'neonschedule1-production-catalog-7'",
     quality: ProductionQualityRulesSchema,
     drying: DryingOperationRulesSchema,
+    packaging: PackagingOperationRulesSchema,
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

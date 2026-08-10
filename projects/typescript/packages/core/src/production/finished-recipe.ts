@@ -2,6 +2,18 @@ import type { Item } from '#core/data/item';
 import type { ProductionCatalog, ProductionStation } from '#core/data/production';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
+    isPackagingAvailable,
+    packagingMaterialDemand,
+    planFinishedRecipePackaging,
+    type FinishedRecipePackagingOptions,
+    type FinishedRecipePackagingStep,
+    type PackagingMaterialDemand,
+} from '#core/production/packaging';
+export type {
+    FinishedRecipePackagingOptions,
+    FinishedRecipePackagingStep,
+} from '#core/production/packaging';
+import {
     type ProductionBatchPlan,
     type ProductionPlanDataset,
     type ProductionPurchase,
@@ -11,6 +23,7 @@ import {
 export interface FinishedRecipeProductionOptions {
     readonly mixingStationItemId?: string;
     readonly drying?: FinishedRecipeDryingOptions;
+    readonly packaging?: FinishedRecipePackagingOptions;
 }
 
 export interface FinishedRecipeDryingOptions {
@@ -80,13 +93,16 @@ export interface FinishedRecipeUnmodeledOperationEvidence {
 export interface FinishedRecipeProductionEvidence {
     readonly modeledScope:
         | 'base-product-and-ordered-mixing'
-        | 'base-product-ordered-mixing-and-selected-drying';
+        | 'base-product-ordered-mixing-and-selected-drying'
+        | 'base-product-ordered-mixing-and-selected-packaging'
+        | 'base-product-ordered-mixing-selected-drying-and-packaging';
     readonly modeledQuantityProof: 'exact';
     readonly materialCostCoverage: 'modeled-materials-only';
     readonly modeledDurationProof: 'complete' | 'partial';
     readonly finishedLifecycleProof: 'partial';
     readonly missingFacts: readonly 'mixing-station'[];
     readonly dryingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
+    readonly packagingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
     readonly unmodeledOperations: readonly FinishedRecipeUnmodeledOperationEvidence[];
 }
 
@@ -94,6 +110,7 @@ export interface FinishedRecipeProductionDuration {
     readonly baseProductProcessMinutes: number;
     readonly mixingProcessMinutes: number | null;
     readonly dryingProcessMinutes: number | null;
+    readonly packagingEmployeeRealSeconds: number | null;
     readonly knownProcessMinutes: number;
     readonly modeledTotalProcessMinutes: number | null;
 }
@@ -114,6 +131,7 @@ export interface FinishedRecipeProductionPlan {
     readonly purchases: readonly ProductionPurchase[];
     readonly mixingSteps: readonly FinishedRecipeMixingStep[];
     readonly dryingStep: FinishedRecipeDryingStep | null;
+    readonly packagingStep: FinishedRecipePackagingStep | null;
     readonly duration: FinishedRecipeProductionDuration;
     readonly cost: FinishedRecipeProductionCost;
     readonly evidence: FinishedRecipeProductionEvidence;
@@ -179,7 +197,28 @@ export class FinishedRecipeProductionPlanner {
               ? 'available-not-selected'
               : 'not-applicable';
         const dryingProcessMinutes = dryingStep?.totalProcessMinutes ?? null;
-        const purchaseDemands = mergePurchases(baseProductPlan.purchases, ingredientDemands);
+        const packagingStep = options.packaging === undefined
+            ? null
+            : planFinishedRecipePackaging(
+                  this.#itemsById,
+                  this.#catalog,
+                  recipe.productId,
+                  finishedQuantity,
+                  options.packaging
+              );
+        const packagingApplicability = packagingStep !== null
+            ? 'selected'
+            : isPackagingAvailable(this.#itemsById, recipe.productId)
+              ? 'available-not-selected'
+              : 'not-applicable';
+        const packagingDemand = packagingStep === null
+            ? []
+            : [packagingMaterialDemand(this.#itemsById, packagingStep)];
+        const purchaseDemands = mergePurchases(
+            baseProductPlan.purchases,
+            ingredientDemands,
+            packagingDemand
+        );
         const requiredMaterialCost = purchaseDemands.reduce(
             (total, purchase) => total + purchase.requiredCost,
             0
@@ -202,10 +241,12 @@ export class FinishedRecipeProductionPlanner {
             purchases: purchaseDemands,
             mixingSteps,
             dryingStep,
+            packagingStep,
             duration: {
                 baseProductProcessMinutes: baseProductPlan.totalProcessMinutes,
                 mixingProcessMinutes,
                 dryingProcessMinutes,
+                packagingEmployeeRealSeconds: packagingStep?.totalEmployeeRealSeconds ?? null,
                 knownProcessMinutes,
                 modeledTotalProcessMinutes:
                     mixingProcessMinutes === null ? null : knownProcessMinutes,
@@ -217,24 +258,25 @@ export class FinishedRecipeProductionPlanner {
                 purchaseCost,
             },
             evidence: {
-                modeledScope: dryingStep === null
-                    ? 'base-product-and-ordered-mixing'
-                    : 'base-product-ordered-mixing-and-selected-drying',
+                modeledScope: modeledScope(dryingStep !== null, packagingStep !== null),
                 modeledQuantityProof: 'exact',
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: mixingProcessMinutes === null ? 'partial' : 'complete',
                 finishedLifecycleProof: 'partial',
                 missingFacts: mixingProcessMinutes === null ? ['mixing-station'] : [],
                 dryingApplicability,
+                packagingApplicability,
                 unmodeledOperations: unmodeledOperationKinds
                     .filter(
                         (operation) =>
-                            operation !== 'drying' ||
-                            dryingApplicability === 'available-not-selected'
+                            (operation !== 'drying' ||
+                                dryingApplicability === 'available-not-selected') &&
+                            (operation !== 'packaging' ||
+                                packagingApplicability === 'available-not-selected')
                     )
                     .map((operation) => ({
                         operation,
-                        applicability: operation === 'drying'
+                        applicability: operation === 'drying' || operation === 'packaging'
                             ? 'available-not-selected'
                             : 'not-established',
                         materialCost: null,
@@ -380,6 +422,18 @@ export class FinishedRecipeProductionPlanner {
     }
 }
 
+function modeledScope(
+    selectedDrying: boolean,
+    selectedPackaging: boolean
+): FinishedRecipeProductionEvidence['modeledScope'] {
+    if (selectedDrying && selectedPackaging) {
+        return 'base-product-ordered-mixing-selected-drying-and-packaging';
+    }
+    if (selectedDrying) return 'base-product-ordered-mixing-and-selected-drying';
+    if (selectedPackaging) return 'base-product-ordered-mixing-and-selected-packaging';
+    return 'base-product-and-ordered-mixing';
+}
+
 function dryingTierCount(
     catalog: ProductionCatalog,
     startingQuality: string,
@@ -461,7 +515,8 @@ function splitBatches(quantity: number, capacity: number): number[] {
 
 function mergePurchases(
     basePurchases: readonly ProductionPurchase[],
-    ingredientDemands: readonly FinishedRecipeIngredientDemand[]
+    ingredientDemands: readonly FinishedRecipeIngredientDemand[],
+    packagingDemands: readonly PackagingMaterialDemand[]
 ): ProductionPurchase[] {
     const requiredByItem = new Map<string, { requiredQuantity: number; unitCost: number }>();
     for (const purchase of basePurchases) {
@@ -473,6 +528,9 @@ function mergePurchases(
         );
     }
     for (const demand of ingredientDemands) {
+        addPurchaseDemand(requiredByItem, demand.itemId, demand.requiredQuantity, demand.unitCost);
+    }
+    for (const demand of packagingDemands) {
         addPurchaseDemand(requiredByItem, demand.itemId, demand.requiredQuantity, demand.unitCost);
     }
     return [...requiredByItem]

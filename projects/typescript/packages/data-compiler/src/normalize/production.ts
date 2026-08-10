@@ -1,4 +1,5 @@
 import {
+    PACKAGING_OPERATION_RULES,
     ProductionCatalogSchema,
     type HarvestProduct,
     type OvenTransform,
@@ -41,6 +42,11 @@ const dryingAcceptedProductDrugTypes = ['Cocaine', 'Marijuana', 'Methamphetamine
 const dryingSpecialQualityItemIdSubstring = 'cocaleaf';
 const dryingMaximumQualityTier = 'Heavenly';
 
+// PackagingStation.PackSingleInstance applies the selected PackagingDefinition to a one-item
+// product copy, consumes one packaging item and PackagingDefinition.Quantity loose products, and
+// leaves a smaller remainder in the product slot. PackagingStationBehaviour performs that generic
+// operation after 5 / packager proficiency / station speed / current work speed real seconds.
+
 export function normalizeProduction(
     report: RawReport,
     itemIds: ReadonlySet<string>,
@@ -74,7 +80,7 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-6',
+        schema: 'neonschedule1-production-catalog-7',
         quality: normalizeProductionQuality(report, itemIds, integrity),
         drying: {
             schema: 'neonschedule1-drying-operation-rules-1',
@@ -87,6 +93,7 @@ export function normalizeProduction(
             quantityTransformation: 'preserved',
             qualityTierIncrement: 1,
         },
+        packaging: { ...PACKAGING_OPERATION_RULES },
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),

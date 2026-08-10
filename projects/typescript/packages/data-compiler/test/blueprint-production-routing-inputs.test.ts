@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    PACKAGING_OPERATION_RULES,
     BlueprintProductionRoutingInputsAnalyzer,
     type BlueprintDocument,
     type BlueprintProductionCapacityDataset,
@@ -170,8 +171,9 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function production(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-6',
+        schema: 'neonschedule1-production-catalog-7',
         drying: dryingRules(),
+        packaging: { ...PACKAGING_OPERATION_RULES },
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,

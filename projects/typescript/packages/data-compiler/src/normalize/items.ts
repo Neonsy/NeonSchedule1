@@ -133,7 +133,49 @@ export function normalizeItems(report: RawReport, assets: VerifiedAssets, integr
         items.filter((item) => item.mixingIngredient !== null).length === mixingIngredientIndex.size,
         `Expected ${mixingIngredientIndex.size} mixing ingredients on items`
     );
+    validatePackagingContracts(items, integrity);
     return items;
+}
+
+function validatePackagingContracts(items: readonly Item[], integrity: Integrity): void {
+    const packagingById = new Map(
+        items
+            .filter((item) => item.packaging !== null)
+            .map((item) => [item.id, item.packaging] as const)
+    );
+    for (const item of items) {
+        if (item.packaging !== null) {
+            integrity.check(
+                `packaging ${item.id} contains a positive integer product quantity`,
+                Number.isInteger(item.packaging.quantity) && item.packaging.quantity > 0,
+                `Packaging ${JSON.stringify(item.id)} quantity must be a positive integer`
+            );
+            integrity.check(
+                `packaging ${item.id} has a non-negative purchase price`,
+                Number.isFinite(item.packaging.basePurchasePrice) &&
+                    item.packaging.basePurchasePrice >= 0,
+                `Packaging ${JSON.stringify(item.id)} purchase price must be non-negative`
+            );
+            integrity.check(
+                `packaging ${item.id} purchase price matches its item`,
+                item.packaging.basePurchasePrice === item.basePurchasePrice,
+                `Packaging ${JSON.stringify(item.id)} basePurchasePrice differs from its item`
+            );
+        }
+        if (item.product === null) continue;
+        integrity.check(
+            `product ${item.id} valid packaging IDs are unique`,
+            new Set(item.product.validPackagingIds).size === item.product.validPackagingIds.length,
+            `Product ${JSON.stringify(item.id)} has duplicate valid packaging IDs`
+        );
+        for (const packagingId of item.product.validPackagingIds) {
+            integrity.check(
+                `product ${item.id} packaging ${packagingId} is a packaging definition`,
+                packagingById.has(packagingId),
+                `Product ${JSON.stringify(item.id)} references non-packaging item ${JSON.stringify(packagingId)}`
+            );
+        }
+    }
 }
 
 function normalizePresentation(

@@ -366,6 +366,20 @@ describe('domain normalization', () => {
             quantityTransformation: 'preserved',
             qualityTierIncrement: 1,
         });
+        expect(production.packaging).toEqual({
+            schema: 'neonschedule1-packaging-operation-rules-1',
+            requiresUnpackagedProduct: true,
+            packagingMaterialQuantityPerOperation: 1,
+            packagedItemQuantityPerOperation: 1,
+            productQuantitySource: 'packaging-definition-quantity',
+            itemIdTransformation: 'preserved',
+            productStateTransformation: 'unpackaged-to-packaged',
+            insufficientProductRemainder: 'left-unpackaged',
+            employeeBaseSecondsPerOperation: 5,
+            employeeDurationFormula:
+                'base-seconds / employee-packaging-speed-multiplier / station-employee-speed-multiplier / employee-current-work-speed',
+            manualDuration: 'interactive-not-fixed',
+        });
         expect(production.shrooms[0]).toMatchObject({
             spawnItemId: 'spawn',
             soilItemIds: ['substrate'],
@@ -452,6 +466,40 @@ describe('domain normalization', () => {
             'Product-category item "unexpected-product" has no product record'
         );
         expect(byId.get('unexpected-product')?.isRuntimeOnly).toBe(false);
+    });
+
+    it('rejects invalid packaging quantities and product packaging relationships', () => {
+        const report = emptyReport();
+        report.items.push(
+            rawItem('product', 'Product'),
+            rawItem('package', 'Packaging'),
+            rawItem('loose', 'Ingredient')
+        );
+        report.products.push({
+            id: 'product',
+            drugType: 'Marijuana',
+            basePrice: 20,
+            marketValue: 20,
+            baseAddictiveness: 0,
+            effectIds: [],
+            validPackagingIds: ['package', 'package', 'loose'],
+            basePurchasePrice: 1,
+        });
+        report.packaging.push({ itemId: 'package', quantity: 0, basePurchasePrice: 1 });
+        report.discovery.itemPresentations.push(
+            { itemId: 'product', description: '', fallbackVisuals: { renderers: [], meshes: [] } },
+            { itemId: 'package', description: '' },
+            { itemId: 'loose', description: '', fallbackVisuals: { renderers: [], meshes: [] } }
+        );
+        const integrity = new Integrity();
+
+        normalizeItems(report, noAssets, integrity);
+
+        expect(integrity.errors).toContain('Packaging "package" quantity must be a positive integer');
+        expect(integrity.errors).toContain('Product "product" has duplicate valid packaging IDs');
+        expect(integrity.errors).toContain(
+            'Product "product" references non-packaging item "loose"'
+        );
     });
 });
 
