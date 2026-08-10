@@ -5,6 +5,8 @@ import {
     CustomerRecipeSearch,
     MixingEngine,
     RecipeOutcomeEnumerator,
+    isRecipeRankable,
+    recipeSearchObjectives,
     ReverseRecipeSearch,
     type Customer,
     type CustomerQuality,
@@ -138,7 +140,7 @@ export async function runRecipeIndexVerification(
     const recipeCases: RecipeIndexVerificationCase[] = [];
 
     for (const definition of definitions) {
-        for (const objective of ['productValue', 'netValue'] as const) {
+        for (const objective of recipeSearchObjectives) {
             const query = queryFor(definition, objective, limit);
             const startedAt = performance.now();
             const actual = await lookup.query(query);
@@ -386,6 +388,7 @@ function exhaustiveResult(
 ): RecipeEvaluation[] {
     return recipes
         .filter((recipe) =>
+            isRecipeRankable(recipe.totalCost, objective) &&
             (query.productIds === undefined || query.productIds.includes(recipe.productId)) &&
             (query.requiredEffectIds ?? []).every((effectId) => recipe.effectIds.includes(effectId)) &&
             (query.forbiddenEffectIds ?? []).every((effectId) => !recipe.effectIds.includes(effectId)) &&

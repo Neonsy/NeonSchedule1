@@ -21,7 +21,7 @@ interface PostingDescriptor {
 }
 
 interface BinaryHeader {
-    readonly schema: 'neonschedule1-recipe-corpus-index-binary-2';
+    readonly schema: 'neonschedule1-recipe-corpus-index-binary-3';
     readonly recordCount: number;
     readonly partitionOrdinalBytes: 1 | 2 | 4;
     readonly partitions: readonly CorpusPartitionIdentity[];
@@ -32,7 +32,7 @@ interface BinaryHeader {
     };
 }
 
-const magic = Buffer.from([0x4e, 0x53, 0x31, 0x49, 0x44, 0x58, 0x33, 0x00]);
+const magic = Buffer.from([0x4e, 0x53, 0x31, 0x49, 0x44, 0x58, 0x34, 0x00]);
 const prefixLength = magic.length + Uint32Array.BYTES_PER_ELEMENT;
 const littleEndian = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
@@ -43,7 +43,7 @@ export async function writeBinaryRecipeCorpusIndex(
 ): Promise<BinaryRecipeCorpusIndexFile> {
     const columns = consumeRecipeCorpusIndexColumns(source, partitions);
     const header: BinaryHeader = {
-        schema: 'neonschedule1-recipe-corpus-index-binary-2',
+        schema: 'neonschedule1-recipe-corpus-index-binary-3',
         recordCount: columns.recipeIndexes.length,
         partitionOrdinalBytes: columns.partitionOrdinals.BYTES_PER_ELEMENT as 1 | 2 | 4,
         partitions,
@@ -96,6 +96,9 @@ export async function writeBinaryRecipeCorpusIndex(
         }
         await writeColumn(columns.rankings.productValue);
         await writeColumn(columns.rankings.netValue);
+        await writeColumn(columns.rankings.fewestSteps);
+        await writeColumn(columns.rankings.lowestCost);
+        await writeColumn(columns.rankings.returnOnCost);
         await writeColumn(columns.totalCostOrder);
     } finally {
         await output.close();
@@ -165,6 +168,21 @@ export function readBinaryRecipeCorpusIndex(content: Buffer): RuntimeRecipeCorpu
         Uint32Array.BYTES_PER_ELEMENT,
         (start, length) => uint32View(content, start, length)
     );
+    const fewestSteps = take(
+        header.recordCount,
+        Uint32Array.BYTES_PER_ELEMENT,
+        (start, length) => uint32View(content, start, length)
+    );
+    const lowestCost = take(
+        header.recordCount,
+        Uint32Array.BYTES_PER_ELEMENT,
+        (start, length) => uint32View(content, start, length)
+    );
+    const returnOnCost = take(
+        header.recordCount,
+        Uint32Array.BYTES_PER_ELEMENT,
+        (start, length) => uint32View(content, start, length)
+    );
     const totalCostOrder = take(
         header.recordCount,
         Uint32Array.BYTES_PER_ELEMENT,
@@ -180,7 +198,7 @@ export function readBinaryRecipeCorpusIndex(content: Buffer): RuntimeRecipeCorpu
         totalCosts,
         ingredientCounts,
         postings: { products, effects, ingredients },
-        rankings: { productValue, netValue },
+        rankings: { productValue, netValue, fewestSteps, lowestCost, returnOnCost },
         totalCostOrder,
     });
 }
@@ -212,7 +230,7 @@ function readPostings(
 
 function parseHeader(value: unknown): BinaryHeader {
     const record = object(value, 'Recipe index binary header');
-    if (record.schema !== 'neonschedule1-recipe-corpus-index-binary-2') {
+    if (record.schema !== 'neonschedule1-recipe-corpus-index-binary-3') {
         throw new Error('Recipe index binary file has an unsupported contract');
     }
     const recordCount = integer(record.recordCount, 'binary.recordCount');

@@ -225,6 +225,7 @@ describe('recipe corpus artifact', () => {
             requiredEffectIds: ['mixed-effect'],
             requiredIngredientIds: ['ingredient'],
             exactIngredientCount: 1,
+            objective: 'fewestSteps',
             limit: 2,
         });
         const customer = await router.customer({
@@ -244,6 +245,8 @@ describe('recipe corpus artifact', () => {
         expect(recipe.kind).toBe('exact');
         if (recipe.kind !== 'exact') throw new Error('Expected exact recipe route');
         expect(recipe.request.productIds).toEqual(['product-a', 'product-b']);
+        expect(recipe.request.objective).toBe('fewestSteps');
+        expect(recipe.result.objective).toBe('fewestSteps');
         expect(recipe.result.recipes.map((entry) => entry.productId)).toEqual([
             'product-a',
             'product-b',
@@ -284,9 +287,14 @@ describe('recipe corpus artifact', () => {
             productIds: ['product-a'],
             availableIngredientIds: ['ingredient'],
             maxIngredients: 1,
+            objective: 'returnOnCost',
             limit: 1,
         }, 'quick');
         expect(packagedRecipe.kind).toBe('precomputed-exact');
+        if (packagedRecipe.kind !== 'precomputed-exact') {
+            throw new Error('Expected exact packaged recipe');
+        }
+        expect(packagedRecipe.result.objective).toBe('returnOnCost');
         expect(runtime.production.selection.selectionSha256).toBe(
             refreshed.selection.selectionSha256
         );
@@ -314,6 +322,7 @@ describe('recipe corpus artifact', () => {
             productIds: ['product-a'],
             availableIngredientIds: [],
             maxIngredients: 0,
+            objective: 'fewestSteps',
             limit: 1,
         });
         if (liveRecipeRoute.kind !== 'coverage-miss') {
@@ -323,6 +332,7 @@ describe('recipe corpus artifact', () => {
         expect(liveRecipe.kind).toBe('completed');
         if (liveRecipe.kind !== 'completed') throw new Error('Expected completed live recipe');
         expect(liveRecipe.result.recipes).toHaveLength(1);
+        expect(liveRecipe.result.objective).toBe('fewestSteps');
         expect(liveRecipe.evidence.source).toBe('live');
 
         const seededRecipeRoute = await router.recipe({
@@ -531,6 +541,9 @@ describe('recipe corpus artifact', () => {
             minimumIngredientCount: 1,
             limit: 10,
         });
+        const fewestSteps = await lookup.query({ objective: 'fewestSteps', limit: 2 });
+        const lowestCost = await lookup.query({ objective: 'lowestCost', limit: 2 });
+        const returnOnCost = await lookup.query({ objective: 'returnOnCost', limit: 2 });
 
         expect(mixed.recipes.map((recipe) => recipe.ingredientIds)).toEqual([['ingredient']]);
         expect(affordable.recipes.map((recipe) => recipe.ingredientIds)).toEqual([[]]);
@@ -543,6 +556,20 @@ describe('recipe corpus artifact', () => {
         expect(minimumCount.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
             ['ingredient'],
         ]);
+        expect(fewestSteps.objective).toBe('fewestSteps');
+        expect(fewestSteps.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            [],
+            ['ingredient'],
+        ]);
+        expect(lowestCost.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            [],
+            ['ingredient'],
+        ]);
+        expect(returnOnCost.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+            [],
+        ]);
+        expect(returnOnCost.evidence.candidateCount).toBe(2);
         expect(mixed.evidence.examinedRankingEntries).toBe(1);
         expect(affordable.evidence.examinedRankingEntries).toBe(1);
         await expect(lookup.query({
@@ -559,6 +586,43 @@ describe('recipe corpus artifact', () => {
             exactIngredientCount: 1,
             limit: 1,
         })).rejects.toThrow('minimumIngredientCount cannot exceed exactIngredientCount');
+        await expect(lookup.query({
+            objective: 'profitOverTime' as never,
+            limit: 1,
+        })).rejects.toThrow(
+            'Recipe profit-over-time ranking is unsupported because recipe results do not establish complete production duration'
+        );
+    });
+
+    it('excludes zero-cost recipes from return-on-cost corpus ranking', async () => {
+        const artifact = await writeArtifact('selective', undefined, 0);
+        const indexRoot = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-index-'));
+        temporaryDirectories.push(indexRoot);
+        const indexed = await writeRecipeCorpusIndexArtifact(indexRoot, artifact.directory);
+        const lookup = await RecipeCorpusLookup.load(artifact.directory, indexed.directory);
+
+        const result = await lookup.query({ objective: 'returnOnCost', limit: 2 });
+        const affordable = await lookup.query({
+            objective: 'returnOnCost',
+            maximumTotalCost: 2,
+            limit: 2,
+        });
+        const zeroCeiling = await lookup.query({
+            objective: 'returnOnCost',
+            maximumTotalCost: 0,
+            limit: 2,
+        });
+
+        expect(result.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+        ]);
+        expect(result.evidence.candidateCount).toBe(1);
+        expect(affordable.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+        ]);
+        expect(affordable.evidence.candidateCount).toBe(1);
+        expect(zeroCeiling.recipes).toEqual([]);
+        expect(zeroCeiling.evidence.candidateCount).toBe(0);
     });
 
     it('ranks affordable customer recommendations from corpus candidates', async () => {
@@ -596,7 +660,7 @@ describe('recipe corpus artifact', () => {
             transitionBudgetPercentiles: [0.5],
         });
 
-        expect(report.schema).toBe('neonschedule1-search-benchmark-4');
+        expect(report.schema).toBe('neonschedule1-search-benchmark-5');
         expect(report.cases.every((entry) => entry.warmupSamples.length === 2)).toBe(true);
         expect(report.cases.every((entry) => entry.firstRun !== null)).toBe(true);
         expect(report.transitionBudgetSweep).not.toBeNull();
@@ -639,7 +703,8 @@ async function writeArtifact(
     contentFor: (
         partition: RecipeCorpusPartition,
         content: Buffer
-    ) => Buffer = (_partition, content) => content
+    ) => Buffer = (_partition, content) => content,
+    baseProductCost = 4
 ): Promise<{
     readonly directory: string;
     readonly artifactSha256: string;
@@ -647,7 +712,10 @@ async function writeArtifact(
 }> {
     const directory = await mkdtemp(path.join(tmpdir(), 'neonschedule1-corpus-'));
     temporaryDirectories.push(directory);
-    const partitions = [partition(0, mode), partition(1, mode)];
+    const partitions = [
+        partition(0, mode, baseProductCost),
+        partition(1, mode, baseProductCost),
+    ];
     const files = [];
     const partitionPaths: string[] = [];
     for (const value of partitions) {
@@ -679,7 +747,11 @@ async function temporaryDirectory(prefix: string): Promise<string> {
     return directory;
 }
 
-function partition(depth: number, mode: RecipeCorpusMode): RecipeCorpusPartition {
+function partition(
+    depth: number,
+    mode: RecipeCorpusMode,
+    baseProductCost = 4
+): RecipeCorpusPartition {
     const ingredientIds = depth === 0 ? [] : ['ingredient'];
     const effectIds = depth === 0 ? ['base-effect'] : ['mixed-effect'];
     const ingredientCost = depth * 2;
@@ -716,12 +788,12 @@ function partition(depth: number, mode: RecipeCorpusMode): RecipeCorpusPartition
                 depth,
                 productValue,
                 costs: {
-                    baseProduct: 4,
+                    baseProduct: baseProductCost,
                     baseProductBasis: 'base-purchase-price',
                     ingredients: ingredientCost,
-                    total: 4 + ingredientCost,
+                    total: baseProductCost + ingredientCost,
                 },
-                netValue: productValue - 4 - ingredientCost,
+                netValue: productValue - baseProductCost - ingredientCost,
             },
         ],
     };

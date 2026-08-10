@@ -134,6 +134,12 @@ export function consumeRecipeCorpusIndexColumns(
     mutable.rankings.productValue = [];
     const netValue = Uint32Array.from(source.rankings.netValue);
     mutable.rankings.netValue = [];
+    const fewestSteps = Uint32Array.from(source.rankings.fewestSteps);
+    mutable.rankings.fewestSteps = [];
+    const lowestCost = Uint32Array.from(source.rankings.lowestCost);
+    mutable.rankings.lowestCost = [];
+    const returnOnCost = Uint32Array.from(source.rankings.returnOnCost);
+    mutable.rankings.returnOnCost = [];
     const totalCostOrder = Uint32Array.from(source.totalCostOrder);
     mutable.totalCostOrder = [];
     return {
@@ -143,7 +149,7 @@ export function consumeRecipeCorpusIndexColumns(
         totalCosts,
         ingredientCounts,
         postings: { products, effects, ingredients },
-        rankings: { productValue, netValue },
+        rankings: { productValue, netValue, fewestSteps, lowestCost, returnOnCost },
         totalCostOrder,
     };
 }
@@ -189,6 +195,9 @@ function verifyColumns(columns: RuntimeRecipeCorpusIndexColumns): void {
         columns.ingredientCounts.length !== count ||
         columns.rankings.productValue.length !== count ||
         columns.rankings.netValue.length !== count ||
+        columns.rankings.fewestSteps.length !== count ||
+        columns.rankings.lowestCost.length !== count ||
+        columns.rankings.returnOnCost.length !== count ||
         columns.totalCostOrder.length !== count) {
         throw new Error('Recipe index columns have inconsistent lengths');
     }
@@ -204,6 +213,9 @@ function verifyColumns(columns: RuntimeRecipeCorpusIndexColumns): void {
     }
     verifyPermutation(columns.rankings.productValue, count, 'product-value ranking');
     verifyPermutation(columns.rankings.netValue, count, 'net-value ranking');
+    verifyPermutation(columns.rankings.fewestSteps, count, 'fewest-steps ranking');
+    verifyPermutation(columns.rankings.lowestCost, count, 'lowest-cost ranking');
+    verifyPermutation(columns.rankings.returnOnCost, count, 'return-on-cost ranking');
     verifyPermutation(columns.totalCostOrder, count, 'total-cost order');
     for (let position = 1; position < columns.totalCostOrder.length; position++) {
         const previous = columns.totalCostOrder[position - 1]!;

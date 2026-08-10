@@ -1,4 +1,9 @@
-import type { MixingRuleProfile, RecipeSearchObjective } from '@neonschedule1/core';
+import {
+    isRecipeRankable,
+    requireRecipeSearchObjective,
+    type MixingRuleProfile,
+    type RecipeSearchObjective,
+} from '@neonschedule1/core';
 
 import {
     readRecipeCorpusPartition,
@@ -49,6 +54,7 @@ export interface RecipeCorpusSelectionResult {
 }
 
 export interface RecipeCorpusQueryResult {
+    readonly objective: RecipeSearchObjective;
     readonly recipes: readonly RecipeCorpusEntry[];
     readonly evidence: {
         readonly source: 'precomputed';
@@ -91,6 +97,9 @@ export class RecipeCorpusLookup {
         this.#rankPositions = {
             productValue: rankPositions(this.#index.rankings.productValue),
             netValue: rankPositions(this.#index.rankings.netValue),
+            fewestSteps: rankPositions(this.#index.rankings.fewestSteps),
+            lowestCost: rankPositions(this.#index.rankings.lowestCost),
+            returnOnCost: rankPositions(this.#index.rankings.returnOnCost),
         };
     }
 
@@ -134,8 +143,12 @@ export class RecipeCorpusLookup {
 
     async query(input: RecipeCorpusQuery): Promise<RecipeCorpusQueryResult> {
         validateQuery(input);
-        const objective = input.objective ?? 'productValue';
-        const { allowed, forbidden, candidateCount } = filterState(input, this.#index);
+        const objective = requireRecipeSearchObjective(input.objective ?? 'productValue');
+        const { allowed, forbidden, candidateCount } = filterState(
+            input,
+            this.#index,
+            objective
+        );
 
         let examinedRankingEntries: number;
         let selectedOrdinals: readonly number[];
@@ -143,6 +156,7 @@ export class RecipeCorpusLookup {
             const candidates = [...allowed].filter(
                 (ordinal) =>
                     !forbidden.has(ordinal) &&
+                    isRecipeRankable(this.#index.totalCosts[ordinal]!, objective) &&
                     (input.maximumTotalCost === undefined ||
                         this.#index.totalCosts[ordinal]! <= input.maximumTotalCost)
             );
@@ -158,6 +172,7 @@ export class RecipeCorpusLookup {
                 this.#minimumCostTree(objective),
                 input.maximumTotalCost,
                 forbidden,
+                objective,
                 input.limit
             );
             selectedOrdinals = selected.ordinals;
@@ -168,6 +183,7 @@ export class RecipeCorpusLookup {
             for (const ordinal of this.#index.rankings[objective]) {
                 examinedRankingEntries++;
                 if (forbidden.has(ordinal)) continue;
+                if (!isRecipeRankable(this.#index.totalCosts[ordinal]!, objective)) continue;
                 selected.push(ordinal);
                 if (selected.length === input.limit) break;
             }
@@ -178,6 +194,7 @@ export class RecipeCorpusLookup {
             recipes.push(await this.#recipe(ordinal));
         }
         return {
+            objective,
             recipes,
             evidence: {
                 source: 'precomputed',
@@ -283,6 +300,7 @@ function selectAffordable(
     tree: MinimumCostTree,
     maximumTotalCost: number,
     forbidden: ReadonlySet<number>,
+    objective: RecipeSearchObjective,
     limit: number
 ): { readonly ordinals: readonly number[]; readonly examinedRankingEntries: number } {
     const ordinals: number[] = [];
@@ -294,7 +312,10 @@ function selectAffordable(
         if (right - left === 1) {
             examinedRankingEntries++;
             const ordinal = ranking[left]!;
-            if (!forbidden.has(ordinal)) ordinals.push(ordinal);
+            if (!forbidden.has(ordinal) &&
+                isRecipeRankable(tree.values[tree.leafOffset + left]!, objective)) {
+                ordinals.push(ordinal);
+            }
             return;
         }
         const middle = left + (right - left) / 2;
@@ -311,8 +332,21 @@ function countCandidates(
     maximumTotalCost: number | undefined,
     recordCount: number,
     totalCosts: Float64Array,
-    totalCostOrder: Uint32Array
+    totalCostOrder: Uint32Array,
+    objective?: RecipeSearchObjective
 ): number {
+    if (objective === 'returnOnCost') {
+        let count = 0;
+        for (let ordinal = 0; ordinal < recordCount; ordinal++) {
+            if ((allowed === null || allowed.has(ordinal)) &&
+                !forbidden.has(ordinal) && totalCosts[ordinal]! > 0 &&
+                (maximumTotalCost === undefined ||
+                    totalCosts[ordinal]! <= maximumTotalCost)) {
+                count++;
+            }
+        }
+        return count;
+    }
     if (allowed !== null) {
         let count = 0;
         for (const ordinal of allowed) {
@@ -379,7 +413,11 @@ interface FilterState {
     readonly candidateCount: number;
 }
 
-function filterState(input: RecipeCorpusFilter, index: RuntimeRecipeCorpusIndex): FilterState {
+function filterState(
+    input: RecipeCorpusFilter,
+    index: RuntimeRecipeCorpusIndex,
+    objective?: RecipeSearchObjective
+): FilterState {
     validateFilter(input);
     const products = unique(input.productIds ?? [], 'product');
     const requiredEffects = unique(input.requiredEffectIds ?? [], 'required effect');
@@ -450,7 +488,8 @@ function filterState(input: RecipeCorpusFilter, index: RuntimeRecipeCorpusIndex)
             input.maximumTotalCost,
             index.recordCount,
             index.totalCosts,
-            index.totalCostOrder
+            index.totalCostOrder,
+            objective
         ),
     };
 }
@@ -524,10 +563,7 @@ function validateQuery(input: RecipeCorpusQuery): void {
     if (!Number.isSafeInteger(input.limit) || input.limit < 1) {
         throw new Error('Recipe corpus query limit must be a positive safe integer');
     }
-    if (input.objective !== undefined &&
-        input.objective !== 'productValue' && input.objective !== 'netValue') {
-        throw new Error(`Unknown recipe corpus objective ${JSON.stringify(input.objective)}`);
-    }
+    if (input.objective !== undefined) requireRecipeSearchObjective(input.objective);
 }
 
 function validateFilter(input: RecipeCorpusFilter): void {

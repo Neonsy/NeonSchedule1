@@ -28,7 +28,7 @@ import {
     type LiveSearchMode,
 } from '#solver/search-policy';
 
-export const liveFallbackAlgorithmVersion = '8';
+export const liveFallbackAlgorithmVersion = '9';
 
 export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 

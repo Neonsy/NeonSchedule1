@@ -11,10 +11,10 @@ import {
 } from '#solver/precompute-artifact';
 import type { RecipeCorpusEntry } from '#solver/precompute';
 
-export const recipeCorpusIndexAlgorithmVersion = '3';
+export const recipeCorpusIndexAlgorithmVersion = '4';
 
 export interface RecipeCorpusIndex {
-    readonly schema: 'neonschedule1-recipe-corpus-index-3';
+    readonly schema: 'neonschedule1-recipe-corpus-index-4';
     readonly algorithmVersion: string;
     readonly corpus: {
         readonly artifactSha256: string;
@@ -99,7 +99,7 @@ export async function buildRecipeCorpusIndex(
     return {
         manifest,
         index: {
-            schema: 'neonschedule1-recipe-corpus-index-3',
+            schema: 'neonschedule1-recipe-corpus-index-4',
             algorithmVersion: recipeCorpusIndexAlgorithmVersion,
             corpus: {
                 artifactSha256: manifest.artifactSha256,
@@ -116,6 +116,9 @@ export async function buildRecipeCorpusIndex(
             rankings: {
                 productValue: ranking(indexedRecipes, 'productValue'),
                 netValue: ranking(indexedRecipes, 'netValue'),
+                fewestSteps: ranking(indexedRecipes, 'fewestSteps'),
+                lowestCost: ranking(indexedRecipes, 'lowestCost'),
+                returnOnCost: ranking(indexedRecipes, 'returnOnCost'),
             },
             totalCostOrder: [...indexedRecipes]
                 .sort(

@@ -33,7 +33,7 @@ interface RecipeCorpusIndexManifestBase {
 
 export interface RecipeCorpusIndexManifest extends RecipeCorpusIndexManifestBase {
     readonly schema: typeof recipeCorpusIndexManifestSchema;
-    readonly storage: 'binary-columnar-2';
+    readonly storage: 'binary-columnar-3';
     readonly file: BinaryRecipeCorpusIndexFile;
 }
 
@@ -187,7 +187,7 @@ function manifestBody(
         algorithmVersion: recipeCorpusIndexAlgorithmVersion,
         corpus,
         counts,
-        storage: 'binary-columnar-2',
+        storage: 'binary-columnar-3',
         file,
     };
 }
@@ -208,7 +208,7 @@ function parseManifest(value: unknown): RecipeCorpusIndexManifest {
     const record = object(value, 'Recipe index manifest');
     const file = object(record.file, 'Recipe index file');
     if (record.schema !== recipeCorpusIndexManifestSchema ||
-        record.storage !== 'binary-columnar-2' || file.path !== 'lookup.bin') {
+        record.storage !== 'binary-columnar-3' || file.path !== 'lookup.bin') {
         throw new Error(
             'Recipe index artifact is stale or unsupported; expected manifest with lookup.bin'
         );

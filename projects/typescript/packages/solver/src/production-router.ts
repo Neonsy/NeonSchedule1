@@ -6,6 +6,7 @@ import type {
 } from '@neonschedule1/core';
 import {
     normalizeMixingRuleProfile,
+    requireRecipeSearchObjective,
     sameMixingRuleProfile,
 } from '@neonschedule1/core';
 
@@ -244,10 +245,7 @@ function normalizeRecipeRequest(
     if (input.maximumTotalCost !== undefined) {
         requireNonNegativeFinite(input.maximumTotalCost, 'Recipe maximumTotalCost');
     }
-    if (input.objective !== undefined &&
-        input.objective !== 'productValue' && input.objective !== 'netValue') {
-        throw new Error(`Unknown recipe objective ${JSON.stringify(input.objective)}`);
-    }
+    const objective = requireRecipeSearchObjective(input.objective ?? 'productValue');
     return {
         ruleProfile: normalizeMixingRuleProfile(input.ruleProfile ?? defaultRuleProfile),
         productIds: input.productIds === undefined
@@ -261,7 +259,7 @@ function normalizeRecipeRequest(
         requiredIngredientIds: ingredients.required,
         forbiddenIngredientIds: ingredients.forbidden,
         ...ingredients.counts,
-        objective: input.objective ?? 'productValue',
+        objective,
         ...(input.maximumTotalCost === undefined
             ? {}
             : { maximumTotalCost: input.maximumTotalCost }),

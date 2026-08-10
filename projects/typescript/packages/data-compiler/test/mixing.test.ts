@@ -4,6 +4,7 @@ import {
     compareRecipeEvaluations,
     mixingRuleProfileFromGameSeed,
     MixingEngine,
+    recipeSearchObjectives,
     RecipeEvaluator,
     RecipeOutcomeEnumerator,
     ReverseRecipeSearch,
@@ -201,6 +202,17 @@ describe('mixing engine', () => {
                 ingredientCount: 0,
             },
         ]);
+        const returnOnCost = search.search({
+            productId: 'product',
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 2,
+            limit: 5,
+            objective: 'returnOnCost',
+        });
+        expect(returnOnCost.objective).toBe('returnOnCost');
+        expect(returnOnCost.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+        ]);
     });
 
     it('ranks recipes by product value or value after ingredient cost', () => {
@@ -257,6 +269,21 @@ describe('mixing engine', () => {
             totalCost: 5,
             netValue: 10,
         });
+        expect(search.search({ ...input, objective: 'fewestSteps' }).recipes[0]).toMatchObject({
+            ingredientIds: [],
+            ingredientCount: 0,
+            totalCost: 4,
+        });
+        expect(search.search({ ...input, objective: 'lowestCost' }).recipes[0]).toMatchObject({
+            ingredientIds: [],
+            ingredientCount: 0,
+            totalCost: 4,
+        });
+        expect(search.search({ ...input, objective: 'returnOnCost' }).recipes[0]).toMatchObject({
+            ingredientIds: ['cheap'],
+            productValue: 15,
+            totalCost: 5,
+        });
 
         const exhaustive = new RecipeOutcomeEnumerator(
             engine,
@@ -267,7 +294,7 @@ describe('mixing engine', () => {
             availableIngredientIds: input.availableIngredientIds,
             maxIngredients: 2,
         });
-        for (const objective of ['productValue', 'netValue'] as const) {
+        for (const objective of recipeSearchObjectives) {
             for (const maximumTotalCost of [3, 4, 5, 19]) {
                 const expected = exhaustive
                     .filter((recipe) => recipe.totalCost <= maximumTotalCost)
@@ -285,6 +312,55 @@ describe('mixing engine', () => {
         expect(() => search.search({ ...input, maximumTotalCost: -1 })).toThrow(
             'maximumTotalCost must be a non-negative finite number'
         );
+        expect(() => search.search({
+            ...input,
+            objective: 'profitOverTime' as never,
+        })).toThrow(
+            'Recipe profit-over-time ranking is unsupported because recipe results do not establish complete production duration'
+        );
+    });
+
+    it('uses explicit cost, value, and identifier tie-breaks for new objectives', () => {
+        const effects = [effect('base', 0, 0)];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [{
+                drugType: 'Test',
+                drugTypeValue: 0,
+                radius: 1,
+                effects: [mapEffect('base', 0)],
+            }],
+        };
+        const items = [
+            product('cheap', ['base'], 10, 2),
+            product('valuable', ['base'], 20, 4),
+        ];
+        const search = new ReverseRecipeSearch(
+            new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry]))),
+            new Map(items.map((entry) => [entry.id, entry]))
+        );
+        const input = {
+            productIds: ['valuable', 'cheap'],
+            availableIngredientIds: [],
+            maxIngredients: 0,
+            limit: 2,
+        } as const;
+
+        expect(search.search({
+            ...input,
+            objective: 'fewestSteps',
+        }).recipes.map((recipe) => recipe.productId)).toEqual(['cheap', 'valuable']);
+        expect(search.search({
+            ...input,
+            objective: 'lowestCost',
+        }).recipes.map((recipe) => recipe.productId)).toEqual(['cheap', 'valuable']);
+        expect(search.search({
+            ...input,
+            objective: 'returnOnCost',
+        }).recipes.map((recipe) => recipe.productId)).toEqual(['valuable', 'cheap']);
     });
 
     it('fails explicitly before an exact search exceeds either budget', () => {
@@ -341,7 +417,9 @@ describe('mixing engine', () => {
             availableIngredientIds: ['ingredient'],
             maxIngredients: 1,
             limit: 1,
+            objective: 'fewestSteps',
         });
+        expect(bestFound.objective).toBe('fewestSteps');
         expect(bestFound.evidence).toMatchObject({
             proofStatus: 'incomplete',
             stopReason: 'state-limit',

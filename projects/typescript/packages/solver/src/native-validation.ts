@@ -4,6 +4,7 @@ import {
     MixingEngine,
     normalizeMixingRuleProfile,
     RecipeEvaluator,
+    recipeSearchObjectives,
     ReverseRecipeSearch,
     sameMixingRuleProfile,
     type Item,
@@ -286,7 +287,7 @@ function solverWinners(
     maxStates: number
 ): Candidate[] {
     const search = new ReverseRecipeSearch(engine, itemsById, { maxStates });
-    const objectives: readonly RecipeSearchObjective[] = ['productValue', 'netValue'];
+    const objectives: readonly RecipeSearchObjective[] = recipeSearchObjectives;
     return objectives.flatMap((objective) =>
         search.search({
             productIds,

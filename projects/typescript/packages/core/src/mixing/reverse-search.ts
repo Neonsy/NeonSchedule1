@@ -42,6 +42,7 @@ export interface ReverseRecipeEvaluation extends RecipeEvaluation {
 
 export interface ReverseRecipeSearchResult {
     readonly ruleProfile: MixingRuleProfile;
+    readonly objective: RecipeSearchObjective;
     readonly recipes: readonly ReverseRecipeEvaluation[];
     readonly evidence: RecipeSearchEvidence;
 }
@@ -126,6 +127,7 @@ export class ReverseRecipeSearch {
 
         return {
             ruleProfile: this.#engine.ruleProfile,
+            objective,
             recipes: recipes
                 .sort((left, right) => compareRecipeEvaluations(left, right, objective))
                 .slice(0, input.limit)

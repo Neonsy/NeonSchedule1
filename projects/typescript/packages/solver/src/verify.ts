@@ -1,5 +1,8 @@
 import {
+    compareRecipeEvaluations,
+    isRecipeRankable,
     MixingEngine,
+    recipeSearchObjectives,
     RecipeOutcomeEnumerator,
     ReverseRecipeSearch,
     type IngredientQuantity,
@@ -11,7 +14,7 @@ import {
 
 import type { SolverDataset } from '#solver/dataset';
 
-export const reverseSearchAlgorithmVersion = '2';
+export const reverseSearchAlgorithmVersion = '3';
 const maximumVerifiedRequiredEffects = 4;
 
 export interface ReverseSearchVerificationOptions {
@@ -116,7 +119,7 @@ export function runReverseSearchVerification(
         maxStates: options.maxStates,
     });
     const definitions = constraints.flatMap((constraint) =>
-        (['productValue', 'netValue'] as const).map((objective) => ({ constraint, objective }))
+        recipeSearchObjectives.map((objective) => ({ constraint, objective }))
     );
     const cases: ReverseSearchVerificationCase[] = [];
 
@@ -243,7 +246,10 @@ function exhaustiveResult(
     limit: number
 ): ReverseRecipeEvaluation[] {
     return corpus
-        .filter((recipe) => matches(recipe.effectIds, constraint))
+        .filter((recipe) =>
+            isRecipeRankable(recipe.totalCost, objective) &&
+            matches(recipe.effectIds, constraint)
+        )
         .sort((left, right) => compareRecipes(left, right, objective))
         .slice(0, limit)
         .map((recipe) => ({
@@ -264,16 +270,7 @@ function compareRecipes(
     right: RecipeEvaluation,
     objective: RecipeSearchObjective
 ): number {
-    const leftScore = objective === 'productValue' ? left.productValue : left.netValue;
-    const rightScore = objective === 'productValue' ? right.productValue : right.netValue;
-    return (
-        rightScore - leftScore ||
-        left.ingredientCost - right.ingredientCost ||
-        left.ingredientCount - right.ingredientCount ||
-        compareStrings(left.ingredientIds, right.ingredientIds) ||
-        compareStrings(left.effectIds, right.effectIds) ||
-        compareString(left.productId, right.productId)
-    );
+    return compareRecipeEvaluations(left, right, objective);
 }
 
 function groupIngredients(ingredientIds: readonly string[]): IngredientQuantity[] {

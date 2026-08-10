@@ -2,9 +2,11 @@ import os from 'node:os';
 
 import {
     MixingEngine,
+    recipeSearchObjectives,
     type Customer,
     type CustomerQuality,
     type RecipeSearchEvidence,
+    type RecipeSearchObjective,
 } from '@neonschedule1/core';
 
 import { benchmarkOperation } from '#solver/benchmark-operation';
@@ -16,7 +18,7 @@ import {
 } from '#solver/benchmark-transition';
 import type { SolverDataset } from '#solver/dataset';
 
-export const recipeSearchAlgorithmVersion = '4';
+export const recipeSearchAlgorithmVersion = '5';
 
 export type BenchmarkCustomerState =
     | 'baseline'
@@ -41,7 +43,7 @@ export interface SearchBenchmarkOptions {
 }
 
 export interface SearchBenchmarkReport {
-    readonly schema: 'neonschedule1-search-benchmark-4';
+    readonly schema: 'neonschedule1-search-benchmark-5';
     readonly createdAt: string;
     readonly algorithmVersion: string;
     readonly dataset: {
@@ -71,7 +73,7 @@ export interface SearchBenchmarkCase {
     readonly kind: 'recipe' | 'customer';
     readonly productId?: string;
     readonly customerId?: string;
-    readonly objective?: 'productValue' | 'netValue';
+    readonly objective?: RecipeSearchObjective;
     readonly costCeilingFraction?: number;
     readonly maximumTotalCost?: number;
     readonly depth: number;
@@ -193,7 +195,7 @@ export function runSearchBenchmark(
     const definitions: BenchmarkDefinition[] = [];
     for (const depth of options.depths) {
         for (const productId of productIds) {
-            for (const objective of ['productValue', 'netValue'] as const) {
+            for (const objective of recipeSearchObjectives) {
                 definitions.push({ phase: 'baseline', kind: 'recipe', depth, productId, objective });
                 for (const costCeilingFraction of options.recipeCostCeilingFractions) {
                     definitions.push({
@@ -275,7 +277,7 @@ export function runSearchBenchmark(
     }
 
     return {
-        schema: 'neonschedule1-search-benchmark-4',
+        schema: 'neonschedule1-search-benchmark-5',
         createdAt: new Date().toISOString(),
         algorithmVersion: recipeSearchAlgorithmVersion,
         dataset: {
@@ -319,7 +321,7 @@ export type BenchmarkDefinition = BenchmarkDefinitionBase & (
     | {
           readonly kind: 'recipe';
           readonly productId: string;
-          readonly objective: 'productValue' | 'netValue';
+          readonly objective: RecipeSearchObjective;
           readonly costCeilingFraction?: number;
           readonly maximumTotalCost?: number;
       }

@@ -34,6 +34,7 @@ describe('runtime recipe corpus index', () => {
         expect([...runtime.ingredientCounts]).toEqual([1, 2]);
         expect(runtime.postings.products.product).toBeInstanceOf(Uint32Array);
         expect(runtime.rankings.productValue).toBeInstanceOf(Uint32Array);
+        expect(runtime.rankings.fewestSteps).toBeInstanceOf(Uint32Array);
         expect(source.records).toEqual([]);
     });
 
@@ -56,8 +57,8 @@ describe('runtime recipe corpus index', () => {
 function index(records: RecipeCorpusIndex['records']): RecipeCorpusIndex {
     const ordinals = records.map((_, ordinal) => ordinal);
     return {
-        schema: 'neonschedule1-recipe-corpus-index-3',
-        algorithmVersion: '3',
+        schema: 'neonschedule1-recipe-corpus-index-4',
+        algorithmVersion: '4',
         corpus: {
             artifactSha256: 'a'.repeat(64),
             coverageKey: 'b'.repeat(64),
@@ -73,6 +74,9 @@ function index(records: RecipeCorpusIndex['records']): RecipeCorpusIndex {
         rankings: {
             productValue: ordinals,
             netValue: [...ordinals].reverse(),
+            fewestSteps: ordinals,
+            lowestCost: ordinals,
+            returnOnCost: [...ordinals].reverse(),
         },
         totalCostOrder: ordinals,
     };

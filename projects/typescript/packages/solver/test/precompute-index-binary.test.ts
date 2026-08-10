@@ -26,6 +26,9 @@ describe('recipe corpus binary index', () => {
             expect(runtime.recipeIndexAt(1)).toBe(0);
             expect([...runtime.totalCosts]).toEqual([4, 12.5]);
             expect([...runtime.ingredientCounts]).toEqual([1, 2]);
+            expect([...runtime.rankings.fewestSteps]).toEqual([0, 1]);
+            expect([...runtime.rankings.lowestCost]).toEqual([0, 1]);
+            expect([...runtime.rankings.returnOnCost]).toEqual([1, 0]);
             expect([...runtime.postings.effects.effect]).toEqual([0, 1]);
             expect([...runtime.postings.ingredients.ingredient]).toEqual([0, 1]);
             expect(() => readBinaryRecipeCorpusIndex(
@@ -65,8 +68,8 @@ const partitions = [
 
 function index(): RecipeCorpusIndex {
     return {
-        schema: 'neonschedule1-recipe-corpus-index-3',
-        algorithmVersion: '3',
+        schema: 'neonschedule1-recipe-corpus-index-4',
+        algorithmVersion: '4',
         corpus: {
             artifactSha256: 'a'.repeat(64),
             coverageKey: 'b'.repeat(64),
@@ -92,7 +95,13 @@ function index(): RecipeCorpusIndex {
             effects: { effect: [0, 1] },
             ingredients: { ingredient: [0, 1] },
         },
-        rankings: { productValue: [1, 0], netValue: [0, 1] },
+        rankings: {
+            productValue: [1, 0],
+            netValue: [0, 1],
+            fewestSteps: [0, 1],
+            lowestCost: [0, 1],
+            returnOnCost: [1, 0],
+        },
         totalCostOrder: [0, 1],
     };
 }

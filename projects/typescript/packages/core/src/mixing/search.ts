@@ -5,6 +5,8 @@ import { MixingEngine } from '#core/mixing/engine';
 import { FinalIngredientConstraints } from '#core/mixing/ingredient-constraints';
 import {
     compareRecipeEvaluations,
+    isRecipeRankable,
+    requireRecipeSearchObjective,
     recipeSearchScore,
     type RecipeSearchObjective,
 } from '#core/mixing/recipe-ranking';
@@ -68,6 +70,7 @@ export type RecipeSearchLimitBehavior = 'throw' | 'return-best-found';
 
 export interface RecipeSearchResult {
     readonly ruleProfile: MixingRuleProfile;
+    readonly objective: RecipeSearchObjective;
     readonly recipes: readonly RecipeEvaluation[];
     readonly evidence: RecipeSearchEvidence;
 }
@@ -177,7 +180,7 @@ export class RecipeSearch {
         );
         const maximumIngredientCount = ingredientConstraints.maximumIngredientCount;
         const maximumTotalCost = input.maximumTotalCost ?? Number.POSITIVE_INFINITY;
-        const objective = requireObjective(input.objective ?? 'productValue');
+        const objective = requireRecipeSearchObjective(input.objective ?? 'productValue');
         const constraints = new FinalEffectConstraints(
             this.#engine,
             input.requiredEffectIds ?? [],
@@ -230,6 +233,7 @@ export class RecipeSearch {
                         upperScore: valueBound.relaxedUpperScore(
                             state.effectIds,
                             state.ingredientCost,
+                            state.ingredientIds.length,
                             remainingIngredients
                         ),
                     }))
@@ -252,7 +256,7 @@ export class RecipeSearch {
                         prunedStates++;
                         continue;
                     }
-                    if (remainingIngredients <= 2) {
+                    if (valueBound.supportsBounds && remainingIngredients <= 2) {
                         const exact = valueBound.exactShortHorizon(
                             state.effectIds,
                             state.ingredientIds,
@@ -317,6 +321,7 @@ export class RecipeSearch {
                                     this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
                                     product.baseProductCost,
                                     candidate.ingredientCost,
+                                    candidate.ingredientIds.length,
                                     objective
                                 )
                             );
@@ -349,6 +354,7 @@ export class RecipeSearch {
         }
         const recipes = [...outcomes.values()]
             .filter((recipe) =>
+                isRecipeRankable(recipe.totalCost, objective) &&
                 constraints.matches(recipe.effectIds) &&
                 ingredientConstraints.matches(recipe.ingredientIds) &&
                 (input.maximumTotalCost === undefined ||
@@ -366,6 +372,7 @@ export class RecipeSearch {
         }
         return {
             ruleProfile: this.#engine.ruleProfile,
+            objective,
             recipes,
             evidence: interruption?.evidence ?? exactSearchEvidence(
                 exploredStates,
@@ -448,6 +455,7 @@ class RecipeScoreCutoff {
                         recipe.productValue,
                         recipe.baseProductCost,
                         recipe.ingredientCost,
+                        recipe.ingredientCount,
                         objective
                     )
                 );
@@ -459,7 +467,8 @@ class RecipeScoreCutoff {
         return this.#values.length < this.#limit ? null : (this.#values[this.#limit - 1] ?? null);
     }
 
-    add(key: string, value: number): void {
+    add(key: string, value: number | null): void {
+        if (value === null) return;
         const prior = this.#scoresByKey.get(key);
         if (prior !== undefined && prior >= value) return;
         this.#scoresByKey.set(key, value);
@@ -502,8 +511,13 @@ class RecipeValueBound {
     relaxedUpperScore(
         effectIds: readonly string[],
         ingredientCost: number,
+        ingredientCount: number,
         remainingIngredients: number
     ): number {
+        if (!this.supportsBounds) return Number.POSITIVE_INFINITY;
+        if (this.#objective === 'lowestCost') {
+            return -(this.#product.baseProductCost + ingredientCost);
+        }
         if (this.#product.basePrice < 0 || remainingIngredients > maxValueBoundDepth) {
             return Number.POSITIVE_INFINITY;
         }
@@ -523,8 +537,13 @@ class RecipeValueBound {
             upperValue,
             this.#product.baseProductCost,
             lowerCost,
+            ingredientCount,
             this.#objective
-        );
+        )!;
+    }
+
+    get supportsBounds(): boolean {
+        return this.#objective !== 'fewestSteps' && this.#objective !== 'returnOnCost';
     }
 
     exactShortHorizon(
@@ -542,15 +561,14 @@ class RecipeValueBound {
             constraints.matches(effectIds) &&
             ingredientConstraints.matches(ingredientIds)
         ) {
-            best = {
-                key: outcomeKey(effectIds),
-                value: recipeSearchScore(
-                    this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
-                    this.#product.baseProductCost,
-                    ingredientCost,
-                    this.#objective
-                ),
-            };
+            const value = recipeSearchScore(
+                this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
+                this.#product.baseProductCost,
+                ingredientCost,
+                ingredientIds.length,
+                this.#objective
+            );
+            if (value !== null) best = { key: outcomeKey(effectIds), value };
         }
         let layer = new Map([
             [ingredientConstraints.stateKey(effectIds, ingredientIds), {
@@ -606,8 +624,10 @@ class RecipeValueBound {
                     this.#engine.calculateProductValue(this.#product.basePrice, result.effectIds),
                     this.#product.baseProductCost,
                     ingredientCost + result.additionalIngredientCost,
+                    result.ingredientIds.length,
                     this.#objective
                 );
+                if (value === null) continue;
                 if (best === null || value > best.value || (value === best.value && key < best.key)) {
                     best = { key, value };
                 }
@@ -707,13 +727,6 @@ function compareStrings(left: readonly string[], right: readonly string[]): numb
 
 function outcomeKey(effectIds: readonly string[]): string {
     return JSON.stringify(effectIds);
-}
-
-function requireObjective(objective: string): RecipeSearchObjective {
-    if (objective !== 'productValue' && objective !== 'netValue') {
-        throw new Error(`Unknown recipe search objective ${JSON.stringify(objective)}`);
-    }
-    return objective;
 }
 
 function requireNonNegativeInteger(value: number, name: string): void {
