@@ -9,11 +9,6 @@ export type FinishedRecipeEquipmentRole =
     | 'packaging'
     | 'brick-pressing';
 
-export interface FinishedRecipeOwnedEquipment {
-    readonly itemId: string;
-    readonly quantity: number;
-}
-
 export interface FinishedRecipeEquipmentSelections {
     readonly mixingStationItemId: string | null;
     readonly dryingStationItemId: string | null;
@@ -25,24 +20,20 @@ export interface FinishedRecipeEquipmentRequirement {
     readonly itemId: string;
     readonly roles: readonly FinishedRecipeEquipmentRole[];
     readonly requiredQuantity: 1;
-    readonly ownedQuantity: number | null;
-    readonly missingQuantity: number | null;
     readonly unitPurchasePrice: number | null;
-    readonly missingPurchaseCost: number | null;
+    readonly requiredPurchaseCost: number | null;
 }
 
 export interface FinishedRecipeEquipmentPlan {
     readonly quantityBasis: 'minimum-one-per-selected-item-for-serial-plan';
     readonly selectionProof: 'exact' | 'partial';
     readonly unresolvedProductionRouteIds: readonly string[];
-    readonly ownershipProof: 'supplied' | 'not-supplied' | 'not-required';
     readonly purchaseCostProof:
         | 'exact'
         | 'production-equipment-selection-missing'
-        | 'equipment-ownership-not-supplied'
         | 'equipment-price-not-recorded';
     readonly requirements: readonly FinishedRecipeEquipmentRequirement[];
-    readonly totalMissingPurchaseCost: number | null;
+    readonly totalRequiredPurchaseCost: number | null;
 }
 
 const roleOrder: readonly FinishedRecipeEquipmentRole[] = [
@@ -57,8 +48,7 @@ const roleOrder: readonly FinishedRecipeEquipmentRole[] = [
 export function planFinishedRecipeEquipment(
     itemsById: ReadonlyMap<string, Item>,
     baseProductPlan: ProductionBatchPlan,
-    selections: FinishedRecipeEquipmentSelections,
-    ownedEquipment: readonly FinishedRecipeOwnedEquipment[] | undefined
+    selections: FinishedRecipeEquipmentSelections
 ): FinishedRecipeEquipmentPlan {
     const rolesByItemId = new Map<string, Set<FinishedRecipeEquipmentRole>>();
     const unresolvedProductionRouteIds: string[] = [];
@@ -74,9 +64,6 @@ export function planFinishedRecipeEquipment(
     addSelectedRole(rolesByItemId, selections.packagingStationItemId, 'packaging');
     addSelectedRole(rolesByItemId, selections.brickPressItemId, 'brick-pressing');
 
-    const ownedByItemId = ownedEquipment === undefined
-        ? null
-        : indexOwnedEquipment(itemsById, ownedEquipment);
     const requirements = [...rolesByItemId]
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([itemId, roles]): FinishedRecipeEquipmentRequirement => {
@@ -93,53 +80,33 @@ export function planFinishedRecipeEquipment(
                     `Equipment ${JSON.stringify(itemId)} purchase price must be non-negative`
                 );
             }
-            const ownedQuantity = ownedByItemId?.get(itemId) ?? (ownedByItemId === null ? null : 0);
-            const missingQuantity = ownedQuantity === null ? null : Math.max(0, 1 - ownedQuantity);
             return {
                 itemId,
                 roles: roleOrder.filter((role) => roles.has(role)),
                 requiredQuantity: 1,
-                ownedQuantity,
-                missingQuantity,
                 unitPurchasePrice,
-                missingPurchaseCost:
-                    missingQuantity === null || (missingQuantity > 0 && unitPurchasePrice === null)
-                        ? null
-                        : missingQuantity * (unitPurchasePrice ?? 0),
+                requiredPurchaseCost: unitPurchasePrice,
             };
         });
     const selectionProof = unresolvedProductionRouteIds.length === 0 ? 'exact' : 'partial';
-    const ownershipProof = requirements.length === 0
-        ? 'not-required'
-        : ownedByItemId === null
-          ? 'not-supplied'
-          : 'supplied';
-    const priceMissing = requirements.some(
-        (requirement) =>
-            requirement.missingQuantity !== null &&
-            requirement.missingQuantity > 0 &&
-            requirement.unitPurchasePrice === null
-    );
+    const priceMissing = requirements.some((requirement) => requirement.unitPurchasePrice === null);
     const purchaseCostProof = selectionProof === 'partial'
         ? 'production-equipment-selection-missing'
-        : ownershipProof === 'not-supplied'
-          ? 'equipment-ownership-not-supplied'
-          : priceMissing
-            ? 'equipment-price-not-recorded'
-            : 'exact';
-    const missingPurchaseCost = requirements.reduce(
-        (total, requirement) => total + (requirement.missingPurchaseCost ?? 0),
+        : priceMissing
+          ? 'equipment-price-not-recorded'
+          : 'exact';
+    const requiredPurchaseCost = requirements.reduce(
+        (total, requirement) => total + (requirement.requiredPurchaseCost ?? 0),
         0
     );
     return {
         quantityBasis: 'minimum-one-per-selected-item-for-serial-plan',
         selectionProof,
         unresolvedProductionRouteIds: [...new Set(unresolvedProductionRouteIds)].sort(),
-        ownershipProof,
         purchaseCostProof,
         requirements,
-        totalMissingPurchaseCost:
-            purchaseCostProof === 'exact' ? missingPurchaseCost : null,
+        totalRequiredPurchaseCost:
+            purchaseCostProof === 'exact' ? requiredPurchaseCost : null,
     };
 }
 
@@ -159,26 +126,4 @@ function addRole(
     const roles = rolesByItemId.get(itemId);
     if (roles === undefined) rolesByItemId.set(itemId, new Set([role]));
     else roles.add(role);
-}
-
-function indexOwnedEquipment(
-    itemsById: ReadonlyMap<string, Item>,
-    ownedEquipment: readonly FinishedRecipeOwnedEquipment[]
-): ReadonlyMap<string, number> {
-    const result = new Map<string, number>();
-    for (const entry of ownedEquipment) {
-        if (!itemsById.has(entry.itemId)) {
-            throw new Error(`Unknown owned equipment ${JSON.stringify(entry.itemId)}`);
-        }
-        if (result.has(entry.itemId)) {
-            throw new Error(`Owned equipment contains duplicate item ${JSON.stringify(entry.itemId)}`);
-        }
-        if (!Number.isInteger(entry.quantity) || entry.quantity < 0) {
-            throw new Error(
-                `Owned equipment ${JSON.stringify(entry.itemId)} quantity must be a non-negative integer`
-            );
-        }
-        result.set(entry.itemId, entry.quantity);
-    }
-    return result;
 }

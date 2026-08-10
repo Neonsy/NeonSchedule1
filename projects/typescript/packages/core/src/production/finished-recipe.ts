@@ -14,14 +14,22 @@ export type {
 import {
     planFinishedRecipeEquipment,
     type FinishedRecipeEquipmentPlan,
-    type FinishedRecipeOwnedEquipment,
 } from '#core/production/equipment';
 export type {
     FinishedRecipeEquipmentPlan,
     FinishedRecipeEquipmentRequirement,
     FinishedRecipeEquipmentRole,
-    FinishedRecipeOwnedEquipment,
 } from '#core/production/equipment';
+import {
+    planFinishedRecipeInventory,
+    type FinishedRecipeInventoryItem,
+    type FinishedRecipeInventoryPlan,
+} from '#core/production/inventory';
+export type {
+    FinishedRecipeInventoryItem,
+    FinishedRecipeInventoryPlan,
+    FinishedRecipeInventoryRequirement,
+} from '#core/production/inventory';
 import {
     isPackagingAvailable,
     packagingMaterialDemand,
@@ -46,7 +54,7 @@ export interface FinishedRecipeProductionOptions {
     readonly drying?: FinishedRecipeDryingOptions;
     readonly packaging?: FinishedRecipePackagingOptions;
     readonly brickPressing?: FinishedRecipeBrickPressingOptions;
-    readonly ownedEquipment?: readonly FinishedRecipeOwnedEquipment[];
+    readonly inventory?: readonly FinishedRecipeInventoryItem[];
 }
 
 export interface FinishedRecipeDryingOptions {
@@ -141,7 +149,7 @@ export interface FinishedRecipeProductionEvidence {
     readonly missingFacts: readonly (
         | 'mixing-station'
         | 'production-equipment-selection'
-        | 'equipment-ownership'
+        | 'inventory'
         | 'equipment-purchase-price'
     )[];
     readonly dryingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
@@ -167,9 +175,9 @@ export interface FinishedRecipeProductionCost {
     readonly recipeEstimatedUnitMaterialCost: number;
     readonly recipeEstimatedMaterialCost: number;
     readonly requiredMaterialCost: number;
-    readonly materialPurchaseCost: number;
-    readonly equipmentPurchaseCost: number | null;
-    readonly combinedPurchaseCost: number | null;
+    readonly materialReorderCost: number | null;
+    readonly equipmentReorderCost: number | null;
+    readonly combinedReorderCost: number | null;
 }
 
 export interface FinishedRecipeProductionPlan {
@@ -185,6 +193,7 @@ export interface FinishedRecipeProductionPlan {
     readonly packagingStep: FinishedRecipePackagingStep | null;
     readonly brickPressingStep: FinishedRecipeBrickPressingStep | null;
     readonly equipment: FinishedRecipeEquipmentPlan;
+    readonly inventory: FinishedRecipeInventoryPlan;
     readonly duration: FinishedRecipeProductionDuration;
     readonly cost: FinishedRecipeProductionCost;
     readonly evidence: FinishedRecipeProductionEvidence;
@@ -300,8 +309,7 @@ export class FinishedRecipeProductionPlanner {
                 dryingStationItemId: dryingStep?.stationItemId ?? null,
                 packagingStationItemId: packagingStep?.stationItemId ?? null,
                 brickPressItemId: brickPressingStep?.stationItemId ?? null,
-            },
-            options.ownedEquipment
+            }
         );
         const purchaseDemands = mergePurchases(
             baseProductPlan.purchases,
@@ -312,11 +320,12 @@ export class FinishedRecipeProductionPlanner {
             (total, purchase) => total + purchase.requiredCost,
             0
         );
-        const materialPurchaseCost = purchaseDemands.reduce(
-            (total, purchase) => total + purchase.purchaseCost,
-            0
+        const inventory = planFinishedRecipeInventory(
+            this.#itemsById,
+            purchaseDemands,
+            equipment,
+            options.inventory
         );
-        const equipmentPurchaseCost = equipment.totalMissingPurchaseCost;
         const knownProcessMinutes =
             baseProductPlan.totalProcessMinutes +
             (mixingProcessMinutes ?? 0) +
@@ -335,6 +344,7 @@ export class FinishedRecipeProductionPlanner {
             packagingStep,
             brickPressingStep,
             equipment,
+            inventory,
             duration: {
                 baseProductProcessMinutes: baseProductPlan.totalProcessMinutes,
                 mixingProcessMinutes,
@@ -350,12 +360,9 @@ export class FinishedRecipeProductionPlanner {
                 recipeEstimatedUnitMaterialCost: recipe.totalCost,
                 recipeEstimatedMaterialCost: recipe.totalCost * finishedQuantity,
                 requiredMaterialCost,
-                materialPurchaseCost,
-                equipmentPurchaseCost,
-                combinedPurchaseCost:
-                    equipmentPurchaseCost === null
-                        ? null
-                        : materialPurchaseCost + equipmentPurchaseCost,
+                materialReorderCost: inventory.totalMaterialReorderCost,
+                equipmentReorderCost: inventory.totalEquipmentReorderCost,
+                combinedReorderCost: inventory.totalReorderCost,
             },
             evidence: {
                 modeledScope: modeledScope(
@@ -367,7 +374,7 @@ export class FinishedRecipeProductionPlanner {
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: mixingProcessMinutes === null ? 'partial' : 'complete',
                 finishedLifecycleProof: 'partial',
-                missingFacts: missingFacts(mixingProcessMinutes, equipment),
+                missingFacts: missingFacts(mixingProcessMinutes, equipment, inventory),
                 dryingApplicability,
                 packagingApplicability,
                 brickPressingApplicability,
@@ -381,7 +388,7 @@ export class FinishedRecipeProductionPlanner {
                             (operation !== 'brick-pressing' ||
                                 brickPressingApplicability === 'available-not-selected') &&
                             (operation !== 'equipment-purchase' ||
-                                equipment.purchaseCostProof !== 'exact')
+                                inventory.costProof !== 'exact')
                     )
                     .map((operation) => ({
                         operation,
@@ -613,15 +620,16 @@ function modeledScope(
 
 function missingFacts(
     mixingProcessMinutes: number | null,
-    equipment: FinishedRecipeEquipmentPlan
+    equipment: FinishedRecipeEquipmentPlan,
+    inventory: FinishedRecipeInventoryPlan
 ): FinishedRecipeProductionEvidence['missingFacts'] {
     const result: FinishedRecipeProductionEvidence['missingFacts'][number][] = [];
     if (mixingProcessMinutes === null) result.push('mixing-station');
     if (equipment.selectionProof === 'partial') {
         result.push('production-equipment-selection');
     }
-    if (equipment.ownershipProof === 'not-supplied') result.push('equipment-ownership');
-    if (equipment.purchaseCostProof === 'equipment-price-not-recorded') {
+    if (inventory.inventoryProof === 'not-supplied') result.push('inventory');
+    if (inventory.costProof === 'item-price-not-recorded') {
         result.push('equipment-purchase-price');
     }
     return result;

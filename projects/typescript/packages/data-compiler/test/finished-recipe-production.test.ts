@@ -103,9 +103,9 @@ describe('finished recipe production plans', () => {
                 recipeEstimatedUnitMaterialCost: 10,
                 recipeEstimatedMaterialCost: 30,
                 requiredMaterialCost: 33,
-                materialPurchaseCost: 33,
-                equipmentPurchaseCost: null,
-                combinedPurchaseCost: null,
+                materialReorderCost: null,
+                equipmentReorderCost: null,
+                combinedReorderCost: null,
             },
             evidence: {
                 modeledScope: 'base-product-and-ordered-mixing',
@@ -113,7 +113,7 @@ describe('finished recipe production plans', () => {
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: 'complete',
                 finishedLifecycleProof: 'partial',
-                missingFacts: ['equipment-ownership'],
+                missingFacts: ['inventory'],
                 dryingApplicability: 'available-not-selected',
                 packagingApplicability: 'available-not-selected',
             },
@@ -351,7 +351,7 @@ describe('finished recipe production plans', () => {
         ).toBe('base-product-ordered-mixing-selected-drying-and-brick-pressing');
     });
 
-    it('deduplicates selected equipment and subtracts caller-supplied ownership', () => {
+    it('deduplicates selected equipment and subtracts caller-supplied inventory', () => {
         const { planner, recipe } = fixture();
 
         const plan = planner.plan(recipe, 20, {
@@ -367,7 +367,7 @@ describe('finished recipe production plans', () => {
                 employeePackagingSpeedMultiplier: 1,
                 employeeCurrentWorkSpeed: 1,
             },
-            ownedEquipment: [
+            inventory: [
                 { itemId: 'pot', quantity: 1 },
                 { itemId: 'mixer', quantity: 0 },
                 { itemId: 'dryer', quantity: 2 },
@@ -380,55 +380,61 @@ describe('finished recipe production plans', () => {
             quantityBasis: 'minimum-one-per-selected-item-for-serial-plan',
             selectionProof: 'exact',
             unresolvedProductionRouteIds: [],
-            ownershipProof: 'supplied',
-            purchaseCostProof: 'exact',
+            purchaseCostProof: 'equipment-price-not-recorded',
             requirements: [
                 {
                     itemId: 'brick-press',
                     roles: ['brick-pressing'],
                     requiredQuantity: 1,
-                    ownedQuantity: 0,
-                    missingQuantity: 1,
                     unitPurchasePrice: 500,
-                    missingPurchaseCost: 500,
+                    requiredPurchaseCost: 500,
                 },
                 {
                     itemId: 'dryer',
                     roles: ['drying'],
                     requiredQuantity: 1,
-                    ownedQuantity: 2,
-                    missingQuantity: 0,
                     unitPurchasePrice: null,
-                    missingPurchaseCost: 0,
+                    requiredPurchaseCost: null,
                 },
                 {
                     itemId: 'mixer',
                     roles: ['mixing'],
                     requiredQuantity: 1,
-                    ownedQuantity: 0,
-                    missingQuantity: 1,
                     unitPurchasePrice: 200,
-                    missingPurchaseCost: 200,
+                    requiredPurchaseCost: 200,
                 },
                 {
                     itemId: 'pot',
                     roles: ['base-production'],
                     requiredQuantity: 1,
-                    ownedQuantity: 1,
-                    missingQuantity: 0,
                     unitPurchasePrice: 100,
-                    missingPurchaseCost: 0,
+                    requiredPurchaseCost: 100,
                 },
             ],
-            totalMissingPurchaseCost: 700,
+            totalRequiredPurchaseCost: null,
+        });
+        expect(plan.inventory).toMatchObject({
+            allocationOrder: 'reserve-equipment-before-recurring-materials',
+            demandProof: 'exact',
+            inventoryProof: 'supplied',
+            quantityProof: 'exact',
+            costProof: 'exact',
+            totalMaterialReorderCost: 200,
+            totalEquipmentReorderCost: 700,
+            totalReorderCost: 900,
+            requiredStackCount: 9,
+            currentStackCount: 2,
+            reorderStackCount: 7,
+            postReorderStackCount: 9,
+            additionalStackCount: 7,
         });
         expect(plan.cost).toEqual({
             recipeEstimatedUnitMaterialCost: 10,
             recipeEstimatedMaterialCost: 200,
             requiredMaterialCost: 200,
-            materialPurchaseCost: 200,
-            equipmentPurchaseCost: 700,
-            combinedPurchaseCost: 900,
+            materialReorderCost: 200,
+            equipmentReorderCost: 700,
+            combinedReorderCost: 900,
         });
         expect(plan.evidence.missingFacts).toEqual([]);
         expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
@@ -451,7 +457,7 @@ describe('finished recipe production plans', () => {
             evidence: {
                 modeledDurationProof: 'partial',
                 finishedLifecycleProof: 'partial',
-                missingFacts: ['mixing-station', 'equipment-ownership'],
+                missingFacts: ['mixing-station', 'inventory'],
             },
         });
     });
@@ -461,22 +467,30 @@ describe('finished recipe production plans', () => {
 
         const plan = planner.plan(recipe, 3, {
             mixingStationItemId: 'mixer',
-            ownedEquipment: [{ itemId: 'mixer', quantity: 1 }],
         });
 
         expect(plan.equipment).toMatchObject({
             selectionProof: 'partial',
             unresolvedProductionRouteIds: ['seed:seed:product:soil'],
-            ownershipProof: 'supplied',
             purchaseCostProof: 'production-equipment-selection-missing',
-            totalMissingPurchaseCost: null,
+            totalRequiredPurchaseCost: null,
+        });
+        expect(plan.inventory).toMatchObject({
+            demandProof: 'production-equipment-selection-missing',
+            inventoryProof: 'not-supplied',
+            quantityProof: 'production-equipment-selection-missing',
+            costProof: 'reorder-quantity-not-exact',
+            totalReorderCost: null,
         });
         expect(plan.cost).toMatchObject({
-            materialPurchaseCost: 33,
-            equipmentPurchaseCost: null,
-            combinedPurchaseCost: null,
+            materialReorderCost: null,
+            equipmentReorderCost: null,
+            combinedReorderCost: null,
         });
-        expect(plan.evidence.missingFacts).toEqual(['production-equipment-selection']);
+        expect(plan.evidence.missingFacts).toEqual([
+            'production-equipment-selection',
+            'inventory',
+        ]);
         expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).toContain(
             'equipment-purchase'
         );
@@ -493,7 +507,7 @@ describe('finished recipe production plans', () => {
                 targetQuality: 'Premium',
                 averageTemperature: 20,
             },
-            ownedEquipment: [
+            inventory: [
                 { itemId: 'pot', quantity: 1 },
                 { itemId: 'mixer', quantity: 1 },
                 { itemId: 'dryer', quantity: 0 },
@@ -502,7 +516,12 @@ describe('finished recipe production plans', () => {
 
         expect(plan.equipment).toMatchObject({
             purchaseCostProof: 'equipment-price-not-recorded',
-            totalMissingPurchaseCost: null,
+            totalRequiredPurchaseCost: null,
+        });
+        expect(plan.inventory).toMatchObject({
+            quantityProof: 'exact',
+            costProof: 'item-price-not-recorded',
+            totalReorderCost: null,
         });
         expect(plan.evidence.missingFacts).toEqual(['equipment-purchase-price']);
     });
@@ -517,18 +536,23 @@ describe('finished recipe production plans', () => {
             catalog
         );
 
-        expect(planner.plan(recipe([], 8, 'base-purchase-price'), 1)).toMatchObject({
+        expect(planner.plan(recipe([], 8, 'base-purchase-price'), 1, { inventory: [] })).toMatchObject({
             mixingSteps: [],
             equipment: {
                 requirements: [],
-                ownershipProof: 'not-required',
                 purchaseCostProof: 'exact',
-                totalMissingPurchaseCost: 0,
+                totalRequiredPurchaseCost: 0,
+            },
+            inventory: {
+                inventoryProof: 'supplied',
+                quantityProof: 'exact',
+                costProof: 'exact',
+                totalReorderCost: 8,
             },
             cost: {
-                materialPurchaseCost: 8,
-                equipmentPurchaseCost: 0,
-                combinedPurchaseCost: 8,
+                materialReorderCost: 8,
+                equipmentReorderCost: 0,
+                combinedReorderCost: 8,
             },
             duration: {
                 baseProductProcessMinutes: 0,
@@ -698,22 +722,22 @@ describe('finished recipe production plans', () => {
         );
         expect(() =>
             planner.plan(evaluated, 1, {
-                ownedEquipment: [
+                inventory: [
                     { itemId: 'pot', quantity: 1 },
                     { itemId: 'pot', quantity: 1 },
                 ],
             })
-        ).toThrow('Owned equipment contains duplicate item "pot"');
+        ).toThrow('Inventory contains duplicate item "pot"');
         expect(() =>
             planner.plan(evaluated, 1, {
-                ownedEquipment: [{ itemId: 'pot', quantity: 0.5 }],
+                inventory: [{ itemId: 'pot', quantity: 0.5 }],
             })
-        ).toThrow('Owned equipment "pot" quantity must be a non-negative integer');
+        ).toThrow('Inventory item "pot" quantity must be a non-negative safe integer');
         expect(() =>
             planner.plan(evaluated, 1, {
-                ownedEquipment: [{ itemId: 'unknown', quantity: 1 }],
+                inventory: [{ itemId: 'unknown', quantity: 1 }],
             })
-        ).toThrow('Unknown owned equipment "unknown"');
+        ).toThrow('Unknown inventory item "unknown"');
 
         const product = item('unrouted', null, 'product');
         const catalog = emptyCatalog();
