@@ -59,6 +59,23 @@ export const PackagingOperationRulesSchema = type({
 });
 export type PackagingOperationRules = typeof PackagingOperationRulesSchema.infer;
 
+export const BrickPressOperationRulesSchema = type({
+    schema: "'neonschedule1-brick-press-operation-rules-1'",
+    requiresUnpackagedProduct: 'true',
+    packagingMaterialConsumption: "'none'",
+    packagedItemQuantityPerOperation: '1',
+    productQuantitySource: "'station-packaging-quantity'",
+    itemIdTransformation: "'preserved'",
+    productStateTransformation: "'unpackaged-to-packaged'",
+    insufficientProductRemainder: "'left-unpackaged'",
+    employeeBaseSecondsPerOperation: '15',
+    employeeCompletionOverheadSecondsPerOperation: '1.2',
+    employeeDurationFormula:
+        "'base-seconds / employee-packaging-speed-multiplier / employee-current-work-speed + completion-overhead-seconds'",
+    manualDuration: "'interactive-not-fixed'",
+});
+export type BrickPressOperationRules = typeof BrickPressOperationRulesSchema.infer;
+
 // Current native PackagingStation.PackSingleInstance consumes one packaging definition and its
 // contained product quantity. The employee behaviour waits five real seconds divided by the
 // employee proficiency, station multiplier, and current work-speed multipliers.
@@ -76,6 +93,26 @@ export const PACKAGING_OPERATION_RULES = {
         'base-seconds / employee-packaging-speed-multiplier / station-employee-speed-multiplier / employee-current-work-speed',
     manualDuration: 'interactive-not-fixed',
 } as const satisfies PackagingOperationRules;
+
+// Current native BrickPress.CompletePress consumes the station packaging quantity of one
+// compatible unpackaged product, applies the brick packaging definition to one output instance,
+// and consumes no separate packaging material. Employee work takes 15 divided real seconds plus
+// 0.2 and 1 second completion waits; manual interaction has no fixed native duration.
+export const BRICK_PRESS_OPERATION_RULES = {
+    schema: 'neonschedule1-brick-press-operation-rules-1',
+    requiresUnpackagedProduct: true,
+    packagingMaterialConsumption: 'none',
+    packagedItemQuantityPerOperation: 1,
+    productQuantitySource: 'station-packaging-quantity',
+    itemIdTransformation: 'preserved',
+    productStateTransformation: 'unpackaged-to-packaged',
+    insufficientProductRemainder: 'left-unpackaged',
+    employeeBaseSecondsPerOperation: 15,
+    employeeCompletionOverheadSecondsPerOperation: 1.2,
+    employeeDurationFormula:
+        'base-seconds / employee-packaging-speed-multiplier / employee-current-work-speed + completion-overhead-seconds',
+    manualDuration: 'interactive-not-fixed',
+} as const satisfies BrickPressOperationRules;
 
 export const ShroomProductionSchema = type({
     schema: "'neonschedule1-shroom-production-3'",
@@ -226,10 +263,11 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-7'",
+    schema: "'neonschedule1-production-catalog-8'",
     quality: ProductionQualityRulesSchema,
     drying: DryingOperationRulesSchema,
     packaging: PackagingOperationRulesSchema,
+    brickPressing: BrickPressOperationRulesSchema,
     seeds: SeedProductionSchema.array(),
     shrooms: ShroomProductionSchema.array(),
     stationRecipes: StationRecipeSchema.array(),

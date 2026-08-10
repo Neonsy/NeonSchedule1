@@ -2,6 +2,16 @@ import type { Item } from '#core/data/item';
 import type { ProductionCatalog, ProductionStation } from '#core/data/production';
 import type { RecipeEvaluation } from '#core/mixing/recipe';
 import {
+    isBrickPressingAvailable,
+    planFinishedRecipeBrickPressing,
+    type FinishedRecipeBrickPressingOptions,
+    type FinishedRecipeBrickPressingStep,
+} from '#core/production/brick-pressing';
+export type {
+    FinishedRecipeBrickPressingOptions,
+    FinishedRecipeBrickPressingStep,
+} from '#core/production/brick-pressing';
+import {
     isPackagingAvailable,
     packagingMaterialDemand,
     planFinishedRecipePackaging,
@@ -24,6 +34,7 @@ export interface FinishedRecipeProductionOptions {
     readonly mixingStationItemId?: string;
     readonly drying?: FinishedRecipeDryingOptions;
     readonly packaging?: FinishedRecipePackagingOptions;
+    readonly brickPressing?: FinishedRecipeBrickPressingOptions;
 }
 
 export interface FinishedRecipeDryingOptions {
@@ -108,7 +119,9 @@ export interface FinishedRecipeProductionEvidence {
         | 'base-product-and-ordered-mixing'
         | 'base-product-ordered-mixing-and-selected-drying'
         | 'base-product-ordered-mixing-and-selected-packaging'
-        | 'base-product-ordered-mixing-selected-drying-and-packaging';
+        | 'base-product-ordered-mixing-selected-drying-and-packaging'
+        | 'base-product-ordered-mixing-and-selected-brick-pressing'
+        | 'base-product-ordered-mixing-selected-drying-and-brick-pressing';
     readonly modeledQuantityProof: 'exact';
     readonly materialCostCoverage: 'modeled-materials-only';
     readonly modeledDurationProof: 'complete' | 'partial';
@@ -116,6 +129,10 @@ export interface FinishedRecipeProductionEvidence {
     readonly missingFacts: readonly 'mixing-station'[];
     readonly dryingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
     readonly packagingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
+    readonly brickPressingApplicability:
+        | 'selected'
+        | 'available-not-selected'
+        | 'not-applicable';
     readonly unmodeledOperations: readonly FinishedRecipeUnmodeledOperationEvidence[];
 }
 
@@ -124,6 +141,7 @@ export interface FinishedRecipeProductionDuration {
     readonly mixingProcessMinutes: number | null;
     readonly dryingProcessMinutes: number | null;
     readonly packagingEmployeeRealSeconds: number | null;
+    readonly brickPressingEmployeeRealSeconds: number | null;
     readonly knownProcessMinutes: number;
     readonly modeledTotalProcessMinutes: number | null;
 }
@@ -146,6 +164,7 @@ export interface FinishedRecipeProductionPlan {
     readonly mixingSteps: readonly FinishedRecipeMixingStep[];
     readonly dryingStep: FinishedRecipeDryingStep | null;
     readonly packagingStep: FinishedRecipePackagingStep | null;
+    readonly brickPressingStep: FinishedRecipeBrickPressingStep | null;
     readonly duration: FinishedRecipeProductionDuration;
     readonly cost: FinishedRecipeProductionCost;
     readonly evidence: FinishedRecipeProductionEvidence;
@@ -187,6 +206,9 @@ export class FinishedRecipeProductionPlanner {
         options: FinishedRecipeProductionOptions = {}
     ): FinishedRecipeProductionPlan {
         requirePositiveInteger(finishedQuantity, 'finishedQuantity');
+        if (options.packaging !== undefined && options.brickPressing !== undefined) {
+            throw new Error('Finished recipe cannot select packaging and brick pressing together');
+        }
         const ingredientDemands = this.#ingredientDemands(recipe, finishedQuantity);
         const baseProductPlan = this.#baseProducts.plan(recipe.productId, finishedQuantity);
         assertCompatibleCostBasis(recipe, baseProductPlan);
@@ -226,9 +248,27 @@ export class FinishedRecipeProductionPlanner {
               );
         const packagingApplicability = packagingStep !== null
             ? 'selected'
-            : isPackagingAvailable(this.#itemsById, recipe.productId)
-              ? 'available-not-selected'
-              : 'not-applicable';
+            : options.brickPressing !== undefined
+              ? 'not-applicable'
+              : isPackagingAvailable(this.#itemsById, recipe.productId)
+                ? 'available-not-selected'
+                : 'not-applicable';
+        const brickPressingStep = options.brickPressing === undefined
+            ? null
+            : planFinishedRecipeBrickPressing(
+                  this.#itemsById,
+                  this.#catalog,
+                  recipe.productId,
+                  finishedQuantity,
+                  options.brickPressing
+              );
+        const brickPressingApplicability = brickPressingStep !== null
+            ? 'selected'
+            : options.packaging !== undefined
+              ? 'not-applicable'
+              : isBrickPressingAvailable(this.#itemsById, this.#catalog, recipe.productId)
+                ? 'available-not-selected'
+                : 'not-applicable';
         const packagingDemand = packagingStep === null
             ? []
             : [packagingMaterialDemand(this.#itemsById, packagingStep)];
@@ -261,11 +301,14 @@ export class FinishedRecipeProductionPlanner {
             mixingSteps,
             dryingStep,
             packagingStep,
+            brickPressingStep,
             duration: {
                 baseProductProcessMinutes: baseProductPlan.totalProcessMinutes,
                 mixingProcessMinutes,
                 dryingProcessMinutes,
                 packagingEmployeeRealSeconds: packagingStep?.totalEmployeeRealSeconds ?? null,
+                brickPressingEmployeeRealSeconds:
+                    brickPressingStep?.totalEmployeeRealSeconds ?? null,
                 knownProcessMinutes,
                 modeledTotalProcessMinutes:
                     mixingProcessMinutes === null ? null : knownProcessMinutes,
@@ -277,7 +320,11 @@ export class FinishedRecipeProductionPlanner {
                 purchaseCost,
             },
             evidence: {
-                modeledScope: modeledScope(dryingStep !== null, packagingStep !== null),
+                modeledScope: modeledScope(
+                    dryingStep !== null,
+                    packagingStep !== null,
+                    brickPressingStep !== null
+                ),
                 modeledQuantityProof: 'exact',
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: mixingProcessMinutes === null ? 'partial' : 'complete',
@@ -285,17 +332,23 @@ export class FinishedRecipeProductionPlanner {
                 missingFacts: mixingProcessMinutes === null ? ['mixing-station'] : [],
                 dryingApplicability,
                 packagingApplicability,
+                brickPressingApplicability,
                 unmodeledOperations: unmodeledOperationKinds
                     .filter(
                         (operation) =>
                             (operation !== 'drying' ||
                                 dryingApplicability === 'available-not-selected') &&
                             (operation !== 'packaging' ||
-                                packagingApplicability === 'available-not-selected')
+                                packagingApplicability === 'available-not-selected') &&
+                            (operation !== 'brick-pressing' ||
+                                brickPressingApplicability === 'available-not-selected')
                     )
                     .map((operation) => ({
                         operation,
-                        applicability: operation === 'drying' || operation === 'packaging'
+                        applicability:
+                            operation === 'drying' ||
+                            operation === 'packaging' ||
+                            operation === 'brick-pressing'
                             ? 'available-not-selected'
                             : 'not-established',
                         materialCost: null,
@@ -501,13 +554,20 @@ function finishedRecipeGrowAdditiveSteps(
 
 function modeledScope(
     selectedDrying: boolean,
-    selectedPackaging: boolean
+    selectedPackaging: boolean,
+    selectedBrickPressing: boolean
 ): FinishedRecipeProductionEvidence['modeledScope'] {
     if (selectedDrying && selectedPackaging) {
         return 'base-product-ordered-mixing-selected-drying-and-packaging';
     }
+    if (selectedDrying && selectedBrickPressing) {
+        return 'base-product-ordered-mixing-selected-drying-and-brick-pressing';
+    }
     if (selectedDrying) return 'base-product-ordered-mixing-and-selected-drying';
     if (selectedPackaging) return 'base-product-ordered-mixing-and-selected-packaging';
+    if (selectedBrickPressing) {
+        return 'base-product-ordered-mixing-and-selected-brick-pressing';
+    }
     return 'base-product-and-ordered-mixing';
 }
 

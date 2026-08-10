@@ -1,4 +1,5 @@
 import {
+    BRICK_PRESS_OPERATION_RULES,
     PACKAGING_OPERATION_RULES,
     ProductionCatalogSchema,
     type HarvestProduct,
@@ -83,7 +84,7 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-7',
+        schema: 'neonschedule1-production-catalog-8',
         quality: normalizeProductionQuality(report, itemIds, integrity),
         drying: {
             schema: 'neonschedule1-drying-operation-rules-1',
@@ -97,6 +98,7 @@ export function normalizeProduction(
             qualityTierIncrement: 1,
         },
         packaging: { ...PACKAGING_OPERATION_RULES },
+        brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
         seeds: [...seeds.entries()]
             .map(([itemId, raw]) => normalizeSeed(itemId, raw, soils.plant, itemIds, integrity))
             .sort((left, right) => left.seedItemId.localeCompare(right.seedItemId)),

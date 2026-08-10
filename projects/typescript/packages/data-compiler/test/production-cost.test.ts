@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BRICK_PRESS_OPERATION_RULES,
     PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
     ProductionMaterialCostEvaluator,
@@ -526,9 +527,10 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-7',
+        schema: 'neonschedule1-production-catalog-8',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
+        brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
         quality: qualityRules(),
         seeds: [],
         shrooms: [],

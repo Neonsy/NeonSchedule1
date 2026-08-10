@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BRICK_PRESS_OPERATION_RULES,
     FinishedRecipeProductionPlanner,
     PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
@@ -118,7 +119,7 @@ describe('finished recipe production plans', () => {
         expect(plan.evidence.unmodeledOperations).toEqual([
             unmodeled('drying', 'available-not-selected'),
             unmodeled('packaging', 'available-not-selected'),
-            unmodeled('brick-pressing'),
+            unmodeled('brick-pressing', 'available-not-selected'),
             unmodeled('equipment-purchase'),
             unmodeled('transport'),
         ]);
@@ -161,6 +162,7 @@ describe('finished recipe production plans', () => {
             mixingProcessMinutes: 54,
             dryingProcessMinutes: 1_152,
             packagingEmployeeRealSeconds: null,
+            brickPressingEmployeeRealSeconds: null,
             knownProcessMinutes: 1_226,
             modeledTotalProcessMinutes: 1_226,
         });
@@ -240,9 +242,13 @@ describe('finished recipe production plans', () => {
         expect(plan.evidence).toMatchObject({
             modeledScope: 'base-product-ordered-mixing-and-selected-packaging',
             packagingApplicability: 'selected',
+            brickPressingApplicability: 'not-applicable',
         });
         expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
             'packaging'
+        );
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'brick-pressing'
         );
         expect(
             planner.plan(recipe, 21, {
@@ -275,6 +281,72 @@ describe('finished recipe production plans', () => {
                 },
             }).evidence.modeledScope
         ).toBe('base-product-ordered-mixing-selected-drying-and-packaging');
+    });
+
+    it('presses whole bricks without consuming packaging material and leaves loose remainder', () => {
+        const { planner, recipe } = fixture();
+
+        const plan = planner.plan(recipe, 41, {
+            mixingStationItemId: 'mixer',
+            brickPressing: {
+                stationItemId: 'brick-press',
+                employeePackagingSpeedMultiplier: 1.25,
+                employeeCurrentWorkSpeed: 0.8,
+            },
+        });
+
+        expect(plan.brickPressingStep).toEqual({
+            position: 'after-optional-drying',
+            stationItemId: 'brick-press',
+            stationKind: 'brick-press',
+            productItemId: 'product',
+            outputPackagingItemId: 'brick',
+            inputProductState: 'unpackaged',
+            outputProductState: 'packaged',
+            inputProductQuantity: 41,
+            productQuantityPerBrick: 20,
+            brickCount: 2,
+            pressedProductQuantity: 40,
+            unpackagedRemainderQuantity: 1,
+            packagingMaterialConsumption: 'none',
+            outputSlotCapacityBricks: 20,
+            outputBatchBrickCounts: [2],
+            employeeBaseSecondsPerBrick: 15,
+            employeeCompletionOverheadSecondsPerBrick: 1.2,
+            employeePackagingSpeedMultiplier: 1.25,
+            employeeCurrentWorkSpeed: 0.8,
+            employeeSecondsPerBrick: 16.2,
+            totalEmployeeRealSeconds: 32.4,
+            manualDuration: 'interactive-not-fixed',
+        });
+        expect(plan.purchases.map(({ itemId }) => itemId)).not.toContain('brick');
+        expect(plan.duration.brickPressingEmployeeRealSeconds).toBe(32.4);
+        expect(plan.evidence).toMatchObject({
+            modeledScope: 'base-product-ordered-mixing-and-selected-brick-pressing',
+            packagingApplicability: 'not-applicable',
+            brickPressingApplicability: 'selected',
+        });
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'brick-pressing'
+        );
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'packaging'
+        );
+        expect(
+            planner.plan(recipe, 20, {
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Premium',
+                    averageTemperature: 20,
+                },
+                brickPressing: {
+                    stationItemId: 'brick-press',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            }).evidence.modeledScope
+        ).toBe('base-product-ordered-mixing-selected-drying-and-brick-pressing');
     });
 
     it('returns partial modeled duration when no mixing-station fact is supplied', () => {
@@ -410,12 +482,12 @@ describe('finished recipe production plans', () => {
             planner.plan(evaluated, 1, {
                 packaging: {
                     stationItemId: 'packager-mk2',
-                    packagingItemId: 'brick',
+                    packagingItemId: 'wrap',
                     employeePackagingSpeedMultiplier: 1,
                     employeeCurrentWorkSpeed: 1,
                 },
             })
-        ).toThrow('Packaging item "brick" is not valid for product "product"');
+        ).toThrow('Packaging item "wrap" is not valid for product "product"');
         expect(() =>
             planner.plan(evaluated, 1, {
                 packaging: {
@@ -436,6 +508,39 @@ describe('finished recipe production plans', () => {
                 },
             })
         ).toThrow('Employee packaging speed multiplier must be positive');
+        expect(() =>
+            planner.plan(evaluated, 20, {
+                packaging: {
+                    stationItemId: 'packager-mk2',
+                    packagingItemId: 'brick',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+                brickPressing: {
+                    stationItemId: 'brick-press',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Finished recipe cannot select packaging and brick pressing together');
+        expect(() =>
+            planner.plan(evaluated, 19, {
+                brickPressing: {
+                    stationItemId: 'brick-press',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Product quantity is insufficient for one brick from "brick-press"');
+        expect(() =>
+            planner.plan(evaluated, 20, {
+                brickPressing: {
+                    stationItemId: 'pot',
+                    employeePackagingSpeedMultiplier: 1,
+                    employeeCurrentWorkSpeed: 1,
+                },
+            })
+        ).toThrow('Unknown brick press "pot"');
         expect(() => planner.plan({ ...evaluated, ingredientCost: 1 }, 1)).toThrow(
             'Recipe ingredient cost is incompatible with normalized item prices'
         );
@@ -470,15 +575,17 @@ function fixture(): {
     const items = [
         item('seed', 5),
         item('soil', 1, 'soil'),
-        item('product', null, 'product', 'Marijuana', ['baggie', 'jar']),
+        item('product', null, 'product', 'Marijuana', ['baggie', 'brick', 'jar']),
         item('banana', 2, 'ingredient'),
         item('cuke', 3, 'ingredient'),
         item('pot'),
         item('mixer'),
         item('dryer'),
+        item('brick-press'),
         packagingItem('baggie', 1, 1),
         packagingItem('jar', 5, 3),
         packagingItem('brick', 20, 1),
+        packagingItem('wrap', 2, 1),
     ];
     const itemsById = new Map(items.map((entry) => [entry.id, entry]));
     const catalog: ProductionCatalog = {
@@ -532,6 +639,13 @@ function fixture(): {
                 itemId: 'packager-mk2',
                 kind: 'packaging-mk2',
                 employeeSpeedMultiplier: 2,
+            },
+            {
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'brick-press',
+                kind: 'brick-press',
+                packagingItemId: 'brick',
+                packagingQuantity: 20,
             },
         ],
     };
@@ -604,9 +718,10 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-7',
+        schema: 'neonschedule1-production-catalog-8',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
+        brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,

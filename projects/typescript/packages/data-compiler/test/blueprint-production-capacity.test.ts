@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BRICK_PRESS_OPERATION_RULES,
     PACKAGING_OPERATION_RULES,
     BlueprintProductionCapacityAnalyzer,
     BlueprintProductionScheduleAnalyzer,
@@ -157,6 +158,28 @@ describe('blueprint production capacity', () => {
                     kind: 'environmental-maximum',
                     maximumTemperature: 15,
                 },
+            }],
+        });
+    });
+
+    it('reports brick pressing as a one-output transform without a packaging-material input', () => {
+        const result = analyzer().analyze(blueprint([
+            placement('brick-press', 'brick-press', 0),
+        ]));
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.equipment).toHaveLength(1);
+        expect(result.equipment[0]).toMatchObject({
+            itemId: 'brick-press',
+            processes: [{
+                id: 'brick-press:brick-press',
+                kind: 'brick-press',
+                inputItemIds: [],
+                outputItemId: null,
+                recordedOutputQuantity: 1,
+                recordedItemLimit: null,
+                recordedDuration: { kind: 'not-recorded' },
             }],
         });
     });
@@ -682,6 +705,7 @@ function dataset(): BlueprintProductionCapacityDataset {
             buildable('mixer'),
             buildable('chemistry'),
             buildable('mushroom-bed'),
+            buildable('brick-press'),
             buildable('decoration'),
         ],
         propertyLayouts: [propertyLayout()],
@@ -705,9 +729,10 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function production(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-7',
+        schema: 'neonschedule1-production-catalog-8',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
+        brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
         quality: {
             basePlantLevel: 0.5,
             monetaryValueVariesByQuality: false,
@@ -786,6 +811,13 @@ function production(): ProductionCatalog {
                 capacity: 10,
                 timePerItem: 6,
                 requiresManualIngredientInsertion: true,
+            },
+            {
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'brick-press',
+                kind: 'brick-press',
+                packagingItemId: 'brick',
+                packagingQuantity: 20,
             },
         ],
     };

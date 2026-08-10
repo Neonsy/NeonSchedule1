@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    BRICK_PRESS_OPERATION_RULES,
     FinishedRecipeProductionPlanner,
     PACKAGING_OPERATION_RULES,
     ProductionBatchPlanner,
@@ -218,9 +219,10 @@ function fixture(): {
     return {
         itemsById: new Map(items.map((entry) => [entry.id, entry])),
         catalog: {
-            schema: 'neonschedule1-production-catalog-7',
+            schema: 'neonschedule1-production-catalog-8',
             drying: dryingRules(),
             packaging: { ...PACKAGING_OPERATION_RULES },
+            brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
             quality: {
                 basePlantLevel: 0.5,
                 monetaryValueVariesByQuality: false,

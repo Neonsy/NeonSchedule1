@@ -386,9 +386,9 @@ function stationProcesses(
             return [{
                 id: `brick-press:${station.itemId}`,
                 kind: 'brick-press',
-                inputItemIds: [station.packagingItemId],
+                inputItemIds: [],
                 outputItemId: null,
-                recordedOutputQuantity: null,
+                recordedOutputQuantity: catalog.brickPressing.packagedItemQuantityPerOperation,
                 recordedItemLimit: null,
                 recordedDuration: { kind: 'not-recorded' },
                 temperatureRule: null,
