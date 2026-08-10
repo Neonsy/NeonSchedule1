@@ -28,6 +28,7 @@ export interface SeededMixingProfileInferenceEvidence {
     readonly proofStatus: 'exact';
     readonly candidateSpace: 'all-seeded-rotation-angles';
     readonly profileCount: typeof seededMixingProfileCount;
+    readonly rejectedProfileCount: number;
     readonly observationCount: number;
     readonly recipeEvaluationCount: number;
     readonly candidateCountsAfterObservation: readonly number[];
@@ -92,6 +93,7 @@ export class SeededMixingProfileInference {
                 proofStatus: 'exact',
                 candidateSpace: 'all-seeded-rotation-angles',
                 profileCount: seededMixingProfileCount,
+                rejectedProfileCount: seededMixingProfileCount - candidates.length,
                 observationCount: observations.length,
                 recipeEvaluationCount,
                 candidateCountsAfterObservation,

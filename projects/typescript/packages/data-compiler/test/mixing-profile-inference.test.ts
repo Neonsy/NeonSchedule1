@@ -24,6 +24,7 @@ describe('seeded mixing profile inference', () => {
                 proofStatus: 'exact',
                 candidateSpace: 'all-seeded-rotation-angles',
                 profileCount: 360,
+                rejectedProfileCount: 359,
                 observationCount: 1,
                 recipeEvaluationCount: 360,
                 candidateCountsAfterObservation: [1],
@@ -52,6 +53,7 @@ describe('seeded mixing profile inference', () => {
         });
         expect(result.evidence).toMatchObject({
             proofStatus: 'exact',
+            rejectedProfileCount: 0,
             recipeEvaluationCount: 360,
             candidateCountsAfterObservation: [360],
         });
@@ -80,6 +82,7 @@ describe('seeded mixing profile inference', () => {
                 proofStatus: 'exact',
                 candidateSpace: 'all-seeded-rotation-angles',
                 profileCount: 360,
+                rejectedProfileCount: 360,
                 observationCount: 2,
                 recipeEvaluationCount: 361,
                 candidateCountsAfterObservation: [1, 0],
