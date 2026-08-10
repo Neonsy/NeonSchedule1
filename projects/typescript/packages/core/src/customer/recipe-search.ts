@@ -16,6 +16,7 @@ import type { Item, Product } from '#core/data/item';
 import type { MixingRuleProfile } from '#core/data/mixing';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import type { MixingEngine } from '#core/mixing/engine';
+import { FinalIngredientConstraints } from '#core/mixing/ingredient-constraints';
 import {
     RecipeEvaluator,
     type RecipeEvaluation,
@@ -47,6 +48,10 @@ export interface CustomerRecipeSearchInput {
     readonly maxIngredients: number;
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
+    readonly requiredIngredientIds?: readonly string[];
+    readonly forbiddenIngredientIds?: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
     readonly profile: CustomerRecommendationInput['profile'];
     readonly state: CustomerRecommendationInput['state'];
     readonly quality: CustomerQuality;
@@ -141,11 +146,20 @@ export class CustomerRecipeSearch {
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         this.#rank(input, []);
 
-        const actions = this.#ingredients(input.availableIngredientIds);
-        const constraints = new FinalEffectConstraints(
+        const availableActions = this.#ingredients(input.availableIngredientIds);
+        const effectConstraints = new FinalEffectConstraints(
             this.#engine,
             input.requiredEffectIds ?? [],
             input.forbiddenEffectIds ?? []
+        );
+        const ingredientConstraints = new FinalIngredientConstraints(
+            this.#itemsById,
+            input.availableIngredientIds,
+            input.maxIngredients,
+            input
+        );
+        const actions = availableActions.filter((action) =>
+            ingredientConstraints.allows(action.id)
         );
         const seenProductIds = new Set<string>();
         const metrics: SearchMetrics = {
@@ -157,7 +171,7 @@ export class CustomerRecipeSearch {
         let topCandidates: CustomerRecommendationCandidate[] = [];
         let topRecommendations: CustomerRecommendation[] = [];
         let stopReason: RecipeSearchLimitReason | undefined;
-        let completedDepth = input.maxIngredients;
+        let completedDepth = ingredientConstraints.maximumIngredientCount;
 
         const consider = (candidates: readonly CustomerRecommendationCandidate[]): void => {
             if (candidates.length === 0) return;
@@ -188,7 +202,8 @@ export class CustomerRecipeSearch {
                     input,
                     productId,
                     actions,
-                    constraints,
+                    effectConstraints,
+                    ingredientConstraints,
                     consider,
                     cutoff,
                     metrics
@@ -212,7 +227,7 @@ export class CustomerRecipeSearch {
                 ? exactSearchEvidence(
                     metrics.exploredStates,
                     metrics.prunedStates,
-                    input.maxIngredients,
+                    ingredientConstraints.maximumIngredientCount,
                     metrics
                 )
                 : incompleteSearchEvidence(
@@ -229,7 +244,8 @@ export class CustomerRecipeSearch {
         input: CustomerRecipeSearchInput,
         productId: string,
         actions: readonly IngredientAction[],
-        constraints: FinalEffectConstraints,
+        effectConstraints: FinalEffectConstraints,
+        ingredientConstraints: FinalIngredientConstraints,
         consider: (candidates: readonly CustomerRecommendationCandidate[]) => void,
         cutoff: () => number | null,
         metrics: SearchMetrics
@@ -290,17 +306,24 @@ export class CustomerRecipeSearch {
             ingredientCost: 0,
         };
         metrics.exploredStates++;
-        let layer = new Map([[stateKey(base.effectIds), base]]);
-        const outcomes = new Map(layer);
-        if (constraints.matches(base.effectIds)) {
+        const baseKey = ingredientConstraints.stateKey(base.effectIds, base.ingredientIds);
+        let layer = new Map([[baseKey, base]]);
+        const seenStates = new Map(layer);
+        const bestEligibleByOutcome = new Map<string, SearchState>();
+        if (effectConstraints.matches(base.effectIds) &&
+            ingredientConstraints.matches(base.ingredientIds)) {
+            bestEligibleByOutcome.set(outcomeKey(base.effectIds), base);
             consider([candidate(baseRecipe, product.customerDrugType)]);
         }
         workBudget.checkpoint();
 
-        for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
+        for (let depth = 1;
+            depth <= ingredientConstraints.maximumIngredientCount && layer.size > 0;
+            depth++) {
             currentDepth = depth;
             workBudget.checkpoint();
-            const remainingIngredients = input.maxIngredients - depth + 1;
+            const remainingIngredients =
+                ingredientConstraints.maximumIngredientCount - depth + 1;
             const rankedStates = [...layer.values()]
                 .map((state) => ({
                     state,
@@ -309,7 +332,8 @@ export class CustomerRecipeSearch {
                         product,
                         state,
                         actions,
-                        constraints,
+                        effectConstraints,
+                        ingredientConstraints,
                         bound,
                         remainingIngredients,
                         workBudget
@@ -322,6 +346,13 @@ export class CustomerRecipeSearch {
                 );
             const next = new Map<string, SearchState>();
             for (const ranked of rankedStates) {
+                if (!ingredientConstraints.canStillMatch(
+                    ranked.state.ingredientIds,
+                    remainingIngredients
+                )) {
+                    metrics.prunedStates++;
+                    continue;
+                }
                 if (ranked.upperExpectedProfit === Number.NEGATIVE_INFINITY) {
                     metrics.prunedStates++;
                     continue;
@@ -346,8 +377,11 @@ export class CustomerRecipeSearch {
                         ingredientIds: [...ranked.state.ingredientIds, action.id],
                         ingredientCost: ranked.state.ingredientCost + action.cost,
                     };
-                    const key = stateKey(candidateState.effectIds);
-                    const prior = outcomes.get(key);
+                    const key = ingredientConstraints.stateKey(
+                        candidateState.effectIds,
+                        candidateState.ingredientIds
+                    );
+                    const prior = seenStates.get(key);
                     if (prior !== undefined && comparePaths(prior, candidateState) <= 0) {
                         metrics.prunedStates++;
                         continue;
@@ -362,7 +396,8 @@ export class CustomerRecipeSearch {
                         product,
                         candidateState,
                         actions,
-                        constraints,
+                        effectConstraints,
+                        ingredientConstraints,
                         bound,
                         remainingIngredients - 1,
                         workBudget
@@ -396,10 +431,15 @@ export class CustomerRecipeSearch {
             metrics.exploredStates += next.size;
             const changed: CustomerRecommendationCandidate[] = [];
             for (const [key, state] of next) {
-                const current = outcomes.get(key);
+                seenStates.set(key, state);
+                if (!effectConstraints.matches(state.effectIds) ||
+                    !ingredientConstraints.matches(state.ingredientIds)) {
+                    continue;
+                }
+                const resultKey = outcomeKey(state.effectIds);
+                const current = bestEligibleByOutcome.get(resultKey);
                 if (current !== undefined && comparePaths(current, state) <= 0) continue;
-                outcomes.set(key, state);
-                if (!constraints.matches(state.effectIds)) continue;
+                bestEligibleByOutcome.set(resultKey, state);
                 changed.push(
                     candidate(
                         this.#recipes.evaluate({
@@ -414,7 +454,7 @@ export class CustomerRecipeSearch {
             layer = next;
             completedDepth = depth;
         }
-        completedDepth = input.maxIngredients;
+        completedDepth = ingredientConstraints.maximumIngredientCount;
         workBudget.checkpoint();
     }
 
@@ -423,7 +463,8 @@ export class CustomerRecipeSearch {
         product: SearchProduct,
         state: SearchState,
         actions: readonly IngredientAction[],
-        constraints: FinalEffectConstraints,
+        effectConstraints: FinalEffectConstraints,
+        ingredientConstraints: FinalIngredientConstraints,
         bound: CustomerProfitBound,
         remainingIngredients: number,
         workBudget: RecipeSearchWorkBudget
@@ -438,7 +479,8 @@ export class CustomerRecipeSearch {
                     product,
                     state,
                     actions,
-                    constraints,
+                    effectConstraints,
+                    ingredientConstraints,
                     remainingIngredients,
                     workBudget
                 ) ?? Number.NEGATIVE_INFINITY
@@ -456,14 +498,19 @@ export class CustomerRecipeSearch {
         product: SearchProduct,
         initial: SearchState,
         actions: readonly IngredientAction[],
-        constraints: FinalEffectConstraints,
+        effectConstraints: FinalEffectConstraints,
+        ingredientConstraints: FinalIngredientConstraints,
         remainingIngredients: number,
         workBudget: RecipeSearchWorkBudget
     ): number | null {
-        let best = constraints.matches(initial.effectIds)
+        let best = effectConstraints.matches(initial.effectIds) &&
+            ingredientConstraints.matches(initial.ingredientIds)
             ? this.#expectedProfit(input, product, initial)
             : null;
-        let layer = new Map([[stateKey(initial.effectIds), initial]]);
+        let layer = new Map([[
+            ingredientConstraints.stateKey(initial.effectIds, initial.ingredientIds),
+            initial,
+        ]]);
 
         for (let depth = 0; depth < remainingIngredients; depth++) {
             const next = new Map<string, SearchState>();
@@ -479,7 +526,10 @@ export class CustomerRecipeSearch {
                         ingredientIds: [...state.ingredientIds, action.id],
                         ingredientCost: state.ingredientCost + action.cost,
                     };
-                    const key = stateKey(result.effectIds);
+                    const key = ingredientConstraints.stateKey(
+                        result.effectIds,
+                        result.ingredientIds
+                    );
                     const current = next.get(key);
                     if (current === undefined || comparePaths(current, result) > 0) {
                         next.set(key, result);
@@ -487,7 +537,10 @@ export class CustomerRecipeSearch {
                 }
             }
             for (const state of next.values()) {
-                if (!constraints.matches(state.effectIds)) continue;
+                if (!effectConstraints.matches(state.effectIds) ||
+                    !ingredientConstraints.matches(state.ingredientIds)) {
+                    continue;
+                }
                 const score = this.#expectedProfit(input, product, state);
                 if (score !== null && (best === null || score > best)) best = score;
             }
@@ -624,7 +677,7 @@ function compareStrings(left: readonly string[], right: readonly string[]): numb
     return left.length - right.length;
 }
 
-function stateKey(effectIds: readonly string[]): string {
+function outcomeKey(effectIds: readonly string[]): string {
     return JSON.stringify(effectIds);
 }
 

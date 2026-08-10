@@ -10,8 +10,18 @@ describe('runtime recipe corpus index', () => {
             recipeCount: 2,
         }));
         const source = index([
-            { partitionPath: partitions[0]!.path, recipeIndex: 1, totalCost: 12.5 },
-            { partitionPath: partitions[256]!.path, recipeIndex: 0, totalCost: 20 },
+            {
+                partitionPath: partitions[0]!.path,
+                recipeIndex: 1,
+                totalCost: 12.5,
+                ingredientCount: 1,
+            },
+            {
+                partitionPath: partitions[256]!.path,
+                recipeIndex: 0,
+                totalCost: 20,
+                ingredientCount: 2,
+            },
         ]);
 
         const runtime = RuntimeRecipeCorpusIndex.consume(source, partitions);
@@ -21,6 +31,7 @@ describe('runtime recipe corpus index', () => {
         expect(runtime.partitionPathAt(1)).toBe(partitions[256]!.path);
         expect(runtime.recipeIndexAt(0)).toBe(1);
         expect([...runtime.totalCosts]).toEqual([12.5, 20]);
+        expect([...runtime.ingredientCounts]).toEqual([1, 2]);
         expect(runtime.postings.products.product).toBeInstanceOf(Uint32Array);
         expect(runtime.rankings.productValue).toBeInstanceOf(Uint32Array);
         expect(source.records).toEqual([]);
@@ -28,7 +39,12 @@ describe('runtime recipe corpus index', () => {
 
     it('rejects records that typed columns would otherwise coerce', () => {
         const source = index([
-            { partitionPath: 'partition.json', recipeIndex: 2, totalCost: 10 },
+            {
+                partitionPath: 'partition.json',
+                recipeIndex: 2,
+                totalCost: 10,
+                ingredientCount: 0,
+            },
         ]);
 
         expect(() => RuntimeRecipeCorpusIndex.consume(source, [
@@ -40,8 +56,8 @@ describe('runtime recipe corpus index', () => {
 function index(records: RecipeCorpusIndex['records']): RecipeCorpusIndex {
     const ordinals = records.map((_, ordinal) => ordinal);
     return {
-        schema: 'neonschedule1-recipe-corpus-index-2',
-        algorithmVersion: '2',
+        schema: 'neonschedule1-recipe-corpus-index-3',
+        algorithmVersion: '3',
         corpus: {
             artifactSha256: 'a'.repeat(64),
             coverageKey: 'b'.repeat(64),
@@ -52,6 +68,7 @@ function index(records: RecipeCorpusIndex['records']): RecipeCorpusIndex {
         postings: {
             products: { product: ordinals },
             effects: { effect: ordinals },
+            ingredients: { ingredient: ordinals },
         },
         rankings: {
             productValue: ordinals,

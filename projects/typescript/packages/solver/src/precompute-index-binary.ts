@@ -21,17 +21,18 @@ interface PostingDescriptor {
 }
 
 interface BinaryHeader {
-    readonly schema: 'neonschedule1-recipe-corpus-index-binary-1';
+    readonly schema: 'neonschedule1-recipe-corpus-index-binary-2';
     readonly recordCount: number;
     readonly partitionOrdinalBytes: 1 | 2 | 4;
     readonly partitions: readonly CorpusPartitionIdentity[];
     readonly postings: {
         readonly products: readonly PostingDescriptor[];
         readonly effects: readonly PostingDescriptor[];
+        readonly ingredients: readonly PostingDescriptor[];
     };
 }
 
-const magic = Buffer.from([0x4e, 0x53, 0x31, 0x49, 0x44, 0x58, 0x32, 0x00]);
+const magic = Buffer.from([0x4e, 0x53, 0x31, 0x49, 0x44, 0x58, 0x33, 0x00]);
 const prefixLength = magic.length + Uint32Array.BYTES_PER_ELEMENT;
 const littleEndian = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
@@ -42,13 +43,14 @@ export async function writeBinaryRecipeCorpusIndex(
 ): Promise<BinaryRecipeCorpusIndexFile> {
     const columns = consumeRecipeCorpusIndexColumns(source, partitions);
     const header: BinaryHeader = {
-        schema: 'neonschedule1-recipe-corpus-index-binary-1',
+        schema: 'neonschedule1-recipe-corpus-index-binary-2',
         recordCount: columns.recipeIndexes.length,
         partitionOrdinalBytes: columns.partitionOrdinals.BYTES_PER_ELEMENT as 1 | 2 | 4,
         partitions,
         postings: {
             products: describePostings(columns.postings.products),
             effects: describePostings(columns.postings.effects),
+            ingredients: describePostings(columns.postings.ingredients),
         },
     };
     const headerBytes = Buffer.from(JSON.stringify(header), 'utf8');
@@ -82,11 +84,15 @@ export async function writeBinaryRecipeCorpusIndex(
         await writeColumn(columns.partitionOrdinals);
         await writeColumn(columns.recipeIndexes);
         await writeColumn(columns.totalCosts);
+        await writeColumn(columns.ingredientCounts);
         for (const descriptor of header.postings.products) {
             await writeColumn(columns.postings.products[descriptor.key]!);
         }
         for (const descriptor of header.postings.effects) {
             await writeColumn(columns.postings.effects[descriptor.key]!);
+        }
+        for (const descriptor of header.postings.ingredients) {
+            await writeColumn(columns.postings.ingredients[descriptor.key]!);
         }
         await writeColumn(columns.rankings.productValue);
         await writeColumn(columns.rankings.netValue);
@@ -141,8 +147,14 @@ export function readBinaryRecipeCorpusIndex(content: Buffer): RuntimeRecipeCorpu
         Float64Array.BYTES_PER_ELEMENT,
         (start, length) => float64View(content, start, length)
     );
+    const ingredientCounts = take(
+        header.recordCount,
+        Uint32Array.BYTES_PER_ELEMENT,
+        (start, length) => uint32View(content, start, length)
+    );
     const products = readPostings(header.postings.products, take, content);
     const effects = readPostings(header.postings.effects, take, content);
+    const ingredients = readPostings(header.postings.ingredients, take, content);
     const productValue = take(
         header.recordCount,
         Uint32Array.BYTES_PER_ELEMENT,
@@ -166,7 +178,8 @@ export function readBinaryRecipeCorpusIndex(content: Buffer): RuntimeRecipeCorpu
         partitionOrdinals,
         recipeIndexes,
         totalCosts,
-        postings: { products, effects },
+        ingredientCounts,
+        postings: { products, effects, ingredients },
         rankings: { productValue, netValue },
         totalCostOrder,
     });
@@ -199,7 +212,7 @@ function readPostings(
 
 function parseHeader(value: unknown): BinaryHeader {
     const record = object(value, 'Recipe index binary header');
-    if (record.schema !== 'neonschedule1-recipe-corpus-index-binary-1') {
+    if (record.schema !== 'neonschedule1-recipe-corpus-index-binary-2') {
         throw new Error('Recipe index binary file has an unsupported contract');
     }
     const recordCount = integer(record.recordCount, 'binary.recordCount');
@@ -229,6 +242,10 @@ function parseHeader(value: unknown): BinaryHeader {
         postings: {
             products: postingDescriptors(postings.products, 'binary.postings.products'),
             effects: postingDescriptors(postings.effects, 'binary.postings.effects'),
+            ingredients: postingDescriptors(
+                postings.ingredients,
+                'binary.postings.ingredients'
+            ),
         },
     };
 }

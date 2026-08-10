@@ -25,6 +25,10 @@ export interface NormalizedProductionRecipeRequest {
     readonly limit: number;
     readonly requiredEffectIds: readonly string[];
     readonly forbiddenEffectIds: readonly string[];
+    readonly requiredIngredientIds: readonly string[];
+    readonly forbiddenIngredientIds: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
     readonly objective: RecipeSearchObjective;
     readonly maximumTotalCost?: number;
 }
@@ -36,6 +40,10 @@ export interface NormalizedProductionCustomerRequest
         | 'availableIngredientIds'
         | 'requiredEffectIds'
         | 'forbiddenEffectIds'
+        | 'requiredIngredientIds'
+        | 'forbiddenIngredientIds'
+        | 'minimumIngredientCount'
+        | 'exactIngredientCount'
         | 'ruleProfile'
     > {
     readonly ruleProfile: MixingRuleProfile;
@@ -43,6 +51,10 @@ export interface NormalizedProductionCustomerRequest
     readonly availableIngredientIds: readonly string[];
     readonly requiredEffectIds: readonly string[];
     readonly forbiddenEffectIds: readonly string[];
+    readonly requiredIngredientIds: readonly string[];
+    readonly forbiddenIngredientIds: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
 }
 
 export type ProductionCoverageIssue =
@@ -222,6 +234,12 @@ function normalizeRecipeRequest(
 ): NormalizedProductionRecipeRequest {
     const effects = effectConstraints(input.requiredEffectIds, input.forbiddenEffectIds);
     requireNonNegativeSafeInteger(input.maxIngredients, 'Recipe maxIngredients');
+    const availableIngredientIds = canonicalIds(
+        input.availableIngredientIds,
+        'Recipe availableIngredientIds',
+        true
+    );
+    const ingredients = ingredientConstraints(input, availableIngredientIds, input.maxIngredients);
     requirePositiveSafeInteger(input.limit, 'Recipe limit');
     if (input.maximumTotalCost !== undefined) {
         requireNonNegativeFinite(input.maximumTotalCost, 'Recipe maximumTotalCost');
@@ -235,15 +253,14 @@ function normalizeRecipeRequest(
         productIds: input.productIds === undefined
             ? defaultProductIds
             : canonicalIds(input.productIds, 'Recipe productIds', false),
-        availableIngredientIds: canonicalIds(
-            input.availableIngredientIds,
-            'Recipe availableIngredientIds',
-            true
-        ),
+        availableIngredientIds,
         maxIngredients: input.maxIngredients,
         limit: input.limit,
         requiredEffectIds: effects.required,
         forbiddenEffectIds: effects.forbidden,
+        requiredIngredientIds: ingredients.required,
+        forbiddenIngredientIds: ingredients.forbidden,
+        ...ingredients.counts,
         objective: input.objective ?? 'productValue',
         ...(input.maximumTotalCost === undefined
             ? {}
@@ -257,17 +274,22 @@ function normalizeCustomerRequest(
 ): NormalizedProductionCustomerRequest {
     const effects = effectConstraints(input.requiredEffectIds, input.forbiddenEffectIds);
     requireNonNegativeSafeInteger(input.maxIngredients, 'Customer maxIngredients');
+    const availableIngredientIds = canonicalIds(
+        input.availableIngredientIds,
+        'Customer availableIngredientIds',
+        true
+    );
+    const ingredients = ingredientConstraints(input, availableIngredientIds, input.maxIngredients);
     return {
         ruleProfile: normalizeMixingRuleProfile(input.ruleProfile ?? defaultRuleProfile),
         productIds: canonicalIds(input.productIds, 'Customer productIds', false),
-        availableIngredientIds: canonicalIds(
-            input.availableIngredientIds,
-            'Customer availableIngredientIds',
-            true
-        ),
+        availableIngredientIds,
         maxIngredients: input.maxIngredients,
         requiredEffectIds: effects.required,
         forbiddenEffectIds: effects.forbidden,
+        requiredIngredientIds: ingredients.required,
+        forbiddenIngredientIds: ingredients.forbidden,
+        ...ingredients.counts,
         profile: input.profile,
         state: input.state,
         quality: input.quality,
@@ -276,6 +298,90 @@ function normalizeCustomerRequest(
         maximumProductionCost: input.maximumProductionCost,
         limit: input.limit,
     };
+}
+
+function ingredientConstraints(
+    input: {
+        readonly requiredIngredientIds?: readonly string[];
+        readonly forbiddenIngredientIds?: readonly string[];
+        readonly minimumIngredientCount?: number;
+        readonly exactIngredientCount?: number;
+    },
+    availableIngredientIds: readonly string[],
+    maxIngredients: number
+): {
+    readonly required: readonly string[];
+    readonly forbidden: readonly string[];
+    readonly counts: {
+        readonly minimumIngredientCount?: number;
+        readonly exactIngredientCount?: number;
+    };
+} {
+    const required = strictCanonicalIds(
+        input.requiredIngredientIds ?? [],
+        'requiredIngredientIds'
+    );
+    const forbidden = strictCanonicalIds(
+        input.forbiddenIngredientIds ?? [],
+        'forbiddenIngredientIds'
+    );
+    const forbiddenSet = new Set(forbidden);
+    const contradictory = required.find((id) => forbiddenSet.has(id));
+    if (contradictory !== undefined) {
+        throw new Error(
+            `Ingredient ${JSON.stringify(contradictory)} cannot be required and forbidden`
+        );
+    }
+    const available = new Set(availableIngredientIds);
+    const unavailable = required.find((id) => !available.has(id));
+    if (unavailable !== undefined) {
+        throw new Error(
+            `Required mixing ingredient ${JSON.stringify(unavailable)} is not available`
+        );
+    }
+    const minimum = input.minimumIngredientCount;
+    const exact = input.exactIngredientCount;
+    if (minimum !== undefined) {
+        requireNonNegativeSafeInteger(minimum, 'minimumIngredientCount');
+        if (minimum > maxIngredients) {
+            throw new Error('minimumIngredientCount cannot exceed maxIngredients');
+        }
+    }
+    if (exact !== undefined) {
+        requireNonNegativeSafeInteger(exact, 'exactIngredientCount');
+        if (exact > maxIngredients) {
+            throw new Error('exactIngredientCount cannot exceed maxIngredients');
+        }
+        if (minimum !== undefined && minimum > exact) {
+            throw new Error('minimumIngredientCount cannot exceed exactIngredientCount');
+        }
+    }
+    if (required.length > (exact ?? maxIngredients)) {
+        throw new Error(
+            'Required mixing ingredient count exceeds the final ingredient-count limit'
+        );
+    }
+    return {
+        required,
+        forbidden,
+        counts: {
+            ...(minimum === undefined ? {} : { minimumIngredientCount: minimum }),
+            ...(exact === undefined ? {} : { exactIngredientCount: exact }),
+        },
+    };
+}
+
+function strictCanonicalIds(values: readonly string[], label: string): readonly string[] {
+    if (!Array.isArray(values)) throw new Error(`${label} must be an array`);
+    const seen = new Set<string>();
+    for (const value of values) {
+        if (typeof value !== 'string' || value.length === 0) {
+            throw new Error(`${label} must contain non-empty strings`);
+        }
+        if (seen.has(value)) throw new Error(`Duplicate ${label} ${JSON.stringify(value)}`);
+        seen.add(value);
+    }
+    return Object.freeze([...seen].sort());
 }
 
 function effectConstraints(

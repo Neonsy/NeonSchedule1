@@ -11,10 +11,10 @@ import {
 } from '#solver/precompute-artifact';
 import type { RecipeCorpusEntry } from '#solver/precompute';
 
-export const recipeCorpusIndexAlgorithmVersion = '2';
+export const recipeCorpusIndexAlgorithmVersion = '3';
 
 export interface RecipeCorpusIndex {
-    readonly schema: 'neonschedule1-recipe-corpus-index-2';
+    readonly schema: 'neonschedule1-recipe-corpus-index-3';
     readonly algorithmVersion: string;
     readonly corpus: {
         readonly artifactSha256: string;
@@ -26,6 +26,7 @@ export interface RecipeCorpusIndex {
     readonly postings: {
         readonly products: Readonly<Record<string, readonly number[]>>;
         readonly effects: Readonly<Record<string, readonly number[]>>;
+        readonly ingredients: Readonly<Record<string, readonly number[]>>;
     };
     readonly rankings: Readonly<Record<RecipeSearchObjective, readonly number[]>>;
     readonly totalCostOrder: readonly number[];
@@ -35,6 +36,7 @@ export interface RecipeCorpusIndexRecord {
     readonly partitionPath: string;
     readonly recipeIndex: number;
     readonly totalCost: number;
+    readonly ingredientCount: number;
 }
 
 interface IndexedRecipe {
@@ -49,6 +51,7 @@ export async function buildRecipeCorpusIndex(
     const records: RecipeCorpusIndexRecord[] = [];
     const products = new Map<string, number[]>();
     const effects = new Map<string, number[]>();
+    const ingredients = new Map<string, number[]>();
     const strings = new Map<string, string>();
     const sequences = new Map<string, readonly string[]>();
     const intern = (value: string): string => {
@@ -75,9 +78,13 @@ export async function buildRecipeCorpusIndex(
                     partitionPath: file.path,
                     recipeIndex,
                     totalCost: entry.costs.total,
+                    ingredientCount: entry.depth,
                 });
                 addPosting(products, entry.productId, ordinal);
                 for (const effectId of entry.effectIds) addPosting(effects, effectId, ordinal);
+                for (const ingredientId of new Set(entry.ingredientIds)) {
+                    addPosting(ingredients, ingredientId, ordinal);
+                }
             });
         }
     );
@@ -92,7 +99,7 @@ export async function buildRecipeCorpusIndex(
     return {
         manifest,
         index: {
-            schema: 'neonschedule1-recipe-corpus-index-2',
+            schema: 'neonschedule1-recipe-corpus-index-3',
             algorithmVersion: recipeCorpusIndexAlgorithmVersion,
             corpus: {
                 artifactSha256: manifest.artifactSha256,
@@ -104,6 +111,7 @@ export async function buildRecipeCorpusIndex(
             postings: {
                 products: postingRecord(products),
                 effects: postingRecord(effects),
+                ingredients: postingRecord(ingredients),
             },
             rankings: {
                 productValue: ranking(indexedRecipes, 'productValue'),

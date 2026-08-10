@@ -58,6 +58,18 @@ export class CustomerCorpusRecommendationLookup {
             ...(input.forbiddenEffectIds === undefined
                 ? {}
                 : { forbiddenEffectIds: input.forbiddenEffectIds }),
+            ...(input.requiredIngredientIds === undefined
+                ? {}
+                : { requiredIngredientIds: input.requiredIngredientIds }),
+            ...(input.forbiddenIngredientIds === undefined
+                ? {}
+                : { forbiddenIngredientIds: input.forbiddenIngredientIds }),
+            ...(input.minimumIngredientCount === undefined
+                ? {}
+                : { minimumIngredientCount: input.minimumIngredientCount }),
+            ...(input.exactIngredientCount === undefined
+                ? {}
+                : { exactIngredientCount: input.exactIngredientCount }),
             maximumTotalCost: conservativeUnitCostCeiling(
                 input.maximumProductionCost,
                 input.quantity

@@ -19,6 +19,10 @@ export interface RecipeCorpusFilter {
     readonly productIds?: readonly string[];
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
+    readonly requiredIngredientIds?: readonly string[];
+    readonly forbiddenIngredientIds?: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
     readonly maximumTotalCost?: number;
 }
 
@@ -380,10 +384,31 @@ function filterState(input: RecipeCorpusFilter, index: RuntimeRecipeCorpusIndex)
     const products = unique(input.productIds ?? [], 'product');
     const requiredEffects = unique(input.requiredEffectIds ?? [], 'required effect');
     const forbiddenEffects = unique(input.forbiddenEffectIds ?? [], 'forbidden effect');
+    const requiredIngredients = unique(
+        input.requiredIngredientIds ?? [],
+        'required ingredient'
+    );
+    const forbiddenIngredients = unique(
+        input.forbiddenIngredientIds ?? [],
+        'forbidden ingredient'
+    );
     for (const effectId of requiredEffects) {
         if (forbiddenEffects.includes(effectId)) {
             throw new Error(`Effect ${JSON.stringify(effectId)} cannot be required and forbidden`);
         }
+    }
+    for (const ingredientId of requiredIngredients) {
+        if (forbiddenIngredients.includes(ingredientId)) {
+            throw new Error(
+                `Ingredient ${JSON.stringify(ingredientId)} cannot be required and forbidden`
+            );
+        }
+    }
+    if (input.exactIngredientCount !== undefined &&
+        requiredIngredients.length > input.exactIngredientCount) {
+        throw new Error(
+            'Required ingredient count cannot exceed exactIngredientCount'
+        );
     }
 
     let allowed: Set<number> | null = null;
@@ -394,7 +419,28 @@ function filterState(input: RecipeCorpusFilter, index: RuntimeRecipeCorpusIndex)
         .map((effectId) => index.postings.effects[effectId] ?? [])
         .sort((left, right) => left.length - right.length);
     for (const posting of requiredPostings) allowed = intersect(allowed, posting);
-    const forbidden = postingSet(forbiddenEffects, index.postings.effects);
+    const requiredIngredientPostings = requiredIngredients
+        .map((ingredientId) => index.postings.ingredients[ingredientId] ?? [])
+        .sort((left, right) => left.length - right.length);
+    for (const posting of requiredIngredientPostings) allowed = intersect(allowed, posting);
+    if (input.minimumIngredientCount !== undefined ||
+        input.exactIngredientCount !== undefined) {
+        const countMatches: number[] = [];
+        for (let ordinal = 0; ordinal < index.recordCount; ordinal++) {
+            const count = index.ingredientCounts[ordinal]!;
+            if ((input.minimumIngredientCount === undefined ||
+                    count >= input.minimumIngredientCount) &&
+                (input.exactIngredientCount === undefined ||
+                    count === input.exactIngredientCount)) {
+                countMatches.push(ordinal);
+            }
+        }
+        allowed = intersect(allowed, countMatches);
+    }
+    const forbidden = union(
+        postingSet(forbiddenEffects, index.postings.effects),
+        postingSet(forbiddenIngredients, index.postings.ingredients)
+    );
     return {
         allowed,
         forbidden,
@@ -418,6 +464,10 @@ function postingSet(
         for (const ordinal of postings[key] ?? []) result.add(ordinal);
     }
     return result;
+}
+
+function union(left: ReadonlySet<number>, right: ReadonlySet<number>): Set<number> {
+    return new Set([...left, ...right]);
 }
 
 function rankPositions(ranking: Uint32Array): Uint32Array {
@@ -484,5 +534,29 @@ function validateFilter(input: RecipeCorpusFilter): void {
     if (input.maximumTotalCost !== undefined &&
         (!Number.isFinite(input.maximumTotalCost) || input.maximumTotalCost < 0)) {
         throw new Error('Recipe corpus maximumTotalCost must be a non-negative number');
+    }
+    if (input.minimumIngredientCount !== undefined) {
+        requireNonNegativeSafeInteger(
+            input.minimumIngredientCount,
+            'Recipe corpus minimumIngredientCount'
+        );
+    }
+    if (input.exactIngredientCount !== undefined) {
+        requireNonNegativeSafeInteger(
+            input.exactIngredientCount,
+            'Recipe corpus exactIngredientCount'
+        );
+        if (input.minimumIngredientCount !== undefined &&
+            input.minimumIngredientCount > input.exactIngredientCount) {
+            throw new Error(
+                'Recipe corpus minimumIngredientCount cannot exceed exactIngredientCount'
+            );
+        }
+    }
+}
+
+function requireNonNegativeSafeInteger(value: number, label: string): void {
+    if (!Number.isSafeInteger(value) || value < 0) {
+        throw new Error(`${label} must be a non-negative safe integer`);
     }
 }

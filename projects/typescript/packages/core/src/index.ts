@@ -31,6 +31,7 @@ export * from '#core/geometry/transform';
 export * from '#core/geometry/triangle-mesh';
 export * from '#core/mixing/enumerate';
 export * from '#core/mixing/engine';
+export * from '#core/mixing/ingredient-constraints';
 export * from '#core/mixing/profile-inference';
 export * from '#core/mixing/recipe';
 export * from '#core/mixing/recipe-ranking';

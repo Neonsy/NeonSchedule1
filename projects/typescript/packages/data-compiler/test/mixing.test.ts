@@ -621,6 +621,141 @@ describe('mixing engine', () => {
         ).toThrow('Mixing effect "base" cannot be both required and forbidden');
     });
 
+    it('applies ingredient and count constraints without losing equivalent states', () => {
+        const effects = [
+            effect('base', 0, 0),
+            effect('mixed', 0, 0),
+            effect('cheap-shift', 1, 1),
+            effect('required-shift', 1, 1),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [{
+                drugType: 'Test',
+                drugTypeValue: 0,
+                radius: 2,
+                effects: [mapEffect('base', 0), mapEffect('mixed', 1)],
+            }],
+        };
+        const items = [
+            product('product', ['base'], 10),
+            ingredient('cheap', 'cheap-shift', 1),
+            ingredient('required', 'required-shift', 2),
+        ];
+        const search = new RecipeSearch(
+            new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry]))),
+            new Map(items.map((entry) => [entry.id, entry]))
+        );
+        const input = {
+            productId: 'product',
+            availableIngredientIds: ['cheap', 'required'],
+            maxIngredients: 2,
+            limit: 10,
+        } as const;
+
+        expect(search.search({
+            ...input,
+            requiredIngredientIds: ['required'],
+            exactIngredientCount: 1,
+        }).recipes.map((recipe) => recipe.ingredientIds)).toEqual([['required']]);
+        expect(search.search({
+            ...input,
+            exactIngredientCount: 2,
+        }).recipes.map((recipe) => recipe.ingredientIds)).toEqual([['cheap', 'cheap']]);
+        expect(search.search({
+            ...input,
+            minimumIngredientCount: 2,
+            requiredIngredientIds: ['required'],
+        }).recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['cheap', 'required'],
+        ]);
+        expect(search.search({
+            ...input,
+            exactIngredientCount: 1,
+            forbiddenIngredientIds: ['cheap'],
+        }).recipes.map((recipe) => recipe.ingredientIds)).toEqual([['required']]);
+
+        const interrupted = new RecipeSearch(
+            new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry]))),
+            new Map(items.map((entry) => [entry.id, entry])),
+            { maxStates: 1, limitBehavior: 'return-best-found' }
+        ).search({
+            ...input,
+            exactIngredientCount: 2,
+        });
+        expect(interrupted.recipes).toEqual([]);
+        expect(interrupted.evidence).toMatchObject({
+            proofStatus: 'incomplete',
+            stopReason: 'state-limit',
+            completedDepth: 0,
+        });
+    });
+
+    it('rejects invalid ingredient and count constraints', () => {
+        const effects = [effect('base', 0, 0), effect('shift', 1, 1)];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 1,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [{
+                drugType: 'Test',
+                drugTypeValue: 0,
+                radius: 1,
+                effects: [mapEffect('base', 0)],
+            }],
+        };
+        const items = [
+            product('product', ['base'], 10),
+            ingredient('ingredient', 'shift', 1),
+        ];
+        const search = new RecipeSearch(
+            new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry]))),
+            new Map(items.map((entry) => [entry.id, entry]))
+        );
+        const input = {
+            productId: 'product',
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
+            limit: 1,
+        } as const;
+
+        expect(() => search.search({
+            ...input,
+            requiredIngredientIds: ['ingredient', 'ingredient'],
+        })).toThrow('Duplicate required mixing ingredient "ingredient"');
+        expect(() => search.search({
+            ...input,
+            requiredIngredientIds: ['missing'],
+        })).toThrow('Unknown required mixing ingredient "missing"');
+        expect(() => search.search({
+            ...input,
+            requiredIngredientIds: ['ingredient'],
+            forbiddenIngredientIds: ['ingredient'],
+        })).toThrow('cannot be both required and forbidden');
+        expect(() => search.search({
+            ...input,
+            requiredIngredientIds: ['ingredient'],
+            availableIngredientIds: [],
+        })).toThrow('is not available');
+        expect(() => search.search({
+            ...input,
+            minimumIngredientCount: 2,
+        })).toThrow('minimumIngredientCount cannot exceed maxIngredients');
+        expect(() => search.search({
+            ...input,
+            minimumIngredientCount: 1,
+            exactIngredientCount: 0,
+        })).toThrow('minimumIngredientCount cannot exceed exactIngredientCount');
+        expect(() => search.search({
+            ...input,
+            exactIngredientCount: 2,
+        })).toThrow('exactIngredientCount cannot exceed maxIngredients');
+    });
+
     it('finds an exact effect-constrained recipe across base products', () => {
         const effects = [
             effect('base', 0, 0),

@@ -17,9 +17,11 @@ export interface RuntimeRecipeCorpusIndexColumns {
     readonly partitionOrdinals: PartitionOrdinals;
     readonly recipeIndexes: Uint32Array;
     readonly totalCosts: Float64Array;
+    readonly ingredientCounts: Uint32Array;
     readonly postings: {
         readonly products: Readonly<Record<string, Uint32Array>>;
         readonly effects: Readonly<Record<string, Uint32Array>>;
+        readonly ingredients: Readonly<Record<string, Uint32Array>>;
     };
     readonly rankings: Readonly<Record<RecipeSearchObjective, Uint32Array>>;
     readonly totalCostOrder: Uint32Array;
@@ -30,6 +32,7 @@ interface MutableRecipeCorpusIndex {
     postings: {
         products: Readonly<Record<string, readonly number[]>>;
         effects: Readonly<Record<string, readonly number[]>>;
+        ingredients: Readonly<Record<string, readonly number[]>>;
     };
     rankings: Record<RecipeSearchObjective, readonly number[]>;
     totalCostOrder: readonly number[];
@@ -38,9 +41,11 @@ interface MutableRecipeCorpusIndex {
 export class RuntimeRecipeCorpusIndex {
     readonly recordCount: number;
     readonly totalCosts: Float64Array;
+    readonly ingredientCounts: Uint32Array;
     readonly postings: {
         readonly products: Readonly<Record<string, Uint32Array>>;
         readonly effects: Readonly<Record<string, Uint32Array>>;
+        readonly ingredients: Readonly<Record<string, Uint32Array>>;
     };
     readonly rankings: Readonly<Record<RecipeSearchObjective, Uint32Array>>;
     readonly totalCostOrder: Uint32Array;
@@ -54,6 +59,7 @@ export class RuntimeRecipeCorpusIndex {
         this.#partitionOrdinals = columns.partitionOrdinals;
         this.#recipeIndexes = columns.recipeIndexes;
         this.totalCosts = columns.totalCosts;
+        this.ingredientCounts = columns.ingredientCounts;
         this.postings = columns.postings;
         this.rankings = columns.rankings;
         this.totalCostOrder = columns.totalCostOrder;
@@ -107,12 +113,14 @@ export function consumeRecipeCorpusIndexColumns(
     const recordPartitions = partitionOrdinals(recordCount, partitions.length);
     const recipeIndexes = new Uint32Array(recordCount);
     const totalCosts = new Float64Array(recordCount);
+    const ingredientCounts = new Uint32Array(recordCount);
     copyRecords(
         source.records,
         partitions,
         recordPartitions,
         recipeIndexes,
-        totalCosts
+        totalCosts,
+        ingredientCounts
     );
     mutable.records = [];
 
@@ -120,6 +128,8 @@ export function consumeRecipeCorpusIndexColumns(
     mutable.postings.products = {};
     const effects = ordinalRecord(source.postings.effects);
     mutable.postings.effects = {};
+    const ingredients = ordinalRecord(source.postings.ingredients);
+    mutable.postings.ingredients = {};
     const productValue = Uint32Array.from(source.rankings.productValue);
     mutable.rankings.productValue = [];
     const netValue = Uint32Array.from(source.rankings.netValue);
@@ -131,7 +141,8 @@ export function consumeRecipeCorpusIndexColumns(
         partitionOrdinals: recordPartitions,
         recipeIndexes,
         totalCosts,
-        postings: { products, effects },
+        ingredientCounts,
+        postings: { products, effects, ingredients },
         rankings: { productValue, netValue },
         totalCostOrder,
     };
@@ -142,7 +153,8 @@ function copyRecords(
     partitions: readonly CorpusPartitionIdentity[],
     recordPartitions: PartitionOrdinals,
     recipeIndexes: Uint32Array,
-    totalCosts: Float64Array
+    totalCosts: Float64Array,
+    ingredientCounts: Uint32Array
 ): void {
     const partitionOrdinals = new Map(
         partitions.map((partition, ordinal) => [partition.path, ordinal])
@@ -163,12 +175,18 @@ function copyRecords(
         recordPartitions[ordinal] = partitionOrdinal;
         recipeIndexes[ordinal] = record.recipeIndex;
         totalCosts[ordinal] = record.totalCost;
+        if (!Number.isSafeInteger(record.ingredientCount) || record.ingredientCount < 0 ||
+            record.ingredientCount > 0xffff_ffff) {
+            throw new Error('Recipe index contains an invalid ingredient count');
+        }
+        ingredientCounts[ordinal] = record.ingredientCount;
     });
 }
 
 function verifyColumns(columns: RuntimeRecipeCorpusIndexColumns): void {
     const count = columns.recipeIndexes.length;
     if (columns.partitionOrdinals.length !== count || columns.totalCosts.length !== count ||
+        columns.ingredientCounts.length !== count ||
         columns.rankings.productValue.length !== count ||
         columns.rankings.netValue.length !== count ||
         columns.totalCostOrder.length !== count) {
@@ -197,6 +215,7 @@ function verifyColumns(columns: RuntimeRecipeCorpusIndexColumns): void {
     for (const [kind, postings] of [
         ['product', columns.postings.products],
         ['effect', columns.postings.effects],
+        ['ingredient', columns.postings.ingredients],
     ] as const) {
         for (const [key, ordinals] of Object.entries(postings)) {
             verifyPosting(ordinals, count, `${kind} posting ${JSON.stringify(key)}`);

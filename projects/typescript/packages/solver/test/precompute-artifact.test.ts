@@ -223,12 +223,15 @@ describe('recipe corpus artifact', () => {
             availableIngredientIds: ['ingredient', 'ingredient'],
             maxIngredients: 1,
             requiredEffectIds: ['mixed-effect'],
+            requiredIngredientIds: ['ingredient'],
+            exactIngredientCount: 1,
             limit: 2,
         });
         const customer = await router.customer({
             productIds: ['product-a', 'product-b'],
             availableIngredientIds: ['ingredient'],
             maxIngredients: 1,
+            minimumIngredientCount: 1,
             profile: customerProfile,
             state: { addiction: 0.2, relationship: 2, orderLimitMultiplier: 1 },
             quality: 'Standard',
@@ -249,6 +252,10 @@ describe('recipe corpus artifact', () => {
             recipe.result.recipes.length
         );
         expect(customer.kind).toBe('exact');
+        if (customer.kind !== 'exact') throw new Error('Expected exact customer route');
+        expect(customer.result.recommendations.every(
+            ({ recipe }) => recipe.ingredientCount >= 1
+        )).toBe(true);
         if (customer.kind !== 'exact') throw new Error('Expected exact customer route');
         expect(customer.result.recommendations.length).toBeGreaterThan(0);
         expect(production.selection.selectionSha256).toBe(
@@ -511,11 +518,47 @@ describe('recipe corpus artifact', () => {
 
         const mixed = await lookup.query({ requiredEffectIds: ['mixed-effect'], limit: 1 });
         const affordable = await lookup.query({ maximumTotalCost: 4, limit: 10 });
+        const requiredIngredient = await lookup.query({
+            requiredIngredientIds: ['ingredient'],
+            exactIngredientCount: 1,
+            limit: 10,
+        });
+        const forbiddenIngredient = await lookup.query({
+            forbiddenIngredientIds: ['ingredient'],
+            limit: 10,
+        });
+        const minimumCount = await lookup.query({
+            minimumIngredientCount: 1,
+            limit: 10,
+        });
 
         expect(mixed.recipes.map((recipe) => recipe.ingredientIds)).toEqual([['ingredient']]);
         expect(affordable.recipes.map((recipe) => recipe.ingredientIds)).toEqual([[]]);
+        expect(requiredIngredient.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+        ]);
+        expect(forbiddenIngredient.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            [],
+        ]);
+        expect(minimumCount.recipes.map((recipe) => recipe.ingredientIds)).toEqual([
+            ['ingredient'],
+        ]);
         expect(mixed.evidence.examinedRankingEntries).toBe(1);
         expect(affordable.evidence.examinedRankingEntries).toBe(1);
+        await expect(lookup.query({
+            requiredIngredientIds: ['ingredient', 'ingredient'],
+            limit: 1,
+        })).rejects.toThrow('Duplicate required ingredient "ingredient"');
+        await expect(lookup.query({
+            requiredIngredientIds: ['ingredient'],
+            forbiddenIngredientIds: ['ingredient'],
+            limit: 1,
+        })).rejects.toThrow('cannot be required and forbidden');
+        await expect(lookup.query({
+            minimumIngredientCount: 2,
+            exactIngredientCount: 1,
+            limit: 1,
+        })).rejects.toThrow('minimumIngredientCount cannot exceed exactIngredientCount');
     });
 
     it('ranks affordable customer recommendations from corpus candidates', async () => {

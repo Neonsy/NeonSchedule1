@@ -27,12 +27,13 @@ interface RecipeCorpusIndexManifestBase {
         readonly recipes: number;
         readonly products: number;
         readonly effects: number;
+        readonly ingredients: number;
     };
 }
 
 export interface RecipeCorpusIndexManifest extends RecipeCorpusIndexManifestBase {
     readonly schema: typeof recipeCorpusIndexManifestSchema;
-    readonly storage: 'binary-columnar-1';
+    readonly storage: 'binary-columnar-2';
     readonly file: BinaryRecipeCorpusIndexFile;
 }
 
@@ -121,6 +122,7 @@ function indexSummary(index: RecipeCorpusIndex): RecipeCorpusIndexSummary {
         recipes: index.records.length,
         products: Object.keys(index.postings.products).length,
         effects: Object.keys(index.postings.effects).length,
+        ingredients: Object.keys(index.postings.ingredients).length,
         },
     };
 }
@@ -185,7 +187,7 @@ function manifestBody(
         algorithmVersion: recipeCorpusIndexAlgorithmVersion,
         corpus,
         counts,
-        storage: 'binary-columnar-1',
+        storage: 'binary-columnar-2',
         file,
     };
 }
@@ -196,7 +198,8 @@ function verifyRuntimeIndex(
 ): void {
     if (index.recordCount !== manifest.counts.recipes ||
         Object.keys(index.postings.products).length !== manifest.counts.products ||
-        Object.keys(index.postings.effects).length !== manifest.counts.effects) {
+        Object.keys(index.postings.effects).length !== manifest.counts.effects ||
+        Object.keys(index.postings.ingredients).length !== manifest.counts.ingredients) {
         throw new Error('Recipe index lookup metadata differs from its manifest');
     }
 }
@@ -205,7 +208,7 @@ function parseManifest(value: unknown): RecipeCorpusIndexManifest {
     const record = object(value, 'Recipe index manifest');
     const file = object(record.file, 'Recipe index file');
     if (record.schema !== recipeCorpusIndexManifestSchema ||
-        record.storage !== 'binary-columnar-1' || file.path !== 'lookup.bin') {
+        record.storage !== 'binary-columnar-2' || file.path !== 'lookup.bin') {
         throw new Error(
             'Recipe index artifact is stale or unsupported; expected manifest with lookup.bin'
         );
@@ -228,6 +231,7 @@ function parseManifest(value: unknown): RecipeCorpusIndexManifest {
             recipes: integer(counts.recipes, 'counts.recipes'),
             products: integer(counts.products, 'counts.products'),
             effects: integer(counts.effects, 'counts.effects'),
+            ingredients: integer(counts.ingredients, 'counts.ingredients'),
         },
     };
     const fileIdentity = {

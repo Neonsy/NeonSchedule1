@@ -28,7 +28,7 @@ import {
     type LiveSearchMode,
 } from '#solver/search-policy';
 
-export const liveFallbackAlgorithmVersion = '7';
+export const liveFallbackAlgorithmVersion = '8';
 
 export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 
@@ -272,6 +272,8 @@ export class LiveFallbackRunner {
         readonly availableIngredientIds: readonly string[];
         readonly requiredEffectIds: readonly string[];
         readonly forbiddenEffectIds: readonly string[];
+        readonly requiredIngredientIds: readonly string[];
+        readonly forbiddenIngredientIds: readonly string[];
     }): void {
         requireKnown(request.productIds, this.#productIds, 'live product');
         requireKnown(
@@ -281,6 +283,16 @@ export class LiveFallbackRunner {
         );
         this.#validateEffects(request.requiredEffectIds, 'Required effect');
         this.#validateEffects(request.forbiddenEffectIds, 'Forbidden effect');
+        requireKnown(
+            request.requiredIngredientIds,
+            this.#ingredientIds,
+            'required live mixing ingredient'
+        );
+        requireKnown(
+            request.forbiddenIngredientIds,
+            this.#ingredientIds,
+            'forbidden live mixing ingredient'
+        );
     }
 
     #validateEffects(ids: readonly string[], label: string): void {

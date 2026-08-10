@@ -23,6 +23,10 @@ export interface ReverseRecipeSearchInput {
     readonly limit: number;
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
+    readonly requiredIngredientIds?: readonly string[];
+    readonly forbiddenIngredientIds?: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
     readonly objective?: RecipeSearchObjective;
     readonly maximumTotalCost?: number;
 }
@@ -84,6 +88,18 @@ export class ReverseRecipeSearch {
                 ...(input.forbiddenEffectIds === undefined
                     ? {}
                     : { forbiddenEffectIds: input.forbiddenEffectIds }),
+                ...(input.requiredIngredientIds === undefined
+                    ? {}
+                    : { requiredIngredientIds: input.requiredIngredientIds }),
+                ...(input.forbiddenIngredientIds === undefined
+                    ? {}
+                    : { forbiddenIngredientIds: input.forbiddenIngredientIds }),
+                ...(input.minimumIngredientCount === undefined
+                    ? {}
+                    : { minimumIngredientCount: input.minimumIngredientCount }),
+                ...(input.exactIngredientCount === undefined
+                    ? {}
+                    : { exactIngredientCount: input.exactIngredientCount }),
                 ...(input.maximumTotalCost === undefined
                     ? {}
                     : { maximumTotalCost: input.maximumTotalCost }),

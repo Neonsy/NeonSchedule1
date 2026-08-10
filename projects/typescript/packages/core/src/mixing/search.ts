@@ -2,6 +2,7 @@ import type { Item, Product } from '#core/data/item';
 import type { MixingRuleProfile } from '#core/data/mixing';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import { MixingEngine } from '#core/mixing/engine';
+import { FinalIngredientConstraints } from '#core/mixing/ingredient-constraints';
 import {
     compareRecipeEvaluations,
     recipeSearchScore,
@@ -46,6 +47,10 @@ export interface RecipeSearchInput {
     readonly limit: number;
     readonly requiredEffectIds?: readonly string[];
     readonly forbiddenEffectIds?: readonly string[];
+    readonly requiredIngredientIds?: readonly string[];
+    readonly forbiddenIngredientIds?: readonly string[];
+    readonly minimumIngredientCount?: number;
+    readonly exactIngredientCount?: number;
     readonly objective?: RecipeSearchObjective;
     readonly maximumTotalCost?: number;
 }
@@ -160,7 +165,17 @@ export class RecipeSearch {
                 }
         );
         const product = this.#product(input.productId);
-        const actions = this.#ingredients(input.availableIngredientIds);
+        const availableActions = this.#ingredients(input.availableIngredientIds);
+        const ingredientConstraints = new FinalIngredientConstraints(
+            this.#itemsById,
+            input.availableIngredientIds,
+            input.maxIngredients,
+            input
+        );
+        const actions = availableActions.filter((action) =>
+            ingredientConstraints.allows(action.id)
+        );
+        const maximumIngredientCount = ingredientConstraints.maximumIngredientCount;
         const maximumTotalCost = input.maximumTotalCost ?? Number.POSITIVE_INFINITY;
         const objective = requireObjective(input.objective ?? 'productValue');
         const constraints = new FinalEffectConstraints(
@@ -174,8 +189,17 @@ export class RecipeSearch {
             ingredientCost: 0,
         };
         exploredStates = 1;
-        let layer = new Map([[stateKey(base.effectIds), base]]);
-        const outcomes = new Map([[stateKey(base.effectIds), evaluateState(input.productId, product, base, this.#engine)]]);
+        const baseKey = ingredientConstraints.stateKey(base.effectIds, base.ingredientIds);
+        let layer = new Map([[baseKey, base]]);
+        const seenStates = new Map([[baseKey, base]]);
+        const outcomes = new Map<string, RecipeEvaluation>();
+        if (constraints.matches(base.effectIds) &&
+            ingredientConstraints.matches(base.ingredientIds)) {
+            outcomes.set(
+                outcomeKey(base.effectIds),
+                evaluateState(input.productId, product, base, this.#engine)
+            );
+        }
         const valueBound = new RecipeValueBound(
             this.#engine,
             product,
@@ -187,7 +211,7 @@ export class RecipeSearch {
 
         try {
             workBudget.checkpoint();
-            for (let depth = 1; depth <= input.maxIngredients && layer.size > 0; depth++) {
+            for (let depth = 1; depth <= maximumIngredientCount && layer.size > 0; depth++) {
                 currentDepth = depth;
                 workBudget.checkpoint();
                 const next = new Map<string, SearchState>();
@@ -196,9 +220,10 @@ export class RecipeSearch {
                     input.limit,
                     constraints,
                     objective,
-                    input.maximumTotalCost
+                    input.maximumTotalCost,
+                    ingredientConstraints
                 );
-                const remainingIngredients = input.maxIngredients - depth + 1;
+                const remainingIngredients = maximumIngredientCount - depth + 1;
                 const rankedStates = [...layer.values()]
                     .map((state) => ({
                         state,
@@ -216,6 +241,13 @@ export class RecipeSearch {
                 for (const ranked of rankedStates) {
                     const { state } = ranked;
                     let { upperScore } = ranked;
+                    if (!ingredientConstraints.canStillMatch(
+                        state.ingredientIds,
+                        remainingIngredients
+                    )) {
+                        prunedStates++;
+                        continue;
+                    }
                     if (cutoff.value !== null && upperScore < cutoff.value) {
                         prunedStates++;
                         continue;
@@ -223,9 +255,11 @@ export class RecipeSearch {
                     if (remainingIngredients <= 2) {
                         const exact = valueBound.exactShortHorizon(
                             state.effectIds,
+                            state.ingredientIds,
                             state.ingredientCost,
                             remainingIngredients,
                             constraints,
+                            ingredientConstraints,
                             maximumTotalCost
                         );
                         if (exact === null) {
@@ -250,9 +284,12 @@ export class RecipeSearch {
                             prunedStates++;
                             continue;
                         }
-                        const key = stateKey(candidate.effectIds);
-                        const prior = outcomes.get(key);
-                        if (prior !== undefined && prior.ingredientCost <= candidate.ingredientCost) {
+                        const key = ingredientConstraints.stateKey(
+                            candidate.effectIds,
+                            candidate.ingredientIds
+                        );
+                        const prior = seenStates.get(key);
+                        if (prior !== undefined && comparePaths(prior, candidate) <= 0) {
                             prunedStates++;
                             continue;
                         }
@@ -272,9 +309,10 @@ export class RecipeSearch {
                         }
                         if (current !== undefined) prunedStates++;
                         next.set(key, candidate);
-                        if (constraints.matches(candidate.effectIds)) {
+                        if (constraints.matches(candidate.effectIds) &&
+                            ingredientConstraints.matches(candidate.ingredientIds)) {
                             cutoff.add(
-                                key,
+                                outcomeKey(candidate.effectIds),
                                 recipeSearchScore(
                                     this.#engine.calculateProductValue(product.basePrice, candidate.effectIds),
                                     product.baseProductCost,
@@ -288,15 +326,23 @@ export class RecipeSearch {
 
                 exploredStates += next.size;
                 for (const [key, state] of next) {
+                    seenStates.set(key, state);
+                    if (!constraints.matches(state.effectIds) ||
+                        !ingredientConstraints.matches(state.ingredientIds)) {
+                        continue;
+                    }
                     const candidate = evaluateState(input.productId, product, state, this.#engine);
-                    const current = outcomes.get(key);
-                    if (current === undefined || comparePaths(current, candidate) > 0) outcomes.set(key, candidate);
+                    const resultKey = outcomeKey(state.effectIds);
+                    const current = outcomes.get(resultKey);
+                    if (current === undefined || comparePaths(current, candidate) > 0) {
+                        outcomes.set(resultKey, candidate);
+                    }
                 }
                 layer = next;
                 completedDepth = depth;
             }
 
-            completedDepth = input.maxIngredients;
+            completedDepth = maximumIngredientCount;
         } catch (error) {
             interruption = recipeSearchInterruption(error);
             if (interruption === undefined || this.#limitBehavior === 'throw') throw error;
@@ -304,6 +350,7 @@ export class RecipeSearch {
         const recipes = [...outcomes.values()]
             .filter((recipe) =>
                 constraints.matches(recipe.effectIds) &&
+                ingredientConstraints.matches(recipe.ingredientIds) &&
                 (input.maximumTotalCost === undefined ||
                     recipe.totalCost <= input.maximumTotalCost)
             )
@@ -323,7 +370,7 @@ export class RecipeSearch {
             evidence: interruption?.evidence ?? exactSearchEvidence(
                 exploredStates,
                 prunedStates,
-                input.maxIngredients,
+                maximumIngredientCount,
                 work
             ),
         };
@@ -385,12 +432,14 @@ class RecipeScoreCutoff {
         limit: number,
         constraints: FinalEffectConstraints,
         objective: RecipeSearchObjective,
-        maximumTotalCost: number | undefined
+        maximumTotalCost: number | undefined,
+        ingredientConstraints: FinalIngredientConstraints
     ) {
         this.#limit = limit;
         for (const [key, recipe] of recipes) {
             if (
                 constraints.matches(recipe.effectIds) &&
+                ingredientConstraints.matches(recipe.ingredientIds) &&
                 (maximumTotalCost === undefined || recipe.totalCost <= maximumTotalCost)
             ) {
                 this.add(
@@ -480,18 +529,21 @@ class RecipeValueBound {
 
     exactShortHorizon(
         effectIds: readonly string[],
+        ingredientIds: readonly string[],
         ingredientCost: number,
         remainingIngredients: number,
         constraints: FinalEffectConstraints,
+        ingredientConstraints: FinalIngredientConstraints,
         maximumTotalCost: number
     ): { readonly key: string; readonly value: number } | null {
         let best: { readonly key: string; readonly value: number } | null = null;
         if (
             this.#product.baseProductCost + ingredientCost <= maximumTotalCost &&
-            constraints.matches(effectIds)
+            constraints.matches(effectIds) &&
+            ingredientConstraints.matches(ingredientIds)
         ) {
             best = {
-                key: stateKey(effectIds),
+                key: outcomeKey(effectIds),
                 value: recipeSearchScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, effectIds),
                     this.#product.baseProductCost,
@@ -501,12 +553,20 @@ class RecipeValueBound {
             };
         }
         let layer = new Map([
-            [stateKey(effectIds), { effectIds, additionalIngredientCost: 0 }],
+            [ingredientConstraints.stateKey(effectIds, ingredientIds), {
+                effectIds,
+                ingredientIds,
+                additionalIngredientCost: 0,
+            }],
         ]);
         for (let depth = 0; depth < remainingIngredients; depth++) {
             const next = new Map<
                 string,
-                { readonly effectIds: readonly string[]; readonly additionalIngredientCost: number }
+                {
+                    readonly effectIds: readonly string[];
+                    readonly ingredientIds: readonly string[];
+                    readonly additionalIngredientCost: number;
+                }
             >();
             for (const current of layer.values()) {
                 for (const action of this.#actions) {
@@ -516,7 +576,8 @@ class RecipeValueBound {
                         current.effectIds,
                         action.effectId
                     );
-                    const key = stateKey(result);
+                    const resultIngredientIds = [...current.ingredientIds, action.id];
+                    const key = ingredientConstraints.stateKey(result, resultIngredientIds);
                     const additionalIngredientCost = current.additionalIngredientCost + action.cost;
                     const totalIngredientCost = ingredientCost + additionalIngredientCost;
                     if (this.#product.baseProductCost + totalIngredientCost > maximumTotalCost) {
@@ -527,13 +588,20 @@ class RecipeValueBound {
                         existing === undefined ||
                         additionalIngredientCost < existing.additionalIngredientCost
                     ) {
-                        next.set(key, { effectIds: result, additionalIngredientCost });
+                        next.set(key, {
+                            effectIds: result,
+                            ingredientIds: resultIngredientIds,
+                            additionalIngredientCost,
+                        });
                     }
                 }
             }
             for (const result of next.values()) {
-                if (!constraints.matches(result.effectIds)) continue;
-                const key = stateKey(result.effectIds);
+                if (!constraints.matches(result.effectIds) ||
+                    !ingredientConstraints.matches(result.ingredientIds)) {
+                    continue;
+                }
+                const key = outcomeKey(result.effectIds);
                 const value = recipeSearchScore(
                     this.#engine.calculateProductValue(this.#product.basePrice, result.effectIds),
                     this.#product.baseProductCost,
@@ -637,7 +705,7 @@ function compareStrings(left: readonly string[], right: readonly string[]): numb
     return left.length - right.length;
 }
 
-function stateKey(effectIds: readonly string[]): string {
+function outcomeKey(effectIds: readonly string[]): string {
     return JSON.stringify(effectIds);
 }
 

@@ -43,6 +43,7 @@ describe('customer recipe search', () => {
         product('product', ['base'], 10),
         ingredient('valuable-ingredient', 'valuable', 19),
         ingredient('preferred-ingredient', 'preferred', 0),
+        ingredient('preferred-copy', 'preferred', 0),
     ];
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const engine = new MixingEngine(rules, new Map(effects.map((entry) => [entry.id, entry])));
@@ -158,6 +159,51 @@ describe('customer recipe search', () => {
         expect(result.recommendations[0]?.recipe.ingredientIds).toEqual([
             'preferred-ingredient',
         ]);
+    });
+
+    it('applies ingredient and count constraints to customer recommendations', () => {
+        const search = new CustomerRecipeSearch(engine, itemsById, catalog());
+        const input = {
+            ...customerSearchInput(2),
+            productIds: ['product'],
+            availableIngredientIds: [
+                'valuable-ingredient',
+                'preferred-copy',
+                'preferred-ingredient',
+            ],
+        };
+
+        expect(search.search({
+            ...input,
+            requiredIngredientIds: ['preferred-ingredient'],
+            exactIngredientCount: 1,
+        }).recommendations[0]?.recipe.ingredientIds).toEqual([
+            'preferred-ingredient',
+        ]);
+        expect(search.search({
+            ...input,
+            requiredIngredientIds: ['preferred-ingredient'],
+            exactIngredientCount: 2,
+        }).recommendations[0]?.recipe.ingredientIds).toEqual([
+            'preferred-copy',
+            'preferred-ingredient',
+        ]);
+        expect(search.search({
+            ...input,
+            minimumIngredientCount: 1,
+            forbiddenIngredientIds: ['preferred-copy', 'preferred-ingredient'],
+        }).recommendations[0]?.recipe.ingredientIds).toEqual([
+            'valuable-ingredient',
+        ]);
+        const baseOnly = search.search({
+            ...input,
+            exactIngredientCount: 0,
+        });
+        expect(baseOnly.recommendations[0]?.recipe.ingredientIds).toEqual([]);
+        expect(baseOnly.evidence).toMatchObject({
+            proofStatus: 'exact',
+            completedDepth: 0,
+        });
     });
 
     it('fails instead of returning an incomplete ranking at either limit', () => {
