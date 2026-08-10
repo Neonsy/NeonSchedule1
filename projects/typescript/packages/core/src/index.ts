@@ -55,6 +55,7 @@ export * from '#core/progression/availability';
 export * from '#core/relationship/graph';
 export * from '#core/world/projection';
 export * from '#core/world/navigation';
+export * from '#core/world/person-schedule';
 export * from '#core/world/shop-routing';
 export * from '#core/blueprint/collision';
 export * from '#core/blueprint/access';
