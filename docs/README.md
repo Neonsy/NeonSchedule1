@@ -19,6 +19,7 @@ The repository currently supports:
 - Normalize world, property, shop, and navigation evidence
 - Validate and plan property blueprints
 - Evaluate standard and explicit seeded mixing profiles
+- Compose finished-product, inventory, transfer, purchase, and shopping plans
 
 ## Planned player features
 

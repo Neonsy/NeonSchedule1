@@ -40,6 +40,7 @@ export * from '#core/mixing/reverse-search';
 export * from '#core/mixing/search';
 export * from '#core/mixing/seed';
 export * from '#core/production/cost';
+export * from '#core/production/finished-recipe';
 export * from '#core/production/growing';
 export * from '#core/production/plan';
 export * from '#core/production/time';
