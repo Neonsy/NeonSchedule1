@@ -26,6 +26,7 @@ export * from '#core/customer/recommendation';
 export * from '#core/customer/recipe-search';
 export * from '#core/dealer/assignment';
 export * from '#core/dealer/customer-allocation';
+export * from '#core/dealer/travel';
 export * from '#core/geometry/box-collision';
 export * from '#core/geometry/convex-hull';
 export * from '#core/geometry/transform';
