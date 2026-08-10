@@ -103,7 +103,9 @@ describe('finished recipe production plans', () => {
                 recipeEstimatedUnitMaterialCost: 10,
                 recipeEstimatedMaterialCost: 30,
                 requiredMaterialCost: 33,
-                purchaseCost: 33,
+                materialPurchaseCost: 33,
+                equipmentPurchaseCost: null,
+                combinedPurchaseCost: null,
             },
             evidence: {
                 modeledScope: 'base-product-and-ordered-mixing',
@@ -111,7 +113,7 @@ describe('finished recipe production plans', () => {
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: 'complete',
                 finishedLifecycleProof: 'partial',
-                missingFacts: [],
+                missingFacts: ['equipment-ownership'],
                 dryingApplicability: 'available-not-selected',
                 packagingApplicability: 'available-not-selected',
             },
@@ -349,6 +351,91 @@ describe('finished recipe production plans', () => {
         ).toBe('base-product-ordered-mixing-selected-drying-and-brick-pressing');
     });
 
+    it('deduplicates selected equipment and subtracts caller-supplied ownership', () => {
+        const { planner, recipe } = fixture();
+
+        const plan = planner.plan(recipe, 20, {
+            mixingStationItemId: 'mixer',
+            drying: {
+                stationItemId: 'dryer',
+                startingQuality: 'Standard',
+                targetQuality: 'Premium',
+                averageTemperature: 20,
+            },
+            brickPressing: {
+                stationItemId: 'brick-press',
+                employeePackagingSpeedMultiplier: 1,
+                employeeCurrentWorkSpeed: 1,
+            },
+            ownedEquipment: [
+                { itemId: 'pot', quantity: 1 },
+                { itemId: 'mixer', quantity: 0 },
+                { itemId: 'dryer', quantity: 2 },
+                { itemId: 'brick-press', quantity: 0 },
+                { itemId: 'packager-mk2', quantity: 1 },
+            ],
+        });
+
+        expect(plan.equipment).toEqual({
+            quantityBasis: 'minimum-one-per-selected-item-for-serial-plan',
+            selectionProof: 'exact',
+            unresolvedProductionRouteIds: [],
+            ownershipProof: 'supplied',
+            purchaseCostProof: 'exact',
+            requirements: [
+                {
+                    itemId: 'brick-press',
+                    roles: ['brick-pressing'],
+                    requiredQuantity: 1,
+                    ownedQuantity: 0,
+                    missingQuantity: 1,
+                    unitPurchasePrice: 500,
+                    missingPurchaseCost: 500,
+                },
+                {
+                    itemId: 'dryer',
+                    roles: ['drying'],
+                    requiredQuantity: 1,
+                    ownedQuantity: 2,
+                    missingQuantity: 0,
+                    unitPurchasePrice: null,
+                    missingPurchaseCost: 0,
+                },
+                {
+                    itemId: 'mixer',
+                    roles: ['mixing'],
+                    requiredQuantity: 1,
+                    ownedQuantity: 0,
+                    missingQuantity: 1,
+                    unitPurchasePrice: 200,
+                    missingPurchaseCost: 200,
+                },
+                {
+                    itemId: 'pot',
+                    roles: ['base-production'],
+                    requiredQuantity: 1,
+                    ownedQuantity: 1,
+                    missingQuantity: 0,
+                    unitPurchasePrice: 100,
+                    missingPurchaseCost: 0,
+                },
+            ],
+            totalMissingPurchaseCost: 700,
+        });
+        expect(plan.cost).toEqual({
+            recipeEstimatedUnitMaterialCost: 10,
+            recipeEstimatedMaterialCost: 200,
+            requiredMaterialCost: 200,
+            materialPurchaseCost: 200,
+            equipmentPurchaseCost: 700,
+            combinedPurchaseCost: 900,
+        });
+        expect(plan.evidence.missingFacts).toEqual([]);
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).not.toContain(
+            'equipment-purchase'
+        );
+    });
+
     it('returns partial modeled duration when no mixing-station fact is supplied', () => {
         const { planner, recipe } = fixture();
 
@@ -364,9 +451,60 @@ describe('finished recipe production plans', () => {
             evidence: {
                 modeledDurationProof: 'partial',
                 finishedLifecycleProof: 'partial',
-                missingFacts: ['mixing-station'],
+                missingFacts: ['mixing-station', 'equipment-ownership'],
             },
         });
+    });
+
+    it('retains an unknown equipment total when base-production equipment is not selected', () => {
+        const { planner, recipe } = fixture(false);
+
+        const plan = planner.plan(recipe, 3, {
+            mixingStationItemId: 'mixer',
+            ownedEquipment: [{ itemId: 'mixer', quantity: 1 }],
+        });
+
+        expect(plan.equipment).toMatchObject({
+            selectionProof: 'partial',
+            unresolvedProductionRouteIds: ['seed:seed:product:soil'],
+            ownershipProof: 'supplied',
+            purchaseCostProof: 'production-equipment-selection-missing',
+            totalMissingPurchaseCost: null,
+        });
+        expect(plan.cost).toMatchObject({
+            materialPurchaseCost: 33,
+            equipmentPurchaseCost: null,
+            combinedPurchaseCost: null,
+        });
+        expect(plan.evidence.missingFacts).toEqual(['production-equipment-selection']);
+        expect(plan.evidence.unmodeledOperations.map(({ operation }) => operation)).toContain(
+            'equipment-purchase'
+        );
+    });
+
+    it('retains an unknown equipment total when a missing item has no recorded price', () => {
+        const { planner, recipe } = fixture();
+
+        const plan = planner.plan(recipe, 3, {
+            mixingStationItemId: 'mixer',
+            drying: {
+                stationItemId: 'dryer',
+                startingQuality: 'Standard',
+                targetQuality: 'Premium',
+                averageTemperature: 20,
+            },
+            ownedEquipment: [
+                { itemId: 'pot', quantity: 1 },
+                { itemId: 'mixer', quantity: 1 },
+                { itemId: 'dryer', quantity: 0 },
+            ],
+        });
+
+        expect(plan.equipment).toMatchObject({
+            purchaseCostProof: 'equipment-price-not-recorded',
+            totalMissingPurchaseCost: null,
+        });
+        expect(plan.evidence.missingFacts).toEqual(['equipment-purchase-price']);
     });
 
     it('needs no mixing station for a recipe with no ingredients', () => {
@@ -381,6 +519,17 @@ describe('finished recipe production plans', () => {
 
         expect(planner.plan(recipe([], 8, 'base-purchase-price'), 1)).toMatchObject({
             mixingSteps: [],
+            equipment: {
+                requirements: [],
+                ownershipProof: 'not-required',
+                purchaseCostProof: 'exact',
+                totalMissingPurchaseCost: 0,
+            },
+            cost: {
+                materialPurchaseCost: 8,
+                equipmentPurchaseCost: 0,
+                combinedPurchaseCost: 8,
+            },
             duration: {
                 baseProductProcessMinutes: 0,
                 mixingProcessMinutes: 0,
@@ -547,6 +696,24 @@ describe('finished recipe production plans', () => {
         expect(() => planner.plan({ ...evaluated, ingredientCount: 2 }, 1)).toThrow(
             'Recipe ingredient count does not match its ordered ingredient IDs'
         );
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                ownedEquipment: [
+                    { itemId: 'pot', quantity: 1 },
+                    { itemId: 'pot', quantity: 1 },
+                ],
+            })
+        ).toThrow('Owned equipment contains duplicate item "pot"');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                ownedEquipment: [{ itemId: 'pot', quantity: 0.5 }],
+            })
+        ).toThrow('Owned equipment "pot" quantity must be a non-negative integer');
+        expect(() =>
+            planner.plan(evaluated, 1, {
+                ownedEquipment: [{ itemId: 'unknown', quantity: 1 }],
+            })
+        ).toThrow('Unknown owned equipment "unknown"');
 
         const product = item('unrouted', null, 'product');
         const catalog = emptyCatalog();
@@ -568,7 +735,7 @@ describe('finished recipe production plans', () => {
     });
 });
 
-function fixture(): {
+function fixture(selectGrowContainer = true): {
     readonly planner: FinishedRecipeProductionPlanner;
     readonly recipe: RecipeEvaluation;
 } {
@@ -578,10 +745,11 @@ function fixture(): {
         item('product', null, 'product', 'Marijuana', ['baggie', 'brick', 'jar']),
         item('banana', 2, 'ingredient'),
         item('cuke', 3, 'ingredient'),
-        item('pot'),
-        item('mixer'),
+        item('pot', 100),
+        item('mixer', 200),
         item('dryer'),
-        item('brick-press'),
+        item('packager-mk2', 400),
+        item('brick-press', 500),
         packagingItem('baggie', 1, 1),
         packagingItem('jar', 5, 3),
         packagingItem('brick', 20, 1),
@@ -649,9 +817,11 @@ function fixture(): {
             },
         ],
     };
-    const costs = new ProductionMaterialCostEvaluator(itemsById, catalog, {
-        growContainerItemId: 'pot',
-    });
+    const costs = new ProductionMaterialCostEvaluator(
+        itemsById,
+        catalog,
+        selectGrowContainer ? { growContainerItemId: 'pot' } : undefined
+    );
     return {
         planner: new FinishedRecipeProductionPlanner(
             new ProductionBatchPlanner(costs, dataset),

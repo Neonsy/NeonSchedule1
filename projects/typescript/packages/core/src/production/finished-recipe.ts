@@ -12,6 +12,17 @@ export type {
     FinishedRecipeBrickPressingStep,
 } from '#core/production/brick-pressing';
 import {
+    planFinishedRecipeEquipment,
+    type FinishedRecipeEquipmentPlan,
+    type FinishedRecipeOwnedEquipment,
+} from '#core/production/equipment';
+export type {
+    FinishedRecipeEquipmentPlan,
+    FinishedRecipeEquipmentRequirement,
+    FinishedRecipeEquipmentRole,
+    FinishedRecipeOwnedEquipment,
+} from '#core/production/equipment';
+import {
     isPackagingAvailable,
     packagingMaterialDemand,
     planFinishedRecipePackaging,
@@ -35,6 +46,7 @@ export interface FinishedRecipeProductionOptions {
     readonly drying?: FinishedRecipeDryingOptions;
     readonly packaging?: FinishedRecipePackagingOptions;
     readonly brickPressing?: FinishedRecipeBrickPressingOptions;
+    readonly ownedEquipment?: readonly FinishedRecipeOwnedEquipment[];
 }
 
 export interface FinishedRecipeDryingOptions {
@@ -126,7 +138,12 @@ export interface FinishedRecipeProductionEvidence {
     readonly materialCostCoverage: 'modeled-materials-only';
     readonly modeledDurationProof: 'complete' | 'partial';
     readonly finishedLifecycleProof: 'partial';
-    readonly missingFacts: readonly 'mixing-station'[];
+    readonly missingFacts: readonly (
+        | 'mixing-station'
+        | 'production-equipment-selection'
+        | 'equipment-ownership'
+        | 'equipment-purchase-price'
+    )[];
     readonly dryingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
     readonly packagingApplicability: 'selected' | 'available-not-selected' | 'not-applicable';
     readonly brickPressingApplicability:
@@ -150,7 +167,9 @@ export interface FinishedRecipeProductionCost {
     readonly recipeEstimatedUnitMaterialCost: number;
     readonly recipeEstimatedMaterialCost: number;
     readonly requiredMaterialCost: number;
-    readonly purchaseCost: number;
+    readonly materialPurchaseCost: number;
+    readonly equipmentPurchaseCost: number | null;
+    readonly combinedPurchaseCost: number | null;
 }
 
 export interface FinishedRecipeProductionPlan {
@@ -165,6 +184,7 @@ export interface FinishedRecipeProductionPlan {
     readonly dryingStep: FinishedRecipeDryingStep | null;
     readonly packagingStep: FinishedRecipePackagingStep | null;
     readonly brickPressingStep: FinishedRecipeBrickPressingStep | null;
+    readonly equipment: FinishedRecipeEquipmentPlan;
     readonly duration: FinishedRecipeProductionDuration;
     readonly cost: FinishedRecipeProductionCost;
     readonly evidence: FinishedRecipeProductionEvidence;
@@ -272,6 +292,17 @@ export class FinishedRecipeProductionPlanner {
         const packagingDemand = packagingStep === null
             ? []
             : [packagingMaterialDemand(this.#itemsById, packagingStep)];
+        const equipment = planFinishedRecipeEquipment(
+            this.#itemsById,
+            baseProductPlan,
+            {
+                mixingStationItemId: mixingSteps[0]?.stationItemId ?? null,
+                dryingStationItemId: dryingStep?.stationItemId ?? null,
+                packagingStationItemId: packagingStep?.stationItemId ?? null,
+                brickPressItemId: brickPressingStep?.stationItemId ?? null,
+            },
+            options.ownedEquipment
+        );
         const purchaseDemands = mergePurchases(
             baseProductPlan.purchases,
             ingredientDemands,
@@ -281,10 +312,11 @@ export class FinishedRecipeProductionPlanner {
             (total, purchase) => total + purchase.requiredCost,
             0
         );
-        const purchaseCost = purchaseDemands.reduce(
+        const materialPurchaseCost = purchaseDemands.reduce(
             (total, purchase) => total + purchase.purchaseCost,
             0
         );
+        const equipmentPurchaseCost = equipment.totalMissingPurchaseCost;
         const knownProcessMinutes =
             baseProductPlan.totalProcessMinutes +
             (mixingProcessMinutes ?? 0) +
@@ -302,6 +334,7 @@ export class FinishedRecipeProductionPlanner {
             dryingStep,
             packagingStep,
             brickPressingStep,
+            equipment,
             duration: {
                 baseProductProcessMinutes: baseProductPlan.totalProcessMinutes,
                 mixingProcessMinutes,
@@ -317,7 +350,12 @@ export class FinishedRecipeProductionPlanner {
                 recipeEstimatedUnitMaterialCost: recipe.totalCost,
                 recipeEstimatedMaterialCost: recipe.totalCost * finishedQuantity,
                 requiredMaterialCost,
-                purchaseCost,
+                materialPurchaseCost,
+                equipmentPurchaseCost,
+                combinedPurchaseCost:
+                    equipmentPurchaseCost === null
+                        ? null
+                        : materialPurchaseCost + equipmentPurchaseCost,
             },
             evidence: {
                 modeledScope: modeledScope(
@@ -329,7 +367,7 @@ export class FinishedRecipeProductionPlanner {
                 materialCostCoverage: 'modeled-materials-only',
                 modeledDurationProof: mixingProcessMinutes === null ? 'partial' : 'complete',
                 finishedLifecycleProof: 'partial',
-                missingFacts: mixingProcessMinutes === null ? ['mixing-station'] : [],
+                missingFacts: missingFacts(mixingProcessMinutes, equipment),
                 dryingApplicability,
                 packagingApplicability,
                 brickPressingApplicability,
@@ -341,7 +379,9 @@ export class FinishedRecipeProductionPlanner {
                             (operation !== 'packaging' ||
                                 packagingApplicability === 'available-not-selected') &&
                             (operation !== 'brick-pressing' ||
-                                brickPressingApplicability === 'available-not-selected')
+                                brickPressingApplicability === 'available-not-selected') &&
+                            (operation !== 'equipment-purchase' ||
+                                equipment.purchaseCostProof !== 'exact')
                     )
                     .map((operation) => ({
                         operation,
@@ -569,6 +609,22 @@ function modeledScope(
         return 'base-product-ordered-mixing-and-selected-brick-pressing';
     }
     return 'base-product-and-ordered-mixing';
+}
+
+function missingFacts(
+    mixingProcessMinutes: number | null,
+    equipment: FinishedRecipeEquipmentPlan
+): FinishedRecipeProductionEvidence['missingFacts'] {
+    const result: FinishedRecipeProductionEvidence['missingFacts'][number][] = [];
+    if (mixingProcessMinutes === null) result.push('mixing-station');
+    if (equipment.selectionProof === 'partial') {
+        result.push('production-equipment-selection');
+    }
+    if (equipment.ownershipProof === 'not-supplied') result.push('equipment-ownership');
+    if (equipment.purchaseCostProof === 'equipment-price-not-recorded') {
+        result.push('equipment-purchase-price');
+    }
+    return result;
 }
 
 function dryingTierCount(
