@@ -7,6 +7,7 @@ import { normalizeEffects } from '#data-compiler/normalize/effects';
 import { normalizeItems } from '#data-compiler/normalize/items';
 import { normalizeProperties } from '#data-compiler/normalize/properties';
 import { normalizeProduction } from '#data-compiler/normalize/production';
+import { normalizeRanks } from '#data-compiler/normalize/progression';
 import { normalizeShops } from '#data-compiler/normalize/shops';
 
 const noAssets: VerifiedAssets = {
@@ -19,6 +20,23 @@ const noAssets: VerifiedAssets = {
 };
 
 describe('domain normalization', () => {
+    it('normalizes the exported rank order', () => {
+        const report = emptyReport();
+        report.world.ranks.push(
+            { rank: 'Hoodlum', tier: 1, totalXpRequired: 1_000, orderLimitMultiplier: 1.25 },
+            { rank: 'Street_Rat', tier: 1, totalXpRequired: 0, orderLimitMultiplier: 1 }
+        );
+        const integrity = new Integrity();
+
+        const ranks = normalizeRanks(report, integrity);
+
+        expect(ranks.levels.map(({ rank, tier }) => ({ rank, tier }))).toEqual([
+            { rank: 'Street_Rat', tier: 1 },
+            { rank: 'Hoodlum', tier: 1 },
+        ]);
+        expect(integrity.errors).toEqual([]);
+    });
+
     it('joins effect presentation data and validates inbound effect references', () => {
         const report = emptyReport();
         report.mixing.effects.push({
@@ -516,6 +534,7 @@ function emptyReport(): RawReport {
             properties: [],
             businesses: [],
             employeeTypes: [],
+            ranks: [],
         },
         discovery: {
             assetDirectory: 'assets',

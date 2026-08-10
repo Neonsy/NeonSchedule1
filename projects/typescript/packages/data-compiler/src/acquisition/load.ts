@@ -245,6 +245,7 @@ function parseReport(document: JsonObject): RawReport {
             properties: objectArray(world.properties, 'report.world.properties'),
             businesses: objectArray(world.businesses, 'report.world.businesses'),
             employeeTypes: objectArray(world.employeeTypes, 'report.world.employeeTypes'),
+            ranks: objectArray(world.ranks, 'report.world.ranks'),
         },
         discovery: {
             assetDirectory: stringField(discovery, 'assetDirectory', 'report.discovery'),

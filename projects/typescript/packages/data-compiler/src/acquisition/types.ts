@@ -56,6 +56,7 @@ export interface RawReport {
         readonly properties: JsonObject[];
         readonly businesses: JsonObject[];
         readonly employeeTypes: JsonObject[];
+        readonly ranks: JsonObject[];
     };
     readonly discovery: {
         readonly assetDirectory: string;
