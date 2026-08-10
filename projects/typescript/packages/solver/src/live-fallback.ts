@@ -6,6 +6,7 @@ import {
     ReverseRecipeSearch,
     systemMonotonicClock,
     type CustomerRecipeSearchResult,
+    type MixingRuleProfile,
     type MonotonicClock,
     type RecipeSearchEvidence,
     type ReverseRecipeSearchResult,
@@ -27,7 +28,7 @@ import {
     type LiveSearchMode,
 } from '#solver/search-policy';
 
-export const liveFallbackAlgorithmVersion = '6';
+export const liveFallbackAlgorithmVersion = '7';
 
 export type { LiveFallbackBudget, LiveSearchMode } from '#solver/search-policy';
 
@@ -37,6 +38,7 @@ export interface LiveFallbackEvidence extends RecipeSearchEvidence {
     readonly elapsedMs: number;
     readonly algorithmVersion: string;
     readonly dataset: RecipeCorpusDatasetIdentity;
+    readonly ruleProfile: MixingRuleProfile;
     readonly mapProfile: readonly string[];
     readonly coverageKey: string;
     readonly maxStatesPerProduct: number;
@@ -79,7 +81,7 @@ export type LiveCustomerFallbackResult = LiveFallbackResult<
 export class LiveFallbackRunner {
     readonly #dataset: SolverDataset;
     readonly #itemsById: ReadonlyMap<string, SolverDataset['items'][number]>;
-    readonly #engine: MixingEngine;
+    readonly #effectsById: ReadonlyMap<string, SolverDataset['effects'][number]>;
     readonly #productIds: ReadonlySet<string>;
     readonly #ingredientIds: ReadonlySet<string>;
     readonly #effectIds: ReadonlySet<string>;
@@ -95,10 +97,7 @@ export class LiveFallbackRunner {
     ) {
         this.#dataset = dataset;
         this.#itemsById = new Map(dataset.items.map((item) => [item.id, item]));
-        this.#engine = new MixingEngine(
-            dataset.mixingRules,
-            new Map(dataset.effects.map((effect) => [effect.id, effect]))
-        );
+        this.#effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
         const products = dataset.items.filter(
             (item) => item.product !== null && !item.isRuntimeOnly
         );
@@ -143,12 +142,13 @@ export class LiveFallbackRunner {
         this.#validateBudget(budget);
         this.#validateMiss(route.miss);
         this.#validateRequest(route.request);
+        const engine = this.#mixingEngine(route.request.ruleProfile);
         return this.#run(
             'recipe',
             route,
             budget,
             mode,
-            () => new ReverseRecipeSearch(this.#engine, this.#itemsById, {
+            () => new ReverseRecipeSearch(engine, this.#itemsById, {
                 maxStates: budget.maxStatesPerProduct,
                 maxTransitionEvaluations: budget.maxTransitionEvaluationsPerProduct,
                 maxDurationMs: budget.maxDurationMsPerProduct,
@@ -185,13 +185,14 @@ export class LiveFallbackRunner {
             route.request.profile.preferredEffectIds,
             'Customer preferred effect'
         );
+        const engine = this.#mixingEngine(route.request.ruleProfile);
         return this.#run(
             'customer',
             route,
             budget,
             mode,
             () => new CustomerRecipeSearch(
-                this.#engine,
+                engine,
                 this.#itemsById,
                 this.#dataset.customerCatalog,
                 {
@@ -207,8 +208,14 @@ export class LiveFallbackRunner {
     }
 
     #run<
-        Request extends { readonly productIds: readonly string[] },
-        Result extends { readonly evidence: RecipeSearchEvidence },
+        Request extends {
+            readonly productIds: readonly string[];
+            readonly ruleProfile: MixingRuleProfile;
+        },
+        Result extends {
+            readonly evidence: RecipeSearchEvidence;
+            readonly ruleProfile: MixingRuleProfile;
+        },
     >(
         kind: 'recipe' | 'customer',
         route: CoverageMissRoute<Request>,
@@ -223,7 +230,8 @@ export class LiveFallbackRunner {
             route.request,
             budget,
             mode,
-            mapProfile
+            mapProfile,
+            route.request.ruleProfile
         );
         const startedAt = this.#clock.now();
         const result = operation();
@@ -231,6 +239,7 @@ export class LiveFallbackRunner {
             result.evidence,
             this.#clock.now() - startedAt,
             this.#dataset,
+            route.request.ruleProfile,
             mapProfile,
             coverageKey,
             budget,
@@ -309,12 +318,17 @@ export class LiveFallbackRunner {
             ...new Set(productIds.map((id) => this.#drugTypeByProductId.get(id)!)),
         ].sort());
     }
+
+    #mixingEngine(ruleProfile: MixingRuleProfile): MixingEngine {
+        return new MixingEngine(this.#dataset.mixingRules, this.#effectsById, ruleProfile);
+    }
 }
 
 function evidence(
     search: RecipeSearchEvidence,
     elapsedMs: number,
     dataset: SolverDataset,
+    ruleProfile: MixingRuleProfile,
     mapProfile: readonly string[],
     coverageKey: string,
     budget: LiveFallbackBudget,
@@ -327,6 +341,7 @@ function evidence(
         elapsedMs,
         algorithmVersion: liveFallbackAlgorithmVersion,
         dataset: identity(dataset),
+        ruleProfile,
         mapProfile,
         coverageKey,
         maxStatesPerProduct: budget.maxStatesPerProduct,
@@ -342,12 +357,14 @@ function liveCoverageKey(
     request: unknown,
     budget: LiveFallbackBudget,
     mode: LiveSearchMode | undefined,
-    mapProfile: readonly string[]
+    mapProfile: readonly string[],
+    ruleProfile: MixingRuleProfile
 ): string {
     return createHash('sha256').update(JSON.stringify({
         algorithmVersion: liveFallbackAlgorithmVersion,
         kind,
         dataset,
+        ruleProfile,
         mapProfile,
         request,
         budget,

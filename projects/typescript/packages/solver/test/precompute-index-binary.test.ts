@@ -63,12 +63,13 @@ const partitions = [
 
 function index(): RecipeCorpusIndex {
     return {
-        schema: 'neonschedule1-recipe-corpus-index-1',
-        algorithmVersion: '1',
+        schema: 'neonschedule1-recipe-corpus-index-2',
+        algorithmVersion: '2',
         corpus: {
             artifactSha256: 'a'.repeat(64),
             coverageKey: 'b'.repeat(64),
             datasetSha256: 'c'.repeat(64),
+            ruleProfile: { kind: 'standard' },
         },
         records: [
             { partitionPath: 'partition-a.json', recipeIndex: 1, totalCost: 4 },

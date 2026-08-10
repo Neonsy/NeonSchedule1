@@ -1,18 +1,21 @@
 import {
     MixingEngine,
+    normalizeMixingRuleProfile,
     RecipeOutcomeEnumerator,
     type Item,
+    type MixingRuleProfile,
     type RecipeEvaluation,
     type RecipeSearchEvidence,
 } from '@neonschedule1/core';
 
 import type { SolverDataset } from '#solver/dataset';
 
-export const recipeCorpusAlgorithmVersion = '1';
+export const recipeCorpusAlgorithmVersion = '2';
 
 export type RecipeCorpusMode = 'exhaustive' | 'selective';
 
 export interface SelectiveCorpusOptions {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly productIds?: readonly string[];
     readonly ingredientIds?: readonly string[];
     readonly maxIngredients: number;
@@ -22,6 +25,7 @@ export interface SelectiveCorpusOptions {
 }
 
 export interface ExhaustiveCorpusOptions {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly maxIngredients: number;
     readonly maxStates: number;
 }
@@ -32,6 +36,7 @@ export type RecipeCorpusOptions =
 
 export interface RecipeCorpusConfiguration {
     readonly mode: RecipeCorpusMode;
+    readonly ruleProfile: MixingRuleProfile;
     readonly productIds: readonly string[];
     readonly ingredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -47,11 +52,12 @@ export interface RecipeCorpusPlan {
 }
 
 export interface RecipeCorpusPartition {
-    readonly schema: 'neonschedule1-recipe-corpus-partition-1';
+    readonly schema: 'neonschedule1-recipe-corpus-partition-2';
     readonly algorithmVersion: string;
     readonly dataset: RecipeCorpusDatasetIdentity;
     readonly coverage: {
         readonly mode: RecipeCorpusMode;
+        readonly ruleProfile: MixingRuleProfile;
         readonly semantics: 'cheapest-representative-per-ordered-effect-state';
         readonly productId: string;
         readonly drugType: string;
@@ -171,6 +177,7 @@ export function planRecipeCorpus(
         dataset,
         configuration: {
             mode: options.mode,
+            ruleProfile: normalizeMixingRuleProfile(options.ruleProfile),
             productIds,
             ingredientIds,
             maxIngredients: options.maxIngredients,
@@ -204,7 +211,11 @@ export function* generateRecipeCorpusProductPartitions(
     }
     const itemsById = new Map(dataset.items.map((item) => [item.id, item]));
     const effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
-    const engine = new MixingEngine(dataset.mixingRules, effectsById);
+    const engine = new MixingEngine(
+        dataset.mixingRules,
+        effectsById,
+        configuration.ruleProfile
+    );
     const enumerator = new RecipeOutcomeEnumerator(engine, itemsById, {
         maxStates: configuration.maxStates,
     });
@@ -230,11 +241,12 @@ export function* generateRecipeCorpusProductPartitions(
     }
     for (let resultDepth = 0; resultDepth <= configuration.maxIngredients; resultDepth++) {
         yield {
-            schema: 'neonschedule1-recipe-corpus-partition-1',
+            schema: 'neonschedule1-recipe-corpus-partition-2',
             algorithmVersion: recipeCorpusAlgorithmVersion,
             dataset: datasetIdentity,
             coverage: {
                 mode: configuration.mode,
+                ruleProfile: configuration.ruleProfile,
                 semantics: 'cheapest-representative-per-ordered-effect-state',
                 productId,
                 drugType: product.drugType,

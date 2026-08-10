@@ -1,4 +1,5 @@
 import type { Item } from '#core/data/item';
+import type { MixingRuleProfile } from '#core/data/mixing';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import type { MixingEngine } from '#core/mixing/engine';
 import {
@@ -15,6 +16,7 @@ import {
 const defaultMaxStates = 100_000;
 
 export interface RecipeEnumerationInput {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly productId: string;
     readonly availableIngredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -27,6 +29,7 @@ export interface RecipeOutcomeEnumeratorOptions extends RecipeEvaluatorOptions {
 }
 
 export interface RecipeEnumerationResult {
+    readonly ruleProfile: MixingRuleProfile;
     readonly recipes: readonly RecipeEvaluation[];
     readonly evidence: RecipeSearchEvidence;
 }
@@ -66,6 +69,7 @@ export class RecipeOutcomeEnumerator {
     }
 
     enumerateWithEvidence(input: RecipeEnumerationInput): RecipeEnumerationResult {
+        this.#engine.assertRuleProfile(input.ruleProfile);
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         const product = this.#product(input.productId);
         const actions = this.#ingredients(input.availableIngredientIds);
@@ -141,6 +145,7 @@ export class RecipeOutcomeEnumerator {
                 })
             );
         return {
+            ruleProfile: this.#engine.ruleProfile,
             recipes,
             evidence: exactSearchEvidence(
                 exploredStates,

@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 
+import { mixingRuleProfileFromGameSeed, type MixingRuleProfile } from '@neonschedule1/core';
+
 import { loadSolverDataset, resolveDatasetDirectory, workspaceRoot } from '#solver/dataset';
 import {
     defaultExhaustiveCorpusOptions,
@@ -94,6 +96,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     const forbiddenEffectIds: string[] = [];
     let maxIngredients = defaults.maxIngredients;
     let maxStates = defaults.maxStates;
+    let ruleProfile: MixingRuleProfile | undefined;
     for (let index = 0; index < normalizedArguments.length; index++) {
         const argument = normalizedArguments[index]!;
         const value = (): string => {
@@ -130,6 +133,12 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             case '--max-states':
                 maxStates = integer(value(), 'max-states');
                 break;
+            case '--mixing-seed':
+                if (ruleProfile !== undefined) {
+                    throw new Error('Mixing seed was provided twice');
+                }
+                ruleProfile = mixingRuleProfileFromGameSeed(integer(value(), 'mixing-seed'));
+                break;
             case '--dry-run':
                 dryRun = true;
                 break;
@@ -149,9 +158,15 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
         );
     }
     const corpus: RecipeCorpusOptions = resolvedMode === 'exhaustive'
-        ? { mode: resolvedMode, maxIngredients, maxStates }
+        ? {
+            mode: resolvedMode,
+            maxIngredients,
+            maxStates,
+            ...(ruleProfile === undefined ? {} : { ruleProfile }),
+        }
         : {
             mode: resolvedMode,
+            ...(ruleProfile === undefined ? {} : { ruleProfile }),
             ...(productIds.length === 0 ? {} : { productIds }),
             ...(ingredientIds.length === 0 ? {} : { ingredientIds }),
             maxIngredients,
@@ -204,6 +219,7 @@ Options:
   --forbidden-effect ID   Forbid a resulting effect; repeat for more
   --max-depth NUMBER      Maximum ingredient count (default: 3)
   --max-states NUMBER     State limit per product (default: 100000)
+  --mixing-seed NUMBER    Use the signed 32-bit save seed's rotation profile
   --dry-run               Resolve coverage and estimate work without writing
   --help                  Show this help
 `;

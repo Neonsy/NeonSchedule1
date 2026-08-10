@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { link, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { normalizeMixingRuleProfile } from '@neonschedule1/core';
+
 import type { SolverDataset } from '#solver/dataset';
 import type {
     RecipeCorpusIndexManifest,
@@ -26,7 +28,7 @@ import type {
 import type { RecipeCorpusManifest } from '#solver/precompute-artifact';
 
 export interface RecipeCorpusProductionSelection {
-    readonly schema: 'neonschedule1-recipe-corpus-production-selection-1';
+    readonly schema: 'neonschedule1-recipe-corpus-production-selection-2';
     readonly selectionSha256: string;
     readonly selectedAt: string;
     readonly dataset: RecipeCorpusDatasetIdentity;
@@ -196,7 +198,7 @@ function buildSelection(
         },
     };
     return {
-        schema: 'neonschedule1-recipe-corpus-production-selection-1',
+        schema: 'neonschedule1-recipe-corpus-production-selection-2',
         selectionSha256: sha256(jsonBytes(body)),
         ...body,
     };
@@ -293,7 +295,7 @@ function processExists(pid: number): boolean {
 
 function parseSelection(value: unknown): RecipeCorpusProductionSelection {
     const record = object(value, 'Recipe corpus production selection');
-    if (record.schema !== 'neonschedule1-recipe-corpus-production-selection-1') {
+    if (record.schema !== 'neonschedule1-recipe-corpus-production-selection-2') {
         throw new Error('Recipe corpus production selection has an unsupported contract');
     }
     const dataset = object(record.dataset, 'selection.dataset');
@@ -312,6 +314,7 @@ function parseSelection(value: unknown): RecipeCorpusProductionSelection {
         },
         configuration: {
             mode: configuration.mode === 'exhaustive' ? 'exhaustive' : failMode(),
+            ruleProfile: normalizeMixingRuleProfile(configuration.ruleProfile),
             productIds: strings(configuration.productIds, 'configuration.productIds'),
             ingredientIds: strings(configuration.ingredientIds, 'configuration.ingredientIds'),
             maxIngredients: integer(configuration.maxIngredients, 'configuration.maxIngredients'),

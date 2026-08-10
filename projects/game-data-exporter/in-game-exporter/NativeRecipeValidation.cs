@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using UnityEngine;
 using EffectList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.Effects.Effect>;
+using NativeGameManager = Il2CppScheduleOne.DevUtilities.GameManager;
 using NativeProductManager = Il2CppScheduleOne.Product.ProductManager;
 
 namespace NeonSchedule1.GameDataExporter;
@@ -15,9 +16,9 @@ internal static partial class GameDataCollector
         "native-recipe-validation-response.json";
 
     private const string NativeValidationRequestSchema =
-        "neonschedule1-native-recipe-validation-request-1";
+        "neonschedule1-native-recipe-validation-request-2";
     private const string NativeValidationResponseSchema =
-        "neonschedule1-native-recipe-validation-response-1";
+        "neonschedule1-native-recipe-validation-response-2";
     private const int MaximumRequestBytes = 1_048_576;
     private const int MaximumCases = 64;
     private const int MaximumIngredientsPerCase = 8;
@@ -55,6 +56,9 @@ internal static partial class GameDataCollector
                 $"but the running game is {Application.version}.");
         }
 
+        var activeRuleProfile = ActiveRuleProfile();
+        ValidateRuleProfile(request.RuleProfile, activeRuleProfile);
+
         var manager = NativeProductManager.Instance
             ?? throw new InvalidOperationException("ProductManager.Instance is unavailable after load.");
         var products = CollectStaticProducts(manager).ToDictionary(
@@ -71,6 +75,7 @@ internal static partial class GameDataCollector
             EvaluatedAtUtc = DateTimeOffset.UtcNow,
             GameVersion = Application.version,
             RequestSha256 = requestHash,
+            RuleProfile = activeRuleProfile,
             Cases = results,
         };
         var json = JsonSerializer.Serialize(response, ExportJson.Options);
@@ -167,6 +172,7 @@ internal static partial class GameDataCollector
             throw new InvalidOperationException(
                 $"Native validation request must contain 1 to {MaximumCases} cases.");
         }
+        ValidateRuleProfileShape(request.RuleProfile);
 
         var caseIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var testCase in request.Cases)
@@ -183,6 +189,49 @@ internal static partial class GameDataCollector
         }
     }
 
+    private static NativeMixingRuleProfile ActiveRuleProfile()
+    {
+        var settings = NativeGameManager.Instance?.Settings
+            ?? throw new InvalidOperationException("GameManager settings are unavailable after load.");
+        if (!settings.UseRandomizedMixMaps)
+        {
+            return new NativeMixingRuleProfile { Kind = "standard" };
+        }
+        var remainder = NativeGameManager.Seed % 360;
+        return new NativeMixingRuleProfile
+        {
+            Kind = "seeded-rotation",
+            AngleDegrees = (remainder + 360) % 360,
+        };
+    }
+
+    private static void ValidateRuleProfile(
+        NativeMixingRuleProfile requested,
+        NativeMixingRuleProfile active)
+    {
+        ValidateRuleProfileShape(requested);
+        if (!string.Equals(requested.Kind, active.Kind, StringComparison.Ordinal) ||
+            requested.AngleDegrees != active.AngleDegrees)
+        {
+            throw new InvalidOperationException(
+                $"Native validation request uses mixing profile '{requested.Kind}' " +
+                $"angle {requested.AngleDegrees?.ToString() ?? "none"}, but the loaded save uses " +
+                $"'{active.Kind}' angle {active.AngleDegrees?.ToString() ?? "none"}.");
+        }
+    }
+
+    private static void ValidateRuleProfileShape(NativeMixingRuleProfile profile)
+    {
+        if (profile is null ||
+            (string.Equals(profile.Kind, "standard", StringComparison.Ordinal)
+                ? profile.AngleDegrees is not null
+                : !string.Equals(profile.Kind, "seeded-rotation", StringComparison.Ordinal) ||
+                    profile.AngleDegrees is null or < 0 or >= 360))
+        {
+            throw new InvalidOperationException("Native validation mixing rule profile is invalid.");
+        }
+    }
+
     private static void WriteAtomic(string path, string content, Encoding encoding)
     {
         var temporaryPath = path + ".tmp";
@@ -195,6 +244,7 @@ internal sealed class NativeRecipeValidationRequest
 {
     public string Schema { get; init; } = string.Empty;
     public NativeRecipeValidationDataset Dataset { get; init; } = new();
+    public NativeMixingRuleProfile RuleProfile { get; init; } = new();
     public List<NativeRecipeValidationCase> Cases { get; init; } = new();
 }
 
@@ -219,7 +269,14 @@ internal sealed class NativeRecipeValidationResponse
     public DateTimeOffset EvaluatedAtUtc { get; init; }
     public string GameVersion { get; init; } = string.Empty;
     public string RequestSha256 { get; init; } = string.Empty;
+    public NativeMixingRuleProfile RuleProfile { get; init; } = new();
     public List<NativeRecipeValidationResult> Cases { get; init; } = new();
+}
+
+internal sealed class NativeMixingRuleProfile
+{
+    public string Kind { get; init; } = string.Empty;
+    public int? AngleDegrees { get; init; }
 }
 
 internal sealed class NativeRecipeValidationResult

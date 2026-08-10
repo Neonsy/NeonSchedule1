@@ -25,6 +25,9 @@ Both tools are development utilities, not player releases.
 5. Wait for `Export complete` in `MelonLoader/Latest.log`
 6. Verify that the report, its SHA-256 sidecar, and the matching asset directory exist
 
+Use a save with randomized mixing maps disabled for a full data export.
+Seeded saves remain supported by the recipe-validation mode.
+
 ## Complete the offline mesh pass
 
 Close the game before AssetRipper reads the installation.

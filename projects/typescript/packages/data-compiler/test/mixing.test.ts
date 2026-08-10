@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     compareRecipeEvaluations,
+    mixingRuleProfileFromGameSeed,
     MixingEngine,
     RecipeEvaluator,
     RecipeOutcomeEnumerator,
@@ -48,6 +49,51 @@ describe('mixing engine', () => {
         expect(engine.calculateProductValue(35, ['a'])).toBe(38);
     });
 
+    it('rotates ingredient displacements by the normalized save-seed angle', () => {
+        const effects = [
+            effect('origin', 0, 0),
+            effect('east', 0, 0),
+            effect('north', 0, 0),
+            effect('shift', 1, 1),
+        ];
+        const rules: MixingRules = {
+            schema: 'neonschedule1-mixing-rules-1',
+            maxProperties: 8,
+            maxDeltaDifference: 0.5,
+            defaultProductIds: [],
+            maps: [{
+                drugType: 'Test',
+                drugTypeValue: 0,
+                radius: 2,
+                effects: [
+                    mapEffect2('origin', 0, 0),
+                    mapEffect2('east', 1, 0),
+                    mapEffect2('north', 0, 1),
+                    mapEffect2('shift', -1, -1),
+                ],
+            }],
+        };
+        const indexedEffects = new Map(effects.map((entry) => [entry.id, entry]));
+        const standard = new MixingEngine(rules, indexedEffects);
+        const seeded = new MixingEngine(
+            rules,
+            indexedEffects,
+            mixingRuleProfileFromGameSeed(450)
+        );
+
+        expect(standard.mixEffectIds('Test', ['origin'], 'shift')).toEqual(['east', 'shift']);
+        expect(seeded.ruleProfile).toEqual({ kind: 'seeded-rotation', angleDegrees: 90 });
+        expect(seeded.mixEffectIds('Test', ['origin'], 'shift')).toEqual(['north', 'shift']);
+        expect(mixingRuleProfileFromGameSeed(-90)).toEqual({
+            kind: 'seeded-rotation',
+            angleDegrees: 270,
+        });
+        expect(() => new MixingEngine(rules, indexedEffects, {
+            kind: 'seeded-rotation',
+            angleDegrees: 360,
+        })).toThrow('integer from 0 through 359');
+    });
+
     it('evaluates an ordered recipe against normalized items', () => {
         const effects = [effect('a', 0, 0, 0.1), effect('b', 0, 0), effect('shift', 1, 1)];
         const rules: MixingRules = {
@@ -69,6 +115,7 @@ describe('mixing engine', () => {
         const evaluator = new RecipeEvaluator(engine, new Map(items.map((entry) => [entry.id, entry])));
 
         expect(evaluator.evaluate({ productId: 'product', ingredientIds: ['ingredient'] })).toEqual({
+            ruleProfile: { kind: 'standard' },
             productId: 'product',
             ingredientIds: ['ingredient'],
             effectIds: ['b', 'shift'],
@@ -128,6 +175,7 @@ describe('mixing engine', () => {
             }).recipes
         ).toEqual([
             {
+                ruleProfile: { kind: 'standard' },
                 productId: 'product',
                 ingredientIds: ['ingredient'],
                 effectIds: ['b', 'shift'],
@@ -140,6 +188,7 @@ describe('mixing engine', () => {
                 ingredientCount: 1,
             },
             {
+                ruleProfile: { kind: 'standard' },
                 productId: 'product',
                 ingredientIds: [],
                 effectIds: ['a'],
@@ -450,6 +499,7 @@ describe('mixing engine', () => {
 
         expect(result.recipes).toEqual([
             {
+                ruleProfile: { kind: 'standard' },
                 productId: 'product',
                 ingredientIds: ['high-ingredient'],
                 effectIds: ['high'],
@@ -515,6 +565,7 @@ describe('mixing engine', () => {
             }).recipes
         ).toEqual([
             {
+                ruleProfile: { kind: 'standard' },
                 productId: 'product',
                 ingredientIds: ['step', 'step'],
                 effectIds: ['required'],
@@ -665,6 +716,10 @@ function effect(id: string, directionX: number, magnitude: number, addBaseValueM
 
 function mapEffect(effectId: string, x: number) {
     return { effectId, position: { x, y: 0 }, radius: 0.01 };
+}
+
+function mapEffect2(effectId: string, x: number, y: number) {
+    return { effectId, position: { x, y }, radius: 0.1 };
 }
 
 function color() {

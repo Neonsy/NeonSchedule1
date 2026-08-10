@@ -1,4 +1,4 @@
-import type { RecipeSearchObjective } from '@neonschedule1/core';
+import type { MixingRuleProfile, RecipeSearchObjective } from '@neonschedule1/core';
 
 import {
     readRecipeCorpusPartition,
@@ -39,6 +39,7 @@ export interface RecipeCorpusSelectionResult {
         readonly corpusArtifactSha256: string;
         readonly indexArtifactSha256: string;
         readonly coverageKey: string;
+        readonly ruleProfile: MixingRuleProfile;
         readonly candidateCount: number;
     };
 }
@@ -51,6 +52,7 @@ export interface RecipeCorpusQueryResult {
         readonly corpusArtifactSha256: string;
         readonly indexArtifactSha256: string;
         readonly coverageKey: string;
+        readonly ruleProfile: MixingRuleProfile;
         readonly candidateCount: number;
         readonly examinedRankingEntries: number;
     };
@@ -179,6 +181,7 @@ export class RecipeCorpusLookup {
                 corpusArtifactSha256: this.#corpusManifest.artifactSha256,
                 indexArtifactSha256: this.#indexManifest.artifactSha256,
                 coverageKey: this.#corpusManifest.coverageKey,
+                ruleProfile: this.#corpusManifest.configuration.ruleProfile,
                 candidateCount,
                 examinedRankingEntries,
             },
@@ -210,6 +213,7 @@ export class RecipeCorpusLookup {
                 corpusArtifactSha256: this.#corpusManifest.artifactSha256,
                 indexArtifactSha256: this.#indexManifest.artifactSha256,
                 coverageKey: this.#corpusManifest.coverageKey,
+                ruleProfile: this.#corpusManifest.configuration.ruleProfile,
                 candidateCount,
             },
         };

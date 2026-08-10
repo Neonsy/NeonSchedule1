@@ -1,7 +1,12 @@
 import type {
     CustomerRecipeSearchInput,
+    MixingRuleProfile,
     RecipeSearchObjective,
     ReverseRecipeSearchInput,
+} from '@neonschedule1/core';
+import {
+    normalizeMixingRuleProfile,
+    sameMixingRuleProfile,
 } from '@neonschedule1/core';
 
 import type {
@@ -13,6 +18,7 @@ import type { RecipeCorpusQueryResult } from '#solver/precompute-query';
 export type ProductionRecipeRequest = ReverseRecipeSearchInput;
 
 export interface NormalizedProductionRecipeRequest {
+    readonly ruleProfile: MixingRuleProfile;
     readonly productIds: readonly string[];
     readonly availableIngredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -30,7 +36,9 @@ export interface NormalizedProductionCustomerRequest
         | 'availableIngredientIds'
         | 'requiredEffectIds'
         | 'forbiddenEffectIds'
+        | 'ruleProfile'
     > {
+    readonly ruleProfile: MixingRuleProfile;
     readonly productIds: readonly string[];
     readonly availableIngredientIds: readonly string[];
     readonly requiredEffectIds: readonly string[];
@@ -38,6 +46,12 @@ export interface NormalizedProductionCustomerRequest
 }
 
 export type ProductionCoverageIssue =
+    | {
+        readonly field: 'ruleProfile';
+        readonly reason: 'different-value';
+        readonly requested: MixingRuleProfile;
+        readonly covered: MixingRuleProfile;
+    }
     | {
         readonly field: 'productIds';
         readonly reason: 'outside-coverage';
@@ -89,6 +103,7 @@ export class ProductionRequestRouter {
     readonly #production: LoadedRecipeCorpusProduction;
     readonly #productIds: readonly string[];
     readonly #ingredientIds: readonly string[];
+    readonly #ruleProfile: MixingRuleProfile;
 
     constructor(production: LoadedRecipeCorpusProduction) {
         this.#production = production;
@@ -102,14 +117,16 @@ export class ProductionRequestRouter {
             'production ingredientIds',
             false
         );
+        this.#ruleProfile = production.selection.configuration.ruleProfile;
     }
 
     async recipe(input: ProductionRecipeRequest): Promise<ProductionRecipeRouteResult> {
-        const request = normalizeRecipeRequest(input, this.#productIds);
+        const request = normalizeRecipeRequest(input, this.#productIds, this.#ruleProfile);
         const miss = this.#coverageMiss(request);
         if (miss !== null) return { kind: 'coverage-miss', request, miss };
         const {
             productIds,
+            ruleProfile: _ruleProfile,
             availableIngredientIds: _availableIngredientIds,
             maxIngredients: _maxIngredients,
             ...query
@@ -127,11 +144,12 @@ export class ProductionRequestRouter {
     async customer(
         input: CustomerRecipeSearchInput
     ): Promise<ProductionCustomerRouteResult> {
-        const request = normalizeCustomerRequest(input);
+        const request = normalizeCustomerRequest(input, this.#ruleProfile);
         const miss = this.#coverageMiss(request);
         if (miss !== null) return { kind: 'coverage-miss', request, miss };
         const {
             productIds,
+            ruleProfile: _ruleProfile,
             availableIngredientIds: _availableIngredientIds,
             maxIngredients: _maxIngredients,
             ...query
@@ -147,11 +165,20 @@ export class ProductionRequestRouter {
     }
 
     #coverageMiss(request: {
+        readonly ruleProfile: MixingRuleProfile;
         readonly productIds: readonly string[];
         readonly availableIngredientIds: readonly string[];
         readonly maxIngredients: number;
     }): ProductionCoverageMiss | null {
         const issues: ProductionCoverageIssue[] = [];
+        if (!sameMixingRuleProfile(request.ruleProfile, this.#ruleProfile)) {
+            issues.push({
+                field: 'ruleProfile',
+                reason: 'different-value',
+                requested: request.ruleProfile,
+                covered: this.#ruleProfile,
+            });
+        }
         const products = new Set(this.#productIds);
         const unsupportedIds = request.productIds.filter((id) => !products.has(id));
         if (unsupportedIds.length > 0) {
@@ -190,7 +217,8 @@ export class ProductionRequestRouter {
 
 function normalizeRecipeRequest(
     input: ProductionRecipeRequest,
-    defaultProductIds: readonly string[]
+    defaultProductIds: readonly string[],
+    defaultRuleProfile: MixingRuleProfile
 ): NormalizedProductionRecipeRequest {
     const effects = effectConstraints(input.requiredEffectIds, input.forbiddenEffectIds);
     requireNonNegativeSafeInteger(input.maxIngredients, 'Recipe maxIngredients');
@@ -203,6 +231,7 @@ function normalizeRecipeRequest(
         throw new Error(`Unknown recipe objective ${JSON.stringify(input.objective)}`);
     }
     return {
+        ruleProfile: normalizeMixingRuleProfile(input.ruleProfile ?? defaultRuleProfile),
         productIds: input.productIds === undefined
             ? defaultProductIds
             : canonicalIds(input.productIds, 'Recipe productIds', false),
@@ -223,11 +252,13 @@ function normalizeRecipeRequest(
 }
 
 function normalizeCustomerRequest(
-    input: CustomerRecipeSearchInput
+    input: CustomerRecipeSearchInput,
+    defaultRuleProfile: MixingRuleProfile
 ): NormalizedProductionCustomerRequest {
     const effects = effectConstraints(input.requiredEffectIds, input.forbiddenEffectIds);
     requireNonNegativeSafeInteger(input.maxIngredients, 'Customer maxIngredients');
     return {
+        ruleProfile: normalizeMixingRuleProfile(input.ruleProfile ?? defaultRuleProfile),
         productIds: canonicalIds(input.productIds, 'Customer productIds', false),
         availableIngredientIds: canonicalIds(
             input.availableIngredientIds,

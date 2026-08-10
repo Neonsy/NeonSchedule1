@@ -91,6 +91,7 @@ function candidate(
     return {
         drugTypes: ['Marijuana'],
         recipe: {
+            ruleProfile: { kind: 'standard' },
             productId,
             ingredientIds: [],
             effectIds: ['refreshing'],

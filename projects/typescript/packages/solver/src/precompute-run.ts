@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { sameMixingRuleProfile } from '@neonschedule1/core';
+
 import {
     buildRecipeCorpusManifest,
     describeCorpusFile,
@@ -249,6 +251,10 @@ async function readProductCheckpoint(
             if (partition.algorithmVersion !== recipeCorpusAlgorithmVersion ||
                 JSON.stringify(partition.dataset) !== JSON.stringify(identity(plan.dataset)) ||
                 partition.coverage.mode !== plan.configuration.mode ||
+                !sameMixingRuleProfile(
+                    partition.coverage.ruleProfile,
+                    plan.configuration.ruleProfile
+                ) ||
                 partition.coverage.semantics !==
                     'cheapest-representative-per-ordered-effect-state' ||
                 partition.coverage.productId !== productId ||

@@ -18,6 +18,7 @@ The repository currently supports:
 - Allocate customers and dealers under shared resource limits
 - Normalize world, property, shop, and navigation evidence
 - Validate and plan property blueprints
+- Evaluate standard and explicit seeded mixing profiles
 
 ## Planned player features
 

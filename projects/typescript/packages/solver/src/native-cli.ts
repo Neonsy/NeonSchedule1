@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { mixingRuleProfileFromGameSeed, type MixingRuleProfile } from '@neonschedule1/core';
+
 import { loadSolverDataset, resolveDatasetDirectory, workspaceRoot } from '#solver/dataset';
 import {
     compareNativeValidation,
@@ -119,6 +121,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     let exportDirectory: string | undefined;
     let maxCases = defaults.maxCases;
     let maxStates = defaults.maxStates;
+    let ruleProfile: MixingRuleProfile | undefined;
     for (let index = 1; index < normalizedArguments.length; index++) {
         const argument = normalizedArguments[index]!;
         const value = (): string => {
@@ -144,6 +147,10 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             case '--max-states':
                 maxStates = integer(value(), 'max-states');
                 break;
+            case '--mixing-seed':
+                if (ruleProfile !== undefined) throw new Error('Mixing seed was provided twice');
+                ruleProfile = mixingRuleProfileFromGameSeed(integer(value(), 'mixing-seed'));
+                break;
             case '--help':
                 process.stdout.write(helpText);
                 process.exit(0);
@@ -156,7 +163,11 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
         ...(dataset === undefined ? {} : { dataset }),
         ...(gameDirectory === undefined ? {} : { gameDirectory }),
         ...(exportDirectory === undefined ? {} : { exportDirectory }),
-        validation: { maxCases, maxStates },
+        validation: {
+            maxCases,
+            maxStates,
+            ...(ruleProfile === undefined ? {} : { ruleProfile }),
+        },
     };
 }
 
@@ -212,6 +223,7 @@ Options:
   --export-directory PATH  Exporter output directory override
   --max-cases NUMBER       Bounded recipe count (default: 48, maximum: 64)
   --max-states NUMBER      State limit per solver winner search (default: 100000)
+  --mixing-seed NUMBER     Require the loaded save's signed 32-bit seed profile
   --help                   Show this help
 `;
 

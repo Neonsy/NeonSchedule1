@@ -19,6 +19,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
     buildRecipeCorpusManifest,
     describeCorpusFile,
+    recipeCorpusCoverageKey,
     verifyRecipeCorpusArtifact,
     verifyRecipeCorpusArtifactIntegrity,
 } from '#solver/precompute-artifact';
@@ -61,6 +62,16 @@ afterEach(async () => {
 });
 
 describe('recipe corpus artifact', () => {
+    it('gives standard and seeded profiles distinct coverage identities', () => {
+        const standard = recipeCorpusCoverageKey(dataset, configuration);
+        const seeded = recipeCorpusCoverageKey(dataset, {
+            ...configuration,
+            ruleProfile: { kind: 'seeded-rotation', angleDegrees: 90 },
+        });
+
+        expect(seeded).not.toBe(standard);
+    });
+
     it('verifies a complete hash-addressed selective artifact', async () => {
         const artifact = await writeArtifact();
 
@@ -307,6 +318,40 @@ describe('recipe corpus artifact', () => {
         expect(liveRecipe.result.recipes).toHaveLength(1);
         expect(liveRecipe.evidence.source).toBe('live');
 
+        const seededRecipeRoute = await router.recipe({
+            ruleProfile: { kind: 'seeded-rotation', angleDegrees: 90 },
+            productIds: ['product-a'],
+            availableIngredientIds: ['ingredient'],
+            maxIngredients: 1,
+            limit: 1,
+        });
+        expect(seededRecipeRoute.kind).toBe('coverage-miss');
+        if (seededRecipeRoute.kind !== 'coverage-miss') {
+            throw new Error('Expected seeded profile coverage miss');
+        }
+        expect(seededRecipeRoute.miss.issues).toEqual([{
+            field: 'ruleProfile',
+            reason: 'different-value',
+            requested: { kind: 'seeded-rotation', angleDegrees: 90 },
+            covered: { kind: 'standard' },
+        }]);
+        const seededRecipe = fallback.recipe(seededRecipeRoute, liveBudget);
+        expect(seededRecipe.kind).toBe('completed');
+        expect(seededRecipe.result.ruleProfile).toEqual({
+            kind: 'seeded-rotation',
+            angleDegrees: 90,
+        });
+        expect(seededRecipe.evidence.ruleProfile).toEqual(
+            seededRecipe.result.ruleProfile
+        );
+        expect(seededRecipe.result.recipes[0]?.effectIds).toEqual([
+            'base-effect',
+            'mixed-effect',
+        ]);
+        expect(seededRecipe.evidence.coverageKey).not.toBe(
+            liveRecipe.evidence.coverageKey
+        );
+
         const quickRecipe = fallback.recipeForMode(liveRecipeRoute, 'quick');
         expect(quickRecipe.kind).toBe('completed');
         expect(quickRecipe.evidence).toMatchObject({
@@ -458,6 +503,7 @@ describe('recipe corpus artifact', () => {
         const indexed = await writeRecipeCorpusIndexArtifact(indexRoot, artifact.directory);
         const { artifactSha256, ...identity } = indexed.manifest;
         expect(indexed.manifest.schema).toBe('neonschedule1-recipe-corpus-index-manifest');
+        expect(indexed.manifest.corpus.ruleProfile).toEqual({ kind: 'standard' });
         expect(createHash('sha256').update(JSON.stringify(identity)).digest('hex')).toBe(
             artifactSha256
         );
@@ -596,11 +642,12 @@ function partition(depth: number, mode: RecipeCorpusMode): RecipeCorpusPartition
     const ingredientCost = depth * 2;
     const productValue = 10 + depth * 5;
     return {
-        schema: 'neonschedule1-recipe-corpus-partition-1',
-        algorithmVersion: '1',
+        schema: 'neonschedule1-recipe-corpus-partition-2',
+        algorithmVersion: '2',
         dataset,
         coverage: {
             mode,
+            ruleProfile: { kind: 'standard' },
             semantics: 'cheapest-representative-per-ordered-effect-state',
             productId: 'product',
             drugType: 'TestDrug',
@@ -678,6 +725,7 @@ const dataset: RecipeCorpusDatasetIdentity = {
 
 const configuration: RecipeCorpusConfiguration = {
     mode: 'selective',
+    ruleProfile: { kind: 'standard' },
     productIds: ['product'],
     ingredientIds: ['ingredient'],
     maxIngredients: 1,

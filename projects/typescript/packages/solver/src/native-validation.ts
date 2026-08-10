@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 
 import {
     MixingEngine,
+    normalizeMixingRuleProfile,
     RecipeEvaluator,
     ReverseRecipeSearch,
+    sameMixingRuleProfile,
     type Item,
+    type MixingRuleProfile,
     type RecipeEvaluation,
     type RecipeSearchObjective,
 } from '@neonschedule1/core';
@@ -18,11 +21,13 @@ export const maximumNativeValidationCases = 64;
 export interface NativeValidationOptions {
     readonly maxCases: number;
     readonly maxStates: number;
+    readonly ruleProfile?: MixingRuleProfile;
 }
 
 export interface NativeValidationRequest {
-    readonly schema: 'neonschedule1-native-recipe-validation-request-1';
+    readonly schema: 'neonschedule1-native-recipe-validation-request-2';
     readonly createdAt: string;
+    readonly ruleProfile: MixingRuleProfile;
     readonly dataset: {
         readonly gameVersion: string;
         readonly datasetSha256: string;
@@ -50,11 +55,12 @@ export type NativeValidationReason =
     | 'effect-capacity';
 
 export interface NativeValidationResponse {
-    readonly schema: 'neonschedule1-native-recipe-validation-response-1';
+    readonly schema: 'neonschedule1-native-recipe-validation-response-2';
     readonly exporterVersion: string;
     readonly evaluatedAtUtc: string;
     readonly gameVersion: string;
     readonly requestSha256: string;
+    readonly ruleProfile: MixingRuleProfile;
     readonly cases: readonly NativeValidationResult[];
 }
 
@@ -67,13 +73,14 @@ export interface NativeValidationResult {
 }
 
 export interface NativeValidationReport {
-    readonly schema: 'neonschedule1-native-recipe-validation-report-1';
+    readonly schema: 'neonschedule1-native-recipe-validation-report-2';
     readonly comparedAt: string;
     readonly gameVersion: string;
     readonly datasetSha256: string;
     readonly exporterVersion: string;
     readonly requestSha256: string;
     readonly responseSha256: string;
+    readonly ruleProfile: MixingRuleProfile;
     readonly caseCount: number;
     readonly ingredientDepths: readonly number[];
     readonly reasons: Readonly<Record<NativeValidationReason, number>>;
@@ -95,7 +102,8 @@ export function createNativeValidationRequest(
     validateOptions(options);
     const itemsById = new Map(dataset.items.map((item) => [item.id, item]));
     const effectsById = new Map(dataset.effects.map((effect) => [effect.id, effect]));
-    const engine = new MixingEngine(dataset.mixingRules, effectsById);
+    const ruleProfile = normalizeMixingRuleProfile(options.ruleProfile);
+    const engine = new MixingEngine(dataset.mixingRules, effectsById, ruleProfile);
     const evaluator = new RecipeEvaluator(engine, itemsById);
     const productIds = dataset.items
         .filter((item) => item.product !== null && !item.isRuntimeOnly)
@@ -125,8 +133,9 @@ export function createNativeValidationRequest(
     if (selected.length === 0) throw new Error('Native validation selected no recipes');
 
     return {
-        schema: 'neonschedule1-native-recipe-validation-request-1',
+        schema: 'neonschedule1-native-recipe-validation-request-2',
         createdAt: new Date().toISOString(),
+        ruleProfile,
         dataset: {
             gameVersion: dataset.manifest.gameVersion,
             datasetSha256: dataset.manifest.datasetSha256,
@@ -138,7 +147,7 @@ export function createNativeValidationRequest(
 
 export function parseNativeValidationRequest(value: unknown): NativeValidationRequest {
     const record = object(value, 'request');
-    if (record.schema !== 'neonschedule1-native-recipe-validation-request-1') {
+    if (record.schema !== 'neonschedule1-native-recipe-validation-request-2') {
         throw new Error('Native validation request has an unsupported schema');
     }
     const dataset = object(record.dataset, 'request.dataset');
@@ -168,6 +177,7 @@ export function parseNativeValidationRequest(value: unknown): NativeValidationRe
     return {
         schema: record.schema,
         createdAt: string(record.createdAt, 'request.createdAt'),
+        ruleProfile: normalizeMixingRuleProfile(record.ruleProfile),
         dataset: {
             gameVersion: string(dataset.gameVersion, 'request.dataset.gameVersion'),
             datasetSha256: sha256(dataset.datasetSha256, 'request.dataset.datasetSha256'),
@@ -182,7 +192,7 @@ export function parseNativeValidationRequest(value: unknown): NativeValidationRe
 
 export function parseNativeValidationResponse(value: unknown): NativeValidationResponse {
     const record = object(value, 'response');
-    if (record.schema !== 'neonschedule1-native-recipe-validation-response-1') {
+    if (record.schema !== 'neonschedule1-native-recipe-validation-response-2') {
         throw new Error('Native validation response has an unsupported schema');
     }
     const cases = array(record.cases, 'response.cases').map((entry, index) => {
@@ -207,6 +217,7 @@ export function parseNativeValidationResponse(value: unknown): NativeValidationR
         evaluatedAtUtc: string(record.evaluatedAtUtc, 'response.evaluatedAtUtc'),
         gameVersion: string(record.gameVersion, 'response.gameVersion'),
         requestSha256: sha256(record.requestSha256, 'response.requestSha256'),
+        ruleProfile: normalizeMixingRuleProfile(record.ruleProfile),
         cases,
     };
 }
@@ -224,6 +235,9 @@ export function compareNativeValidation(
         throw new Error(
             `Native response game ${response.gameVersion} differs from dataset ${request.dataset.gameVersion}`
         );
+    }
+    if (!sameMixingRuleProfile(response.ruleProfile, request.ruleProfile)) {
+        throw new Error('Native response mixing rule profile differs from the request');
     }
     if (response.cases.length !== request.cases.length) {
         throw new Error(
@@ -245,13 +259,14 @@ export function compareNativeValidation(
     });
 
     return {
-        schema: 'neonschedule1-native-recipe-validation-report-1',
+        schema: 'neonschedule1-native-recipe-validation-report-2',
         comparedAt: new Date().toISOString(),
         gameVersion: response.gameVersion,
         datasetSha256: request.dataset.datasetSha256,
         exporterVersion: response.exporterVersion,
         requestSha256,
         responseSha256,
+        ruleProfile: request.ruleProfile,
         caseCount: request.cases.length,
         ingredientDepths: [...new Set(request.cases.map((item) => item.ingredientIds.length))]
             .sort((left, right) => left - right),

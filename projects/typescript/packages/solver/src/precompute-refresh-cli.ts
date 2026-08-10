@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+import { mixingRuleProfileFromGameSeed, type MixingRuleProfile } from '@neonschedule1/core';
+
 import { loadSolverDataset, resolveDatasetDirectory, workspaceRoot } from '#solver/dataset';
 import { planExhaustiveCorpus } from '#solver/precompute';
 import { refreshRecipeCorpusProduction } from '#solver/precompute-refresh';
@@ -11,6 +13,7 @@ interface CliOptions {
     readonly maxIngredients: number;
     readonly maxStates: number;
     readonly verificationLimit: number;
+    readonly ruleProfile?: MixingRuleProfile;
 }
 
 async function main(): Promise<void> {
@@ -33,6 +36,7 @@ async function main(): Promise<void> {
     const plan = planExhaustiveCorpus(dataset, {
         maxIngredients: options.maxIngredients,
         maxStates: options.maxStates,
+        ...(options.ruleProfile === undefined ? {} : { ruleProfile: options.ruleProfile }),
     });
     process.stdout.write(
         `Refreshing exhaustive production coverage: ` +
@@ -81,6 +85,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     let maxIngredients: number | undefined;
     let maxStates: number | undefined;
     let verificationLimit = 10;
+    let ruleProfile: MixingRuleProfile | undefined;
     for (let position = 0; position < argumentsWithoutSeparator.length; position++) {
         const argument = argumentsWithoutSeparator[position]!;
         const value = (): string => {
@@ -107,6 +112,12 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
             case '--limit':
                 verificationLimit = integer(value(), 'limit', 1);
                 break;
+            case '--mixing-seed':
+                if (ruleProfile !== undefined) throw new Error('Mixing seed was provided twice');
+                ruleProfile = mixingRuleProfileFromGameSeed(
+                    signedInteger(value(), 'mixing-seed')
+                );
+                break;
             case '--help':
                 process.stdout.write(helpText);
                 process.exit(0);
@@ -124,6 +135,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
         maxIngredients,
         maxStates,
         verificationLimit,
+        ...(ruleProfile === undefined ? {} : { ruleProfile }),
     };
 }
 
@@ -139,6 +151,12 @@ function integer(value: string, label: string, minimum: number): number {
     return parsed;
 }
 
+function signedInteger(value: string, label: string): number {
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed)) throw new Error(`${label} must be a safe integer`);
+    return parsed;
+}
+
 const helpText = `Usage: pnpm solver:precompute:refresh -- [options]
 
 Required:
@@ -150,6 +168,7 @@ Options:
   --output-root PATH      Artifact root; defaults to .local/precomputed
   --report-root PATH      Verification report root; defaults to .local/verifications
   --limit NUMBER          Results compared per verification case (default: 10)
+  --mixing-seed NUMBER    Use the signed 32-bit save seed's rotation profile
   --help                  Show this help
 `;
 

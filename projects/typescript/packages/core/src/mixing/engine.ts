@@ -1,5 +1,12 @@
 import type { Effect } from '#core/data/effect';
-import type { MixingMap, MixingMapEffect, MixingRules } from '#core/data/mixing';
+import {
+    normalizeMixingRuleProfile,
+    sameMixingRuleProfile,
+    type MixingMap,
+    type MixingMapEffect,
+    type MixingRuleProfile,
+    type MixingRules,
+} from '#core/data/mixing';
 
 interface IndexedMap {
     readonly replacementsByOrigin: ReadonlyMap<string, ReadonlyMap<string, string | null>>;
@@ -8,10 +15,15 @@ interface IndexedMap {
 export class MixingEngine {
     readonly rules: MixingRules;
     readonly effectsById: ReadonlyMap<string, Effect>;
+    readonly ruleProfile: MixingRuleProfile;
 
     readonly #mapsByDrugType: ReadonlyMap<string, IndexedMap>;
 
-    constructor(rules: MixingRules, effectsById: ReadonlyMap<string, Effect>) {
+    constructor(
+        rules: MixingRules,
+        effectsById: ReadonlyMap<string, Effect>,
+        ruleProfile?: MixingRuleProfile
+    ) {
         const indexedEffects = new Map(effectsById);
         const unsupported = [...indexedEffects.values()].find(
             (effect) => effect.value.change !== 0 || effect.value.multiplier !== 1
@@ -23,8 +35,12 @@ export class MixingEngine {
         }
         this.rules = rules;
         this.effectsById = indexedEffects;
+        this.ruleProfile = normalizeMixingRuleProfile(ruleProfile);
         this.#mapsByDrugType = new Map(
-            rules.maps.map((map) => [map.drugType, indexMixingMap(map, indexedEffects)])
+            rules.maps.map((map) => [
+                map.drugType,
+                indexMixingMap(map, indexedEffects, this.ruleProfile),
+            ])
         );
         if (this.#mapsByDrugType.size !== rules.maps.length) {
             throw new Error('Mixing rules contain duplicate drug types');
@@ -71,6 +87,14 @@ export class MixingEngine {
         return roundToEven(value);
     }
 
+    assertRuleProfile(input: unknown): void {
+        if (input === undefined) return;
+        const requested = normalizeMixingRuleProfile(input);
+        if (!sameMixingRuleProfile(requested, this.ruleProfile)) {
+            throw new Error('Requested mixing rule profile differs from the engine profile');
+        }
+    }
+
     #effect(id: string): Effect {
         const effect = this.effectsById.get(id);
         if (effect === undefined) throw new Error(`Unknown mixing effect ${JSON.stringify(id)}`);
@@ -78,16 +102,25 @@ export class MixingEngine {
     }
 }
 
-function indexMixingMap(source: MixingMap, effectsById: ReadonlyMap<string, Effect>): IndexedMap {
+function indexMixingMap(
+    source: MixingMap,
+    effectsById: ReadonlyMap<string, Effect>,
+    ruleProfile: MixingRuleProfile
+): IndexedMap {
     uniqueIndex(source.effects, 'effectId', `mixing map ${source.drugType}`);
     const replacementsByOrigin = new Map<string, ReadonlyMap<string, string | null>>();
     for (const origin of source.effects) {
         const replacements = new Map<string, string | null>();
         for (const addedEffect of effectsById.values()) {
+            const displacement = rotateDisplacement(
+                addedEffect.mixing.direction.x * addedEffect.mixing.magnitude,
+                addedEffect.mixing.direction.y * addedEffect.mixing.magnitude,
+                ruleProfile
+            );
             const targetX =
-                origin.position.x + addedEffect.mixing.direction.x * addedEffect.mixing.magnitude;
+                origin.position.x + displacement.x;
             const targetY =
-                origin.position.y + addedEffect.mixing.direction.y * addedEffect.mixing.magnitude;
+                origin.position.y + displacement.y;
             replacements.set(
                 addedEffect.id,
                 closestEffect(source.effects, targetX, targetY)?.effectId ?? null
@@ -96,6 +129,21 @@ function indexMixingMap(source: MixingMap, effectsById: ReadonlyMap<string, Effe
         replacementsByOrigin.set(origin.effectId, replacements);
     }
     return { replacementsByOrigin };
+}
+
+function rotateDisplacement(
+    x: number,
+    y: number,
+    ruleProfile: MixingRuleProfile
+): { readonly x: number; readonly y: number } {
+    if (ruleProfile.kind === 'standard' || ruleProfile.angleDegrees === 0) return { x, y };
+    const radians = ruleProfile.angleDegrees * Math.PI / 180;
+    const cosine = Math.cos(radians);
+    const sine = Math.sin(radians);
+    return {
+        x: x * cosine - y * sine,
+        y: x * sine + y * cosine,
+    };
 }
 
 function closestEffect(entries: readonly MixingMapEffect[], x: number, y: number): MixingMapEffect | null {

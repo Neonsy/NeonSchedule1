@@ -9,9 +9,10 @@ import {
 import { describe, expect, it } from 'vitest';
 
 const seed: MixSeedDocument = {
-    schema: 'neonschedule1-mix-seed-1',
+    schema: 'neonschedule1-mix-seed-2',
     gameVersion: '0.4.6f11',
     datasetSha256: 'a'.repeat(64),
+    ruleProfile: { kind: 'seeded-rotation', angleDegrees: 17 },
     productId: 'ogkush',
     ingredientIds: ['banana', 'cuke', 'banana'],
 };
@@ -54,33 +55,49 @@ describe('mix seed codec', () => {
             productId: seed.productId,
             datasetSha256: seed.datasetSha256,
             gameVersion: seed.gameVersion,
+            ruleProfile: seed.ruleProfile,
             schema: seed.schema,
         });
 
         expect(first).toBe(second);
-        expect(first).toMatch(/^n1m1\./u);
+        expect(first).toMatch(/^n1m2\./u);
         expect(decodeMixSeed(first)).toEqual(seed);
     });
 
+    it('decodes legacy links as the standard rule profile', () => {
+        const legacy = `n1m1.${encodeURIComponent(JSON.stringify([
+            seed.gameVersion,
+            seed.datasetSha256,
+            seed.productId,
+            seed.ingredientIds,
+        ]))}`;
+
+        expect(decodeMixSeed(legacy)).toEqual({
+            ...seed,
+            ruleProfile: { kind: 'standard' },
+        });
+    });
+
     it.each([
-        ['unsupported version', 'n1m2.payload', 'unsupported version'],
-        ['malformed URI encoding', 'n1m1.%', 'payload is malformed'],
-        ['malformed JSON', 'n1m1.not-json', 'payload is malformed'],
+        ['unsupported version', 'n1m3.payload', 'unsupported version'],
+        ['malformed URI encoding', 'n1m2.%', 'payload is malformed'],
+        ['malformed JSON', 'n1m2.not-json', 'payload is malformed'],
         [
             'wrong tuple shape',
-            `n1m1.${encodeURIComponent(JSON.stringify(['game', 'hash']))}`,
+            `n1m2.${encodeURIComponent(JSON.stringify(['game', 'hash']))}`,
             'invalid structure',
         ],
         [
             'invalid dataset identity',
-            `n1m1.${encodeURIComponent(JSON.stringify(['game', 'hash', 'product', []]))}`,
+            `n1m2.${encodeURIComponent(JSON.stringify(['game', 'hash', null, 'product', []]))}`,
             'lowercase SHA-256',
         ],
         [
             'blank ingredient ID',
-            `n1m1.${encodeURIComponent(JSON.stringify([
+            `n1m2.${encodeURIComponent(JSON.stringify([
                 'game',
                 'a'.repeat(64),
+                null,
                 'product',
                 [' '],
             ]))}`,
@@ -91,7 +108,7 @@ describe('mix seed codec', () => {
     });
 
     it('rejects tokens that exceed the share-link boundary', () => {
-        expect(() => decodeMixSeed(`n1m1.${'a'.repeat(4_092)}`)).toThrow(
+        expect(() => decodeMixSeed(`n1m2.${'a'.repeat(4_092)}`)).toThrow(
             'exceeds 4096 characters'
         );
         expect(() => encodeMixSeed({

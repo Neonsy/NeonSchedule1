@@ -1,12 +1,19 @@
 import { type } from 'arktype';
 
 import type { Item } from '#core/data/item';
-import type { MixingRules } from '#core/data/mixing';
+import {
+    MixingRuleProfileSchema,
+    normalizeMixingRuleProfile,
+    standardMixingRuleProfile,
+    type MixingRuleProfile,
+    type MixingRules,
+} from '#core/data/mixing';
 
 export const MixSeedDocumentSchema = type({
-    schema: "'neonschedule1-mix-seed-1'",
+    schema: "'neonschedule1-mix-seed-2'",
     gameVersion: 'string',
     datasetSha256: 'string',
+    ruleProfile: MixingRuleProfileSchema,
     productId: 'string',
     ingredientIds: 'string[]',
 });
@@ -21,7 +28,8 @@ export interface MixSeedDataset {
     readonly mixingRules: MixingRules;
 }
 
-const tokenPrefix = 'n1m1.';
+const tokenPrefix = 'n1m2.';
+const legacyTokenPrefix = 'n1m1.';
 const maximumTokenLength = 4_096;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 
@@ -30,6 +38,7 @@ export function encodeMixSeed(input: MixSeedDocument): string {
     const payload = JSON.stringify([
         document.gameVersion,
         document.datasetSha256,
+        document.ruleProfile.kind === 'standard' ? null : document.ruleProfile.angleDegrees,
         document.productId,
         document.ingredientIds,
     ]);
@@ -41,7 +50,8 @@ export function encodeMixSeed(input: MixSeedDocument): string {
 }
 
 export function decodeMixSeed(token: string): MixSeedDocument {
-    if (!token.startsWith(tokenPrefix)) {
+    const legacy = token.startsWith(legacyTokenPrefix);
+    if (!legacy && !token.startsWith(tokenPrefix)) {
         throw new TypeError('Mix seed has an unsupported version');
     }
     if (token.length > maximumTokenLength) {
@@ -50,28 +60,32 @@ export function decodeMixSeed(token: string): MixSeedDocument {
 
     let payload: unknown;
     try {
-        payload = JSON.parse(decodeURIComponent(token.slice(tokenPrefix.length))) as unknown;
+        const prefix = legacy ? legacyTokenPrefix : tokenPrefix;
+        payload = JSON.parse(decodeURIComponent(token.slice(prefix.length))) as unknown;
     } catch (error) {
         throw new TypeError('Mix seed payload is malformed', { cause: error });
     }
+    if (legacy) return decodeLegacyPayload(payload);
     if (
         !Array.isArray(payload) ||
-        payload.length !== 4 ||
+        payload.length !== 5 ||
         typeof payload[0] !== 'string' ||
         typeof payload[1] !== 'string' ||
-        typeof payload[2] !== 'string' ||
-        !Array.isArray(payload[3]) ||
-        !payload[3].every((ingredientId) => typeof ingredientId === 'string')
+        (payload[2] !== null && typeof payload[2] !== 'number') ||
+        typeof payload[3] !== 'string' ||
+        !Array.isArray(payload[4]) ||
+        !payload[4].every((ingredientId) => typeof ingredientId === 'string')
     ) {
         throw new TypeError('Mix seed payload has an invalid structure');
     }
 
     return validateDocument(MixSeedDocumentSchema.assert({
-        schema: 'neonschedule1-mix-seed-1',
+        schema: 'neonschedule1-mix-seed-2',
         gameVersion: payload[0],
         datasetSha256: payload[1],
-        productId: payload[2],
-        ingredientIds: payload[3],
+        ruleProfile: decodeRuleProfile(payload[2]),
+        productId: payload[3],
+        ingredientIds: payload[4],
     }));
 }
 
@@ -136,9 +150,38 @@ function validateDocument(document: MixSeedDocument): MixSeedDocument {
         schema: document.schema,
         gameVersion: document.gameVersion,
         datasetSha256: document.datasetSha256,
+        ruleProfile: normalizeMixingRuleProfile(document.ruleProfile),
         productId: document.productId,
         ingredientIds: [...document.ingredientIds],
     };
+}
+
+function decodeLegacyPayload(payload: unknown): MixSeedDocument {
+    if (
+        !Array.isArray(payload) ||
+        payload.length !== 4 ||
+        typeof payload[0] !== 'string' ||
+        typeof payload[1] !== 'string' ||
+        typeof payload[2] !== 'string' ||
+        !Array.isArray(payload[3]) ||
+        !payload[3].every((ingredientId) => typeof ingredientId === 'string')
+    ) {
+        throw new TypeError('Mix seed payload has an invalid structure');
+    }
+    return validateDocument(MixSeedDocumentSchema.assert({
+        schema: 'neonschedule1-mix-seed-2',
+        gameVersion: payload[0],
+        datasetSha256: payload[1],
+        ruleProfile: standardMixingRuleProfile,
+        productId: payload[2],
+        ingredientIds: payload[3],
+    }));
+}
+
+function decodeRuleProfile(value: number | null): MixingRuleProfile {
+    return value === null
+        ? standardMixingRuleProfile
+        : { kind: 'seeded-rotation', angleDegrees: value };
 }
 
 function requireNonBlank(value: string, name: string): void {

@@ -4,6 +4,11 @@ import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
+    normalizeMixingRuleProfile,
+    sameMixingRuleProfile,
+} from '@neonschedule1/core';
+
+import {
     recipeCorpusAlgorithmVersion,
     type RecipeCorpusConfiguration,
     type RecipeCorpusDatasetIdentity,
@@ -21,7 +26,7 @@ export interface RecipeCorpusFile {
 }
 
 export interface RecipeCorpusManifest {
-    readonly schema: 'neonschedule1-recipe-corpus-manifest-1';
+    readonly schema: 'neonschedule1-recipe-corpus-manifest-2';
     readonly artifactSha256: string;
     readonly coverageKey: string;
     readonly algorithmVersion: string;
@@ -71,7 +76,7 @@ export function buildRecipeCorpusManifest(
         sortedFiles
     );
     return {
-        schema: 'neonschedule1-recipe-corpus-manifest-1',
+        schema: 'neonschedule1-recipe-corpus-manifest-2',
         artifactSha256: sha256(jsonBytes(body)),
         ...body,
     };
@@ -250,6 +255,10 @@ function verifyPartition(
         throw new Error(`Recipe corpus partition metadata differs from manifest: ${file.path}`);
     }
     if (partition.coverage.mode !== manifest.configuration.mode ||
+        !sameMixingRuleProfile(
+            partition.coverage.ruleProfile,
+            manifest.configuration.ruleProfile
+        ) ||
         partition.coverage.semantics !== manifest.semantics ||
         partition.coverage.maxIngredients !== manifest.configuration.maxIngredients ||
         JSON.stringify(partition.coverage.ingredientIds) !==
@@ -285,7 +294,7 @@ function verifyPartition(
 
 function parseManifest(value: unknown): RecipeCorpusManifest {
     const record = object(value, 'Recipe corpus manifest');
-    if (record.schema !== 'neonschedule1-recipe-corpus-manifest-1' ||
+    if (record.schema !== 'neonschedule1-recipe-corpus-manifest-2' ||
         record.algorithmVersion !== recipeCorpusAlgorithmVersion ||
         record.semantics !== 'cheapest-representative-per-ordered-effect-state' ||
         record.proofStatus !== 'exact') {
@@ -298,6 +307,7 @@ function parseManifest(value: unknown): RecipeCorpusManifest {
     }
     const parsedConfiguration: RecipeCorpusConfiguration = {
         mode: configuration.mode,
+        ruleProfile: normalizeMixingRuleProfile(configuration.ruleProfile),
         productIds: uniqueStringArray(configuration.productIds, 'configuration.productIds'),
         ingredientIds: uniqueStringArray(
             configuration.ingredientIds,
@@ -371,11 +381,12 @@ function parseManifest(value: unknown): RecipeCorpusManifest {
 
 function parsePartition(value: unknown, file: string): RecipeCorpusPartition {
     const record = object(value, file);
-    if (record.schema !== 'neonschedule1-recipe-corpus-partition-1') {
+    if (record.schema !== 'neonschedule1-recipe-corpus-partition-2') {
         throw new Error(`Recipe corpus partition has an unsupported schema: ${file}`);
     }
     object(record.dataset, `${file}.dataset`);
-    object(record.coverage, `${file}.coverage`);
+    const coverage = object(record.coverage, `${file}.coverage`);
+    normalizeMixingRuleProfile(coverage.ruleProfile);
     object(record.proof, `${file}.proof`);
     array(record.recipes, `${file}.recipes`);
     return record as unknown as RecipeCorpusPartition;

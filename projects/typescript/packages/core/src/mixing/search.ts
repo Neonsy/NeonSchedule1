@@ -1,4 +1,5 @@
 import type { Item, Product } from '#core/data/item';
+import type { MixingRuleProfile } from '#core/data/mixing';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import { MixingEngine } from '#core/mixing/engine';
 import {
@@ -38,6 +39,7 @@ const defaultMaxStates = 100_000;
 const maxValueBoundDepth = 32;
 
 export interface RecipeSearchInput {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly productId: string;
     readonly availableIngredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -60,6 +62,7 @@ export interface RecipeSearchOptions {
 export type RecipeSearchLimitBehavior = 'throw' | 'return-best-found';
 
 export interface RecipeSearchResult {
+    readonly ruleProfile: MixingRuleProfile;
     readonly recipes: readonly RecipeEvaluation[];
     readonly evidence: RecipeSearchEvidence;
 }
@@ -118,6 +121,7 @@ export class RecipeSearch {
     }
 
     search(input: RecipeSearchInput): RecipeSearchResult {
+        this.#engine.assertRuleProfile(input.ruleProfile);
         requireNonNegativeInteger(input.maxIngredients, 'maxIngredients');
         requirePositiveInteger(input.limit, 'limit');
         if (input.maximumTotalCost !== undefined) {
@@ -314,6 +318,7 @@ export class RecipeSearch {
             }
         }
         return {
+            ruleProfile: this.#engine.ruleProfile,
             recipes,
             evidence: interruption?.evidence ?? exactSearchEvidence(
                 exploredStates,
@@ -597,6 +602,7 @@ function evaluateState(
     const productValue = engine.calculateProductValue(product.basePrice, state.effectIds);
     const totalCost = product.baseProductCost + state.ingredientCost;
     return {
+        ruleProfile: engine.ruleProfile,
         productId,
         ingredientIds: state.ingredientIds,
         effectIds: state.effectIds,

@@ -13,6 +13,7 @@ import type {
     CustomerQuality,
 } from '#core/data/customer';
 import type { Item, Product } from '#core/data/item';
+import type { MixingRuleProfile } from '#core/data/mixing';
 import { FinalEffectConstraints } from '#core/mixing/effect-constraints';
 import type { MixingEngine } from '#core/mixing/engine';
 import {
@@ -40,6 +41,7 @@ import type { ProductionMaterialCostResolver } from '#core/production/cost';
 const defaultMaxStates = 100_000;
 
 export interface CustomerRecipeSearchInput {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly productIds: readonly string[];
     readonly availableIngredientIds: readonly string[];
     readonly maxIngredients: number;
@@ -64,6 +66,7 @@ export interface CustomerRecipeSearchOptions {
 }
 
 export interface CustomerRecipeSearchResult {
+    readonly ruleProfile: MixingRuleProfile;
     readonly recommendations: readonly CustomerRecommendation[];
     readonly evidence: RecipeSearchEvidence;
 }
@@ -134,6 +137,7 @@ export class CustomerRecipeSearch {
     }
 
     search(input: CustomerRecipeSearchInput): CustomerRecipeSearchResult {
+        this.#engine.assertRuleProfile(input.ruleProfile);
         requireNonNegativeSafeInteger(input.maxIngredients, 'maxIngredients');
         this.#rank(input, []);
 
@@ -202,6 +206,7 @@ export class CustomerRecipeSearch {
         }
 
         return {
+            ruleProfile: this.#engine.ruleProfile,
             recommendations: topRecommendations,
             evidence: stopReason === undefined
                 ? exactSearchEvidence(

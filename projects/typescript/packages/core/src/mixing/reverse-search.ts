@@ -1,4 +1,5 @@
 import type { Item } from '#core/data/item';
+import type { MixingRuleProfile } from '#core/data/mixing';
 import type { MixingEngine } from '#core/mixing/engine';
 import {
     compareRecipeEvaluations,
@@ -14,6 +15,7 @@ import {
 import { RecipeSearch, type RecipeSearchOptions } from '#core/mixing/search';
 
 export interface ReverseRecipeSearchInput {
+    readonly ruleProfile?: MixingRuleProfile;
     /** Omit to search every product definition in the supplied item collection. */
     readonly productIds?: readonly string[];
     readonly availableIngredientIds: readonly string[];
@@ -35,11 +37,13 @@ export interface ReverseRecipeEvaluation extends RecipeEvaluation {
 }
 
 export interface ReverseRecipeSearchResult {
+    readonly ruleProfile: MixingRuleProfile;
     readonly recipes: readonly ReverseRecipeEvaluation[];
     readonly evidence: RecipeSearchEvidence;
 }
 
 export class ReverseRecipeSearch {
+    readonly #engine: MixingEngine;
     readonly #itemsById: ReadonlyMap<string, Item>;
     readonly #search: RecipeSearch;
 
@@ -48,11 +52,13 @@ export class ReverseRecipeSearch {
         itemsById: ReadonlyMap<string, Item>,
         options: RecipeSearchOptions = {}
     ) {
+        this.#engine = engine;
         this.#itemsById = itemsById;
         this.#search = new RecipeSearch(engine, itemsById, options);
     }
 
     search(input: ReverseRecipeSearchInput): ReverseRecipeSearchResult {
+        this.#engine.assertRuleProfile(input.ruleProfile);
         const productIds = this.#productIds(input.productIds);
         const objective = input.objective ?? 'productValue';
         const recipes: RecipeEvaluation[] = [];
@@ -68,6 +74,7 @@ export class ReverseRecipeSearch {
         for (const productId of productIds) {
             const result = this.#search.search({
                 productId,
+                ...(input.ruleProfile === undefined ? {} : { ruleProfile: input.ruleProfile }),
                 availableIngredientIds: input.availableIngredientIds,
                 maxIngredients: input.maxIngredients,
                 limit: input.limit,
@@ -102,6 +109,7 @@ export class ReverseRecipeSearch {
         }
 
         return {
+            ruleProfile: this.#engine.ruleProfile,
             recipes: recipes
                 .sort((left, right) => compareRecipeEvaluations(left, right, objective))
                 .slice(0, input.limit)

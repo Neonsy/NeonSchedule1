@@ -1,5 +1,6 @@
 import {
     compareRecipeRankingKeys,
+    type MixingRuleProfile,
     type RecipeRankingKey,
     type RecipeSearchObjective,
 } from '@neonschedule1/core';
@@ -10,15 +11,16 @@ import {
 } from '#solver/precompute-artifact';
 import type { RecipeCorpusEntry } from '#solver/precompute';
 
-export const recipeCorpusIndexAlgorithmVersion = '1';
+export const recipeCorpusIndexAlgorithmVersion = '2';
 
 export interface RecipeCorpusIndex {
-    readonly schema: 'neonschedule1-recipe-corpus-index-1';
+    readonly schema: 'neonschedule1-recipe-corpus-index-2';
     readonly algorithmVersion: string;
     readonly corpus: {
         readonly artifactSha256: string;
         readonly coverageKey: string;
         readonly datasetSha256: string;
+        readonly ruleProfile: MixingRuleProfile;
     };
     readonly records: readonly RecipeCorpusIndexRecord[];
     readonly postings: {
@@ -90,12 +92,13 @@ export async function buildRecipeCorpusIndex(
     return {
         manifest,
         index: {
-            schema: 'neonschedule1-recipe-corpus-index-1',
+            schema: 'neonschedule1-recipe-corpus-index-2',
             algorithmVersion: recipeCorpusIndexAlgorithmVersion,
             corpus: {
                 artifactSha256: manifest.artifactSha256,
                 coverageKey: manifest.coverageKey,
                 datasetSha256: manifest.dataset.datasetSha256,
+                ruleProfile: manifest.configuration.ruleProfile,
             },
             records,
             postings: {

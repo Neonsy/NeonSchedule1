@@ -3,6 +3,7 @@ import {
     type CustomerCatalog,
     type CustomerRecommendation,
     type CustomerRecommendationInput,
+    type MixingRuleProfile,
     type RecipeEvaluation,
 } from '@neonschedule1/core';
 
@@ -24,6 +25,7 @@ export interface CustomerCorpusRecommendationResult {
         readonly corpusArtifactSha256: string;
         readonly indexArtifactSha256: string;
         readonly coverageKey: string;
+        readonly ruleProfile: MixingRuleProfile;
         readonly evaluatedCandidateCount: number;
     };
 }
@@ -62,7 +64,7 @@ export class CustomerCorpusRecommendationLookup {
             ),
         });
         const recommendations = this.#ranker.rank({
-            candidates: candidates(selection.recipes),
+            candidates: candidates(selection.recipes, selection.evidence.ruleProfile),
             profile: input.profile,
             state: input.state,
             quality: input.quality,
@@ -79,19 +81,24 @@ export class CustomerCorpusRecommendationLookup {
                 corpusArtifactSha256: selection.evidence.corpusArtifactSha256,
                 indexArtifactSha256: selection.evidence.indexArtifactSha256,
                 coverageKey: selection.evidence.coverageKey,
+                ruleProfile: selection.evidence.ruleProfile,
                 evaluatedCandidateCount: selection.evidence.candidateCount,
             },
         };
     }
 }
 
-function* candidates(entries: readonly RecipeCorpusEntry[]): Generator<{
+function* candidates(
+    entries: readonly RecipeCorpusEntry[],
+    ruleProfile: MixingRuleProfile
+): Generator<{
     readonly recipe: RecipeEvaluation;
     readonly drugTypes: readonly string[];
 }> {
     for (const entry of entries) {
         yield {
             recipe: {
+                ruleProfile,
                 productId: entry.productId,
                 ingredientIds: entry.ingredientIds,
                 effectIds: entry.effectIds,

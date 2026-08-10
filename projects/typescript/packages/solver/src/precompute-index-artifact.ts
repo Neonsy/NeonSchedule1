@@ -3,6 +3,8 @@ import { createReadStream } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { normalizeMixingRuleProfile } from '@neonschedule1/core';
+
 import {
     buildRecipeCorpusIndex,
     recipeCorpusIndexAlgorithmVersion,
@@ -220,6 +222,7 @@ function parseManifest(value: unknown): RecipeCorpusIndexManifest {
             artifactSha256: hash(corpus.artifactSha256, 'corpus.artifactSha256'),
             coverageKey: hash(corpus.coverageKey, 'corpus.coverageKey'),
             datasetSha256: hash(corpus.datasetSha256, 'corpus.datasetSha256'),
+            ruleProfile: normalizeMixingRuleProfile(corpus.ruleProfile),
         },
         counts: {
             recipes: integer(counts.recipes, 'counts.recipes'),

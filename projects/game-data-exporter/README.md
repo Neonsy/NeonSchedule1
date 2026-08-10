@@ -13,7 +13,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.15` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.16` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -44,6 +44,9 @@ dotnet build '.\in-game-exporter\NeonSchedule1.GameDataExporter.csproj' -c Relea
 Copy `in-game-exporter/bin/Release/net6.0/NeonSchedule1.GameDataExporter.dll` into the game's `Mods` directory.
 Start the game, load a post-tutorial save, and wait for `Export complete` in `MelonLoader/Latest.log`.
 
+Use a standard-profile save for a full export.
+Seeded saves are supported by recipe validation.
+
 Each run writes a report, SHA-256 sidecar, and matching direct-asset directory under `UserData/NeonSchedule1/exports` by default.
 
 ## Exported data
@@ -73,6 +76,9 @@ pnpm solver:native prepare --game-directory 'C:\Program Files (x86)\Steam\steama
 # Start the game and load the matching save.
 pnpm solver:native compare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
 ```
+
+Pass `--mixing-seed NUMBER` to `prepare` for a seeded save.
+Omit it for the standard profile.
 
 ### Validate convex colliders
 

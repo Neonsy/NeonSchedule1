@@ -1,14 +1,17 @@
 import type { Item } from '#core/data/item';
+import type { MixingRuleProfile } from '#core/data/mixing';
 
 import { MixingEngine } from '#core/mixing/engine';
 import type { ProductionMaterialCostResolver } from '#core/production/cost';
 
 export interface RecipeInput {
+    readonly ruleProfile?: MixingRuleProfile;
     readonly productId: string;
     readonly ingredientIds: readonly string[];
 }
 
 export interface RecipeEvaluation {
+    readonly ruleProfile: MixingRuleProfile;
     readonly productId: string;
     readonly ingredientIds: readonly string[];
     readonly effectIds: readonly string[];
@@ -41,6 +44,7 @@ export class RecipeEvaluator {
     }
 
     evaluate(input: RecipeInput): RecipeEvaluation {
+        this.#engine.assertRuleProfile(input.ruleProfile);
         const product = this.#item(input.productId, 'product');
         if (product.product === null) {
             throw new Error(`Item ${JSON.stringify(product.id)} is not a product`);
@@ -79,6 +83,7 @@ export class RecipeEvaluator {
         const productValue = this.#engine.calculateProductValue(product.product.basePrice, effectIds);
         const totalCost = baseProductCost + ingredientCost;
         return {
+            ruleProfile: this.#engine.ruleProfile,
             productId: product.id,
             ingredientIds: [...input.ingredientIds],
             effectIds,
