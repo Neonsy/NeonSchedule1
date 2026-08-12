@@ -122,7 +122,67 @@ describe('world normalization', () => {
 
         expect(integrity.errors).toContain('Navigation edge 0 exceeds employee movement limits');
     });
+
+    it('collapses exact native delivery duplicates and permits overlapping regional membership', () => {
+        const raw = report();
+        const regions = raw.discovery.map.regions as RawRegion[];
+        const source = regions[0]!;
+        source.deliveryLocations.push({
+            id: 'delivery-1',
+            position: { x: 8, y: 0, z: 9 },
+        });
+        regions.push({
+            ...source,
+            id: 'Docks',
+            name: 'Docks',
+            deliveryLocations: [{
+                id: 'delivery-1',
+                position: { x: 8, y: 0, z: 9 },
+            }],
+        });
+        const integrity = new Integrity();
+
+        const world = normalizeWorld(raw, assets, new Set(['alice']), new Set(['hardware']), integrity);
+
+        integrity.throwIfInvalid();
+        expect(world.map.regions.map((region) => [region.id, region.deliveryLocations])).toEqual([
+            ['Docks', [{ id: 'delivery-1', position: { x: 8, y: 0, z: 9 } }]],
+            ['Downtown', [{ id: 'delivery-1', position: { x: 8, y: 0, z: 9 } }]],
+        ]);
+    });
+
+    it('reports one delivery location ID with inconsistent regional positions', () => {
+        const raw = report();
+        const regions = raw.discovery.map.regions as RawRegion[];
+        const source = regions[0]!;
+        regions.push({
+            ...source,
+            id: 'Docks',
+            name: 'Docks',
+            deliveryLocations: [{
+                id: 'delivery-1',
+                position: { x: 9, y: 0, z: 9 },
+            }],
+        });
+        const integrity = new Integrity();
+
+        normalizeWorld(raw, assets, new Set(['alice']), new Set(['hardware']), integrity);
+
+        expect(integrity.errors).toContain(
+            'Delivery location "delivery-1" has inconsistent positions across regions'
+        );
+    });
 });
+
+type RawRegion = {
+    [key: string]: unknown;
+    id: string;
+    name: string;
+    deliveryLocations: Array<{
+        id: string;
+        position: { x: number; y: number; z: number };
+    }>;
+};
 
 function report(): RawReport {
     return {

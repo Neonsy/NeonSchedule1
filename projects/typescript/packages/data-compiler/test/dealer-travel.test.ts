@@ -201,6 +201,53 @@ describe('dealer travel', () => {
         });
     });
 
+    it('allows one physical delivery location to belong to multiple regions', () => {
+        const source = worldMap();
+        const map: WorldMap = {
+            ...source,
+            regions: [
+                source.regions[0]!,
+                {
+                    ...source.regions[0]!,
+                    id: 'Other',
+                    name: 'Other',
+                    deliveryLocations: [{ id: 'east', position: { x: 200, y: 0, z: 0 } }],
+                },
+            ],
+        };
+
+        expect(new DealerTravelFeasibilityResolver(tradeCatalog(), map).resolve({
+            regionId: 'Other',
+            deliveryWindowStartTime: 1200,
+            minutesUntilDeliveryWindowStart: 10,
+            dealers: [{ personId: 'center', origin: { x: 100, y: 0, z: 0 } }],
+        }).decisions[0]).toMatchObject({
+            status: 'feasible',
+            deliveryLocationCount: 1,
+            worstCase: { deliveryLocationId: 'east' },
+        });
+    });
+
+    it('rejects one delivery location ID with inconsistent regional positions', () => {
+        const source = worldMap();
+        const map: WorldMap = {
+            ...source,
+            regions: [
+                source.regions[0]!,
+                {
+                    ...source.regions[0]!,
+                    id: 'Other',
+                    name: 'Other',
+                    deliveryLocations: [{ id: 'east', position: { x: 201, y: 0, z: 0 } }],
+                },
+            ],
+        };
+
+        expect(() => new DealerTravelFeasibilityResolver(tradeCatalog(), map)).toThrow(
+            'Delivery location "east" has inconsistent positions across regions'
+        );
+    });
+
     it('preserves HHMM wrapping for very large safe arrival delays', () => {
         expect(estimateDealerTravel({
             ...mechanics(),

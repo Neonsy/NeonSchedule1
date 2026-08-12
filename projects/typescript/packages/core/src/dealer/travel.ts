@@ -281,7 +281,7 @@ function regionLocationIndex(
     world: WorldMap
 ): ReadonlyMap<string, readonly DeliveryLocationCandidate[]> {
     const regions = new Map<string, readonly DeliveryLocationCandidate[]>();
-    const deliveryLocationIds = new Set<string>();
+    const deliveryLocations = new Map<string, DeliveryLocationCandidate>();
     for (const region of world.regions) {
         requireId(region.id, 'Region');
         if (regions.has(region.id)) {
@@ -292,15 +292,22 @@ function regionLocationIndex(
             ({ id }) => id,
             `delivery location in region ${JSON.stringify(region.id)}`
         );
-        for (const locationId of locations.keys()) {
-            if (deliveryLocationIds.has(locationId)) {
-                throw new Error(`Duplicate delivery location ${JSON.stringify(locationId)}`);
+        for (const location of locations.values()) {
+            const existing = deliveryLocations.get(location.id);
+            if (existing !== undefined && !samePosition(existing.position, location.position)) {
+                throw new Error(
+                    `Delivery location ${JSON.stringify(location.id)} has inconsistent positions across regions`
+                );
             }
-            deliveryLocationIds.add(locationId);
+            deliveryLocations.set(location.id, location);
         }
         regions.set(region.id, [...locations.values()]);
     }
     return regions;
+}
+
+function samePosition(left: Vector3, right: Vector3): boolean {
+    return left.x === right.x && left.y === right.y && left.z === right.z;
 }
 
 function requireId(value: string, label: string): void {

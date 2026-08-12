@@ -41,7 +41,7 @@ pnpm data:normalize -- --acquisition <directory> --output <directory>
 The compiler verifies report and asset hashes, parses required meshes, checks schemas and references, applies domain integrity rules, and writes a content-addressed dataset.
 If `--output` is omitted, the compiler infers a sibling `normalized` directory for acquisitions stored under an `acquisitions` directory.
 
-Normalizer `0.0.35` writes the current content-addressed normalized dataset contract.
+Normalizer `0.0.36` writes the current content-addressed normalized dataset contract.
 
 ## Run solver workflows
 

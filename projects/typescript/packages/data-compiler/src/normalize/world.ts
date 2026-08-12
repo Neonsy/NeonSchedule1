@@ -74,7 +74,7 @@ function normalizeMap(raw: JsonObject, assets: VerifiedAssets, integrity: Integr
         .map(([id, region]) => normalizeRegion(id, region, assets, integrity))
         .sort((left, right) => left.id.localeCompare(right.id));
     const regionIds = new Set(regions.keys());
-    const deliveryLocationIds = new Set<string>();
+    const deliveryLocations = new Map<string, DeliveryLocationCandidate>();
     for (const region of normalizedRegions) {
         requireReferences(region.adjacentRegionIds, regionIds, `region ${region.id}`, integrity);
         for (const adjacentId of region.adjacentRegionIds) {
@@ -84,10 +84,13 @@ function normalizeMap(raw: JsonObject, assets: VerifiedAssets, integrity: Integr
             }
         }
         for (const location of region.deliveryLocations) {
-            if (deliveryLocationIds.has(location.id)) {
-                integrity.addError(`Duplicate delivery location ${JSON.stringify(location.id)}`);
+            const existing = deliveryLocations.get(location.id);
+            if (existing !== undefined && !samePosition(existing.position, location.position)) {
+                integrity.addError(
+                    `Delivery location ${JSON.stringify(location.id)} has inconsistent positions across regions`
+                );
             }
-            deliveryLocationIds.add(location.id);
+            deliveryLocations.set(location.id, location);
         }
     }
     integrity.check(
@@ -97,7 +100,7 @@ function normalizeMap(raw: JsonObject, assets: VerifiedAssets, integrity: Integr
     );
     integrity.check(
         'map contains delivery locations',
-        deliveryLocationIds.size > 0,
+        deliveryLocations.size > 0,
         'The exported map contains no regional delivery locations'
     );
 
@@ -185,18 +188,27 @@ function normalizeDeliveryLocations(
     regionPath: string,
     integrity: Integrity
 ): DeliveryLocationCandidate[] {
-    const locations = indexUnique(
-        objectArray(raw.deliveryLocations, `${regionPath}.deliveryLocations`),
-        'id',
-        `${regionPath}.deliveryLocations`,
-        integrity
-    );
-    return [...locations.entries()]
-        .map(([id, location]) => ({
-            id,
-            position: vector3(location.position, `${regionPath}.deliveryLocations[${JSON.stringify(id)}].position`),
-        }))
-        .sort((left, right) => left.id.localeCompare(right.id));
+    const locations = new Map<string, DeliveryLocationCandidate>();
+    objectArray(raw.deliveryLocations, `${regionPath}.deliveryLocations`).forEach((location, index) => {
+        const path = `${regionPath}.deliveryLocations[${index}]`;
+        const candidate = {
+            id: stringField(location, 'id', path),
+            position: vector3(location.position, `${path}.position`),
+        };
+        const existing = locations.get(candidate.id);
+        if (existing === undefined) {
+            locations.set(candidate.id, candidate);
+        } else if (!samePosition(existing.position, candidate.position)) {
+            integrity.addError(
+                `${regionPath}.deliveryLocations contains conflicting positions for id ${JSON.stringify(candidate.id)}`
+            );
+        }
+    });
+    return [...locations.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function samePosition(left: DeliveryLocationCandidate['position'], right: DeliveryLocationCandidate['position']): boolean {
+    return left.x === right.x && left.y === right.y && left.z === right.z;
 }
 
 function normalizeLocations(

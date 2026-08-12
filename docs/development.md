@@ -81,8 +81,8 @@ Use the [complete exporter manual](/projects/game-data-exporter/README.md) for b
 
 ## Compatibility
 
-Exporter `0.0.17` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
-Normalizer `0.0.35` defines the current normalized output contract.
+Exporter `0.0.18` targets *Schedule I* `0.4.6f12`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Normalizer `0.0.36` defines the current normalized output contract.
 A newer game or dependency version requires a new build and acquisition audit.
 
 NeonSchedule1 has no backward-compatibility commitment before version 1.

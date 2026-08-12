@@ -205,6 +205,17 @@ internal static partial class GameDataCollector
         };
     }
 
+    internal static void RequireStandardMixingRuleProfile()
+    {
+        var active = ActiveRuleProfile();
+        if (!string.Equals(active.Kind, "standard", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Full game data export requires a save with randomized mixing maps disabled. " +
+                "Disable randomized mixing maps and reload the save before exporting.");
+        }
+    }
+
     private static void ValidateRuleProfile(
         NativeMixingRuleProfile requested,
         NativeMixingRuleProfile active)
