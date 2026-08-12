@@ -304,9 +304,17 @@ describe('blueprint production logistics', () => {
             purchasedInputSupplyScope: 'first-production-consumers',
             routeQuantityAllocation: 'not-evaluated',
             employeeExecution: {
-                timingScope: 'assigned-production-placement-native-service',
+                timingScope:
+                    'assigned-production-placement-service-and-property-spawn-network-travel-candidates',
                 workSpeedBasis: 'normalized-employee-role-base-work-speed',
-                travelTiming: 'not-evaluated',
+                travelTiming: {
+                    origin: 'property-spawn',
+                    destination: 'assigned-placement-transit-points',
+                    pathSelection: 'all-network-reachable-candidates-unselected',
+                    distanceScope: 'navigation-graph-edges-only',
+                    endpointSnapTraversal: 'not-included-not-proven-walkable',
+                    frequency: 'not-evaluated-dynamic-task-state',
+                },
                 taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
                 scheduling: {
                     dispatchAuthority: 'server',
@@ -326,7 +334,8 @@ describe('blueprint production logistics', () => {
                     ]),
                 },
                 runtimeWorkSpeed: 'not-evaluated',
-                elapsedScheduleComposition: 'not-applied',
+                elapsedScheduleComposition:
+                    'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency',
                 assignments: [
                     {
                         stepIndex: 0,
@@ -362,6 +371,43 @@ describe('blueprint production logistics', () => {
                         ],
                         serviceSecondsPerBatch: 20,
                         totalServiceSeconds: 20,
+                    },
+                ],
+                travelAssignments: [
+                    {
+                        stepIndex: 0,
+                        placementId: 'source-a',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'unassigned',
+                    },
+                    {
+                        stepIndex: 0,
+                        placementId: 'source-b',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'incompatible-employee',
+                        employeeId: 'botanist-1',
+                    },
+                    {
+                        stepIndex: 1,
+                        placementId: 'destination-a',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'unassigned',
+                    },
+                    {
+                        stepIndex: 1,
+                        placementId: 'destination-b',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'candidates',
+                        employeeId: 'chemist-1',
+                        walkSpeed: 2,
+                        candidates: [{
+                            accessPointIndex: 0,
+                            accessPointPath: 'TransitAccess',
+                            startSnapDistance: 0,
+                            endSnapDistance: 0,
+                            networkDistance: 13,
+                            networkTravelSeconds: 6.5,
+                        }],
                     },
                 ],
                 employeeTotals: [{
@@ -595,6 +641,77 @@ describe('blueprint production logistics', () => {
             kind: 'exact',
             totalServiceSeconds: 40,
         }]);
+    });
+
+    it('keeps assigned travel unavailable without normalized walk speed', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const catalog = {
+            ...inputDataset.productionLogistics,
+            employeeRoles: inputDataset.productionLogistics.employeeRoles.map((role) =>
+                role.employeeType === 'Chemist' ? { ...role, walkSpeed: null } : role
+            ),
+        };
+
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            productionLogistics: catalog,
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution.travelAssignments).toContainEqual(
+            expect.objectContaining({
+                placementId: 'destination-b',
+                kind: 'walk-speed-unavailable',
+                employeeId: 'chemist-1',
+            })
+        );
+    });
+
+    it('enumerates every reachable assigned transit point without selecting one', () => {
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3, multipleTransitPoints: true })
+        ).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        const assigned = result.employeeExecution.travelAssignments.find(
+            (assignment) => assignment.placementId === 'destination-b'
+        );
+        expect(assigned).toMatchObject({
+            kind: 'candidates',
+            candidates: [
+                { accessPointIndex: 0 },
+                { accessPointIndex: 1 },
+            ],
+        });
+    });
+
+    it('reports assigned travel without a network-reachable transit point', () => {
+        const input = logisticsBlueprint();
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        const chemist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Chemist'
+        )!;
+        botanist.assignedPotPlacementIds = [];
+        chemist.assignedStationPlacementIds = ['source-a'];
+
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3, missingSourceTransitPoint: true })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution.travelAssignments).toContainEqual(
+            expect.objectContaining({
+                placementId: 'source-a',
+                kind: 'no-network-reachable-transit-point',
+                employeeId: 'chemist-1',
+                walkSpeed: 2,
+            })
+        );
     });
 
     it('reports grow-container service as a lower bound when moisture actions are unknown', () => {
@@ -1022,6 +1139,7 @@ function employeeRole(
         runtimeType: `Game.${employeeType}`,
         dailyWage: 200,
         baseWorkSpeed: 1,
+        walkSpeed: 2,
         inventorySlotCount: 5,
         assignmentKind: employeeType === 'Botanist' ? 'pots' : 'stations',
         assignedStationLimit,

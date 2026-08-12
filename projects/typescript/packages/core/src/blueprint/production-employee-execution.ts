@@ -4,17 +4,31 @@ import type {
 } from '#core/data/blueprint';
 import type { ProductionLogisticsCatalog } from '#core/data/production-logistics';
 import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
+import type {
+    BlueprintProductionEndpointAccessResult,
+    BlueprintProductionPlacementEndpointAccess,
+} from '#core/blueprint/production-endpoint-access';
 import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
 import type {
     BlueprintProductionEmployeeExecution,
     BlueprintProductionEmployeeServiceAssignment,
     BlueprintProductionEmployeeServiceTaskDuration,
     BlueprintProductionEmployeeServiceTotal,
+    BlueprintProductionEmployeeTravelAssignment,
+    BlueprintProductionEmployeeTravelCandidate,
 } from '#core/blueprint/production-logistics-types';
 
 interface EmployeeOwner {
     readonly employee: BlueprintEmployeeAssignment;
     readonly baseWorkSpeed: number | null;
+    readonly walkSpeed: number | null;
+}
+
+interface ScheduledAssignment {
+    readonly scheduledStep: BlueprintProductionScheduledStep;
+    readonly step: ProductionBatchStep;
+    readonly placementId: string;
+    readonly batchCount: number;
 }
 
 interface ServiceRule {
@@ -30,32 +44,59 @@ export function analyzeProductionEmployeeExecution(
     blueprint: BlueprintDocument,
     plan: ProductionBatchPlan,
     schedule: readonly BlueprintProductionScheduledStep[],
-    catalog: ProductionLogisticsCatalog
+    catalog: ProductionLogisticsCatalog,
+    endpointAccess: Extract<BlueprintProductionEndpointAccessResult, { readonly kind: 'analyzed' }>
 ): BlueprintProductionEmployeeExecution {
     const ownerByPlacementId = employeeOwners(blueprint, catalog);
+    const accessByPlacementId = new Map(
+        endpointAccess.placements.map((placement) => [placement.placementId, placement])
+    );
     const stepByIndex = new Map(plan.productionSteps.map((step, stepIndex) => [stepIndex, step]));
-    const assignments = schedule.flatMap((scheduledStep) => {
+    const scheduledAssignments = schedule.flatMap((scheduledStep): ScheduledAssignment[] => {
         const step = stepByIndex.get(scheduledStep.stepIndex);
         if (step === undefined) {
             throw new Error(`Production schedule references unavailable step ${scheduledStep.stepIndex}`);
         }
-        return scheduledStep.assignments.map((assignment) => serviceAssignment(
+        return scheduledStep.assignments.map((assignment) => ({
             scheduledStep,
             step,
-            assignment.placementId,
-            assignment.batchCount,
-            ownerByPlacementId.get(assignment.placementId)
-        ));
+            placementId: assignment.placementId,
+            batchCount: assignment.batchCount,
+        }));
     });
+    const assignments = scheduledAssignments.map((assignment) => serviceAssignment(
+        assignment.scheduledStep,
+        assignment.step,
+        assignment.placementId,
+        assignment.batchCount,
+        ownerByPlacementId.get(assignment.placementId)
+    ));
+    const travelAssignments = scheduledAssignments.map((assignment) => travelAssignment(
+        assignment.scheduledStep,
+        assignment.step,
+        assignment.placementId,
+        ownerByPlacementId.get(assignment.placementId),
+        accessByPlacementId.get(assignment.placementId)
+    ));
     return {
-        timingScope: 'assigned-production-placement-native-service',
+        timingScope:
+            'assigned-production-placement-service-and-property-spawn-network-travel-candidates',
         workSpeedBasis: 'normalized-employee-role-base-work-speed',
-        travelTiming: 'not-evaluated',
+        travelTiming: {
+            origin: 'property-spawn',
+            destination: 'assigned-placement-transit-points',
+            pathSelection: 'all-network-reachable-candidates-unselected',
+            distanceScope: 'navigation-graph-edges-only',
+            endpointSnapTraversal: 'not-included-not-proven-walkable',
+            frequency: 'not-evaluated-dynamic-task-state',
+        },
         taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
         scheduling: employeeScheduling(catalog),
         runtimeWorkSpeed: 'not-evaluated',
-        elapsedScheduleComposition: 'not-applied',
+        elapsedScheduleComposition:
+            'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency',
         assignments,
+        travelAssignments,
         employeeTotals: employeeTotals(assignments),
     };
 }
@@ -77,18 +118,18 @@ function employeeOwners(
     blueprint: BlueprintDocument,
     catalog: ProductionLogisticsCatalog
 ): ReadonlyMap<string, EmployeeOwner> {
-    const speedByType = new Map(
-        catalog.employeeRoles.map((role) => [role.employeeType, role.baseWorkSpeed])
-    );
+    const roleByType = new Map(catalog.employeeRoles.map((role) => [role.employeeType, role]));
     const owners = new Map<string, EmployeeOwner>();
     for (const employee of blueprint.productionLogistics.employees) {
+        const role = roleByType.get(employee.employeeType);
         const placementIds = employee.employeeType === 'Botanist'
             ? employee.assignedPotPlacementIds
             : employee.assignedStationPlacementIds;
         for (const placementId of placementIds) {
             owners.set(placementId, {
                 employee,
-                baseWorkSpeed: speedByType.get(employee.employeeType) ?? null,
+                baseWorkSpeed: role?.baseWorkSpeed ?? null,
+                walkSpeed: role?.walkSpeed ?? null,
             });
         }
     }
@@ -161,6 +202,77 @@ function serviceAssignment(
             batchCount,
             `${step.routeId} assigned service time`
         ),
+    };
+}
+
+function travelAssignment(
+    scheduledStep: BlueprintProductionScheduledStep,
+    step: ProductionBatchStep,
+    placementId: string,
+    owner: EmployeeOwner | undefined,
+    access: BlueprintProductionPlacementEndpointAccess | undefined
+): BlueprintProductionEmployeeTravelAssignment {
+    const requiredEmployeeType = serviceRule(step).requiredEmployeeType;
+    const base = {
+        stepIndex: scheduledStep.stepIndex,
+        itemId: step.itemId,
+        routeId: step.routeId,
+        placementId,
+        requiredEmployeeType,
+    };
+    if (owner === undefined) {
+        return { ...base, kind: 'unassigned', employeeId: null, employeeType: null };
+    }
+    if (owner.employee.employeeType !== requiredEmployeeType) {
+        return {
+            ...base,
+            kind: 'incompatible-employee',
+            employeeId: owner.employee.id,
+            employeeType: owner.employee.employeeType,
+        };
+    }
+    if (owner.walkSpeed === null || !Number.isFinite(owner.walkSpeed) || owner.walkSpeed <= 0) {
+        return {
+            ...base,
+            kind: 'walk-speed-unavailable',
+            employeeId: owner.employee.id,
+            employeeType: owner.employee.employeeType,
+        };
+    }
+    const walkSpeed = owner.walkSpeed;
+    const candidates: BlueprintProductionEmployeeTravelCandidate[] =
+        access?.transitAccessPoints.flatMap((point) => {
+            if (point.employeeReachability.kind !== 'reachable') return [];
+            const path = point.employeeReachability.path;
+            return [{
+                accessPointIndex: point.accessPointIndex,
+                accessPointPath: point.transform.path,
+                startSnapDistance: path.start.snapDistance,
+                endSnapDistance: path.end.snapDistance,
+                networkDistance: path.networkDistance,
+                networkTravelSeconds: divideFinite(
+                    path.networkDistance,
+                    walkSpeed,
+                    `${step.routeId} property-spawn network travel time`
+                ),
+            }];
+        }) ?? [];
+    if (candidates.length === 0) {
+        return {
+            ...base,
+            kind: 'no-network-reachable-transit-point',
+            employeeId: owner.employee.id,
+            employeeType: owner.employee.employeeType,
+            walkSpeed,
+        };
+    }
+    return {
+        ...base,
+        kind: 'candidates',
+        employeeId: owner.employee.id,
+        employeeType: owner.employee.employeeType,
+        walkSpeed,
+        candidates,
     };
 }
 

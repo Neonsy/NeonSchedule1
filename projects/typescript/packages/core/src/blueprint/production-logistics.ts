@@ -120,7 +120,8 @@ export class BlueprintProductionLogisticsAnalyzer {
             blueprint,
             plan,
             transfers.schedule.schedule,
-            this.#catalog
+            this.#catalog,
+            transfers.endpointAccess
         );
         return {
             kind: 'analyzed',

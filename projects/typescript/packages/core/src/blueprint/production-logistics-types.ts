@@ -263,15 +263,72 @@ export interface BlueprintProductionEmployeeServiceTotal {
     readonly totalServiceSeconds: number;
 }
 
+export interface BlueprintProductionEmployeeTravelCandidate {
+    readonly accessPointIndex: number;
+    readonly accessPointPath: string;
+    readonly startSnapDistance: number;
+    readonly endSnapDistance: number;
+    readonly networkDistance: number;
+    readonly networkTravelSeconds: number;
+}
+
+interface BlueprintProductionEmployeeTravelAssignmentBase {
+    readonly stepIndex: number;
+    readonly itemId: string;
+    readonly routeId: string;
+    readonly placementId: string;
+    readonly requiredEmployeeType: BlueprintEmployeeAssignment['employeeType'];
+}
+
+export type BlueprintProductionEmployeeTravelAssignment =
+    | BlueprintProductionEmployeeTravelAssignmentBase & {
+        readonly kind: 'unassigned';
+        readonly employeeId: null;
+        readonly employeeType: null;
+    }
+    | BlueprintProductionEmployeeTravelAssignmentBase & {
+        readonly kind: 'incompatible-employee';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeTravelAssignmentBase & {
+        readonly kind: 'walk-speed-unavailable';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeTravelAssignmentBase & {
+        readonly kind: 'no-network-reachable-transit-point';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+        readonly walkSpeed: number;
+    }
+    | BlueprintProductionEmployeeTravelAssignmentBase & {
+        readonly kind: 'candidates';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+        readonly walkSpeed: number;
+        readonly candidates: readonly BlueprintProductionEmployeeTravelCandidate[];
+    };
+
 export interface BlueprintProductionEmployeeExecution {
-    readonly timingScope: 'assigned-production-placement-native-service';
+    readonly timingScope:
+        'assigned-production-placement-service-and-property-spawn-network-travel-candidates';
     readonly workSpeedBasis: 'normalized-employee-role-base-work-speed';
-    readonly travelTiming: 'not-evaluated';
+    readonly travelTiming: {
+        readonly origin: 'property-spawn';
+        readonly destination: 'assigned-placement-transit-points';
+        readonly pathSelection: 'all-network-reachable-candidates-unselected';
+        readonly distanceScope: 'navigation-graph-edges-only';
+        readonly endpointSnapTraversal: 'not-included-not-proven-walkable';
+        readonly frequency: 'not-evaluated-dynamic-task-state';
+    };
     readonly taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded';
     readonly scheduling: ProductionLogisticsEmployeeScheduling | null;
     readonly runtimeWorkSpeed: 'not-evaluated';
-    readonly elapsedScheduleComposition: 'not-applied';
+    readonly elapsedScheduleComposition:
+        'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency';
     readonly assignments: readonly BlueprintProductionEmployeeServiceAssignment[];
+    readonly travelAssignments: readonly BlueprintProductionEmployeeTravelAssignment[];
     readonly employeeTotals: readonly BlueprintProductionEmployeeServiceTotal[];
 }
 
