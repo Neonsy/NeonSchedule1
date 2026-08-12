@@ -17,6 +17,12 @@ export const MapProjectionCalibrationSchema = type({
 });
 export type MapProjectionCalibration = typeof MapProjectionCalibrationSchema.infer;
 
+export const DeliveryLocationCandidateSchema = type({
+    id: 'string',
+    position: Vector3Schema,
+});
+export type DeliveryLocationCandidate = typeof DeliveryLocationCandidateSchema.infer;
+
 export const WorldRegionSchema = type({
     id: 'string',
     name: 'string',
@@ -29,11 +35,12 @@ export const WorldRegionSchema = type({
     verticalSize: 'number',
     polygonPoints: Vector3Schema.array(),
     adjacentRegionIds: 'string[]',
+    deliveryLocations: DeliveryLocationCandidateSchema.array(),
 });
 export type WorldRegion = typeof WorldRegionSchema.infer;
 
 export const WorldMapSchema = type({
-    schema: "'neonschedule1-world-map-1'",
+    schema: "'neonschedule1-world-map-2'",
     mainMap: MapImageSchema.or('null'),
     tutorialMap: MapImageSchema.or('null'),
     projection: MapProjectionCalibrationSchema,

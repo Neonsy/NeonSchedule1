@@ -554,6 +554,7 @@ internal sealed class DealerSnapshot
     public string HomeName { get; init; } = string.Empty;
     public float SalesCutPercentage { get; init; }
     public float SigningFee { get; init; }
+    public float WalkSpeed { get; init; }
     public int NegativeQualityTolerance { get; init; }
     public int PositiveQualityTolerance { get; init; }
 }

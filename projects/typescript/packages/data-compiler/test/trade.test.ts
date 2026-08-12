@@ -19,7 +19,7 @@ describe('dealer and supplier normalization', () => {
 
         integrity.throwIfInvalid();
         expect(normalized).toEqual({
-            schema: 'neonschedule1-trade-catalog-1',
+            schema: 'neonschedule1-trade-catalog-2',
             dealerMechanics: {
                 maximumCustomers: 10,
                 dealArrivalDelay: 30,
@@ -33,6 +33,7 @@ describe('dealer and supplier normalization', () => {
                 instanceKey: 'dealer:one',
                 type: 'PlayerDealer',
                 homeName: 'Dealer home',
+                walkSpeed: 4,
                 salesCutPercentage: 0.2,
                 signingFee: 500,
                 qualityTolerance: { negative: -2, positive: 5 },
@@ -89,6 +90,7 @@ function report(): RawReport {
                 objectPath: 'one',
                 dealerType: 'PlayerDealer',
                 homeName: 'Dealer home',
+                walkSpeed: 4,
                 salesCutPercentage: 0.2,
                 signingFee: 500,
                 negativeQualityTolerance: -2,

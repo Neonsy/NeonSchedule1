@@ -157,6 +157,52 @@ describe('customer recommendation dealer allocation', () => {
         expect(allocation.result.allocations[0]).toMatchObject({ dealerId: 'd1' });
     });
 
+    it('intersects configured eligibility with worst-case travel feasibility', () => {
+        const allocation = new CustomerRecommendationDealerAllocator(tradeCatalog(1, [
+            dealer('d1', 0.1, 0),
+            dealer('d2', 0.2, 0),
+        ])).allocate({
+            datasetSha256,
+            dealers: [
+                { personId: 'd1', signingFeePaid: true },
+                { personId: 'd2', signingFeePaid: true },
+            ],
+            recommendationSets: [{
+                customerId: 'customer',
+                recommendations: [recommendation('offer', 100, 50, 1)],
+                eligibleDealerIds: ['d1', 'd2'],
+                travelFeasibility: {
+                    policy: 'worst-case-regional-delivery-location',
+                    regionId: 'Test',
+                    decisions: [{
+                        dealerId: 'd2',
+                        status: 'feasible',
+                        deliveryLocationCount: 1,
+                        minutesUntilDeliveryWindowStart: 10,
+                        availableTravelMinutes: 40,
+                        worstCase: {
+                            deliveryLocationId: 'location',
+                            method: 'native-straight-line-walk-speed',
+                            straightLineDistance: 100,
+                            travelMinutesBeforeClamp: 25,
+                            travelMinutes: 25,
+                            targetArrivalTime: 1230,
+                            departureTime: 1205,
+                        },
+                        reasons: [],
+                    }],
+                    eligibleDealerIds: ['d2'],
+                },
+            }],
+            maximumProductionCost: 1,
+            maximumDealerSubsets: 4,
+            maximumStatesPerDealerSubset: 100,
+        });
+
+        expect(allocation.result.allocations).toHaveLength(1);
+        expect(allocation.result.allocations[0]).toMatchObject({ dealerId: 'd2' });
+    });
+
     it('reports dealer-subset and allocation-state limits separately', () => {
         const allocator = new CustomerRecommendationDealerAllocator(tradeCatalog(10, [
             dealer('dealer', 0, 0),
@@ -268,6 +314,7 @@ function dealer(
         instanceKey: `${personId}:one`,
         type: 'PlayerDealer',
         homeName: `${personId} home`,
+        walkSpeed: 4,
         salesCutPercentage,
         signingFee,
         qualityTolerance: { negative: -2, positive: 5 },
@@ -279,7 +326,7 @@ function tradeCatalog(
     dealers: TradeCatalog['dealers']
 ): TradeCatalog {
     return {
-        schema: 'neonschedule1-trade-catalog-1',
+        schema: 'neonschedule1-trade-catalog-2',
         dealerMechanics: {
             maximumCustomers,
             dealArrivalDelay: 30,

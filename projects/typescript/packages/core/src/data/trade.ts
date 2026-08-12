@@ -18,6 +18,7 @@ export const DealerProfileSchema = type({
     instanceKey: 'string',
     type: 'string',
     homeName: 'string',
+    walkSpeed: 'number',
     salesCutPercentage: 'number',
     signingFee: 'number',
     qualityTolerance: {
@@ -53,7 +54,7 @@ export const SupplierProfileSchema = type({
 export type SupplierProfile = typeof SupplierProfileSchema.infer;
 
 export const TradeCatalogSchema = type({
-    schema: "'neonschedule1-trade-catalog-1'",
+    schema: "'neonschedule1-trade-catalog-2'",
     dealerMechanics: DealerMechanicsSchema,
     dealers: DealerProfileSchema.array(),
     suppliers: SupplierProfileSchema.array(),

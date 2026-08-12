@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { estimateDealerTravel, type DealerMechanics } from '@neonschedule1/core';
+import {
+    DealerTravelFeasibilityResolver,
+    estimateDealerTravel,
+    type DealerMechanics,
+    type TradeCatalog,
+    type WorldMap,
+} from '@neonschedule1/core';
 
 describe('dealer travel', () => {
     it('reproduces native straight-line, walk-speed, rounding, and departure behavior', () => {
@@ -103,6 +109,109 @@ describe('dealer travel', () => {
             deliveryWindowStartTime: 1200,
         })).toThrow('Minimum dealer travel time cannot exceed maximum dealer travel time');
     });
+
+    it('uses every regional delivery candidate and admits only worst-case-feasible dealers', () => {
+        const result = new DealerTravelFeasibilityResolver(tradeCatalog(), worldMap()).resolve({
+            regionId: 'Test',
+            deliveryWindowStartTime: 1200,
+            minutesUntilDeliveryWindowStart: 10,
+            dealers: [
+                { personId: 'west', origin: { x: 0, y: 0, z: 0 } },
+                { personId: 'center', origin: { x: 100, y: 0, z: 0 } },
+            ],
+        });
+
+        expect(result).toMatchObject({
+            policy: 'worst-case-regional-delivery-location',
+            regionId: 'Test',
+            eligibleDealerIds: ['center'],
+            decisions: [
+                {
+                    dealerId: 'center',
+                    status: 'feasible',
+                    deliveryLocationCount: 2,
+                    availableTravelMinutes: 40,
+                    worstCase: { deliveryLocationId: 'east', travelMinutes: 25 },
+                },
+                {
+                    dealerId: 'west',
+                    status: 'infeasible',
+                    worstCase: { deliveryLocationId: 'east', travelMinutes: 50 },
+                    reasons: [{
+                        code: 'insufficient-travel-time',
+                        requiredTravelMinutes: 50,
+                        availableTravelMinutes: 40,
+                    }],
+                },
+            ],
+        });
+    });
+
+    it('reports unknown feasibility when caller-owned origin or timing evidence is absent', () => {
+        const resolver = new DealerTravelFeasibilityResolver(tradeCatalog(), worldMap());
+
+        expect(resolver.resolve({
+            regionId: 'Test',
+            deliveryWindowStartTime: 1200,
+            dealers: [{ personId: 'west' }],
+        }).decisions[0]).toMatchObject({
+            status: 'unknown',
+            worstCase: null,
+            reasons: [
+                { code: 'missing-dealer-origin' },
+                { code: 'missing-minutes-until-delivery-window-start' },
+            ],
+        });
+    });
+
+    it('treats the exact worst-case travel limit as feasible and one minute less as infeasible', () => {
+        const resolver = new DealerTravelFeasibilityResolver(tradeCatalog(), worldMap());
+        const facts = {
+            regionId: 'Test',
+            deliveryWindowStartTime: 1200,
+            dealers: [{ personId: 'center', origin: { x: 100, y: 0, z: 0 } }],
+        } as const;
+
+        expect(resolver.resolve({
+            ...facts,
+            minutesUntilDeliveryWindowStart: -5,
+        }).decisions[0]?.status).toBe('feasible');
+        expect(resolver.resolve({
+            ...facts,
+            minutesUntilDeliveryWindowStart: -6,
+        }).decisions[0]?.status).toBe('infeasible');
+    });
+
+    it('reports unknown feasibility when a region has no delivery candidates', () => {
+        const source = worldMap();
+        const map: WorldMap = {
+            ...source,
+            regions: [{ ...source.regions[0]!, deliveryLocations: [] }],
+        };
+
+        expect(new DealerTravelFeasibilityResolver(tradeCatalog(), map).resolve({
+            regionId: 'Test',
+            deliveryWindowStartTime: 1200,
+            minutesUntilDeliveryWindowStart: 10,
+            dealers: [{ personId: 'center', origin: { x: 100, y: 0, z: 0 } }],
+        }).decisions[0]).toMatchObject({
+            status: 'unknown',
+            worstCase: null,
+            reasons: [{ code: 'missing-delivery-locations', regionId: 'Test' }],
+        });
+    });
+
+    it('preserves HHMM wrapping for very large safe arrival delays', () => {
+        expect(estimateDealerTravel({
+            ...mechanics(),
+            dealArrivalDelay: Number.MAX_SAFE_INTEGER,
+        }, {
+            origin: { x: 0, y: 0, z: 0 },
+            destination: { x: 0, y: 0, z: 0 },
+            walkSpeed: 4,
+            deliveryWindowStartTime: 2,
+        }).targetArrivalTime).toBe(33);
+    });
 });
 
 function mechanics(): DealerMechanics {
@@ -113,5 +222,54 @@ function mechanics(): DealerMechanics {
         overflowSlotCount: 10,
         cashReminderThreshold: 500,
         relationshipChangePerDeal: 0.05,
+    };
+}
+
+function tradeCatalog(): TradeCatalog {
+    return {
+        schema: 'neonschedule1-trade-catalog-2',
+        dealerMechanics: mechanics(),
+        dealers: ['west', 'center'].map((personId) => ({
+            personId,
+            instanceKey: `${personId}:one`,
+            type: 'PlayerDealer',
+            homeName: `${personId} home`,
+            walkSpeed: 4,
+            salesCutPercentage: 0.2,
+            signingFee: 0,
+            qualityTolerance: { negative: -2, positive: 5 },
+        })),
+        suppliers: [],
+    };
+}
+
+function worldMap(): WorldMap {
+    return {
+        schema: 'neonschedule1-world-map-2',
+        mainMap: null,
+        tutorialMap: null,
+        projection: {
+            origin: { x: 0, y: 0, z: 0 },
+            edge: { x: 1, y: 0, z: 0 },
+            mapDimensions: 1,
+            conversionFactor: 1,
+        },
+        regions: [{
+            id: 'Test',
+            name: 'Test',
+            unlockedByDefault: true,
+            rankRequirement: null,
+            spriteFileId: null,
+            boundsPointA: null,
+            boundsPointB: null,
+            isClosed: false,
+            verticalSize: 0,
+            polygonPoints: [],
+            adjacentRegionIds: [],
+            deliveryLocations: [
+                { id: 'west', position: { x: 0, y: 0, z: 0 } },
+                { id: 'east', position: { x: 200, y: 0, z: 0 } },
+            ],
+        }],
     };
 }

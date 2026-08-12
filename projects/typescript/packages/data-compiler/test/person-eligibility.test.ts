@@ -203,7 +203,7 @@ function fixture(): PersonEligibilityData {
         ],
     } as WorldMap;
     const trade = {
-        schema: 'neonschedule1-trade-catalog-1',
+        schema: 'neonschedule1-trade-catalog-2',
         dealerMechanics: {
             maximumCustomers: 8,
             dealArrivalDelay: 30,
@@ -247,6 +247,7 @@ function dealer(personId: string, instanceKey: string, type: string) {
         instanceKey,
         type,
         homeName: 'Home',
+        walkSpeed: 4,
         salesCutPercentage: 0.2,
         signingFee: 100,
         qualityTolerance: { negative: 1, positive: 1 },

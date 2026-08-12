@@ -4,6 +4,7 @@ import {
     WorldMapSchema,
     isNavigationSegmentLocallyTraversable,
     type MapImage,
+    type DeliveryLocationCandidate,
     type MapService,
     type NavigationEdge,
     type NavigationGraph,
@@ -73,6 +74,7 @@ function normalizeMap(raw: JsonObject, assets: VerifiedAssets, integrity: Integr
         .map(([id, region]) => normalizeRegion(id, region, assets, integrity))
         .sort((left, right) => left.id.localeCompare(right.id));
     const regionIds = new Set(regions.keys());
+    const deliveryLocationIds = new Set<string>();
     for (const region of normalizedRegions) {
         requireReferences(region.adjacentRegionIds, regionIds, `region ${region.id}`, integrity);
         for (const adjacentId of region.adjacentRegionIds) {
@@ -81,16 +83,27 @@ function normalizeMap(raw: JsonObject, assets: VerifiedAssets, integrity: Integr
                 integrity.addError(`Region adjacency ${region.id} -> ${adjacentId} is not reciprocal`);
             }
         }
+        for (const location of region.deliveryLocations) {
+            if (deliveryLocationIds.has(location.id)) {
+                integrity.addError(`Duplicate delivery location ${JSON.stringify(location.id)}`);
+            }
+            deliveryLocationIds.add(location.id);
+        }
     }
     integrity.check(
         'map contains regions',
         normalizedRegions.length > 0,
         'The exported map contains no regions'
     );
+    integrity.check(
+        'map contains delivery locations',
+        deliveryLocationIds.size > 0,
+        'The exported map contains no regional delivery locations'
+    );
 
     const members = asObject(raw.positionUtilityMembers, 'report.discovery.map.positionUtilityMembers');
     const map: WorldMap = {
-        schema: 'neonschedule1-world-map-1',
+        schema: 'neonschedule1-world-map-2',
         mainMap: normalizeMapImage(raw.mainMapSprite, 'report.discovery.map.mainMapSprite', assets, integrity),
         tutorialMap: normalizeMapImage(
             raw.tutorialMapSprite,
@@ -163,7 +176,27 @@ function normalizeRegion(
             vector3(point, `${path}.polygonPoints[${index}]`)
         ),
         adjacentRegionIds: [...new Set(stringArrayField(raw, 'adjacentRegionIds', path))].sort(),
+        deliveryLocations: normalizeDeliveryLocations(raw, path, integrity),
     };
+}
+
+function normalizeDeliveryLocations(
+    raw: JsonObject,
+    regionPath: string,
+    integrity: Integrity
+): DeliveryLocationCandidate[] {
+    const locations = indexUnique(
+        objectArray(raw.deliveryLocations, `${regionPath}.deliveryLocations`),
+        'id',
+        `${regionPath}.deliveryLocations`,
+        integrity
+    );
+    return [...locations.entries()]
+        .map(([id, location]) => ({
+            id,
+            position: vector3(location.position, `${regionPath}.deliveryLocations[${JSON.stringify(id)}].position`),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function normalizeLocations(

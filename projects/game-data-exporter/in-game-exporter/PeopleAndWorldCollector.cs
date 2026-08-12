@@ -309,6 +309,9 @@ internal static partial class GameDataCollector
                 var dealer = npc.GetComponent<Il2CppScheduleOne.Economy.Dealer>();
                 if (dealer?.DealerData is not null)
                 {
+                    var movement = npc.Movement
+                        ?? throw new InvalidOperationException(
+                            $"Dealer {npc.ID} has no NPC movement component.");
                     result.Dealers.Add(new DealerSnapshot
                     {
                         PersonId = npc.ID,
@@ -319,6 +322,7 @@ internal static partial class GameDataCollector
                         HomeName = dealer.DealerData.HomeName ?? string.Empty,
                         SalesCutPercentage = dealer.DealerData.SalesCutPercentage,
                         SigningFee = dealer.DealerData.SigningFee,
+                        WalkSpeed = movement.WalkSpeed,
                         NegativeQualityTolerance =
                             Il2CppScheduleOne.Economy.Dealer.NegativeQualityTolerance,
                         PositiveQualityTolerance =

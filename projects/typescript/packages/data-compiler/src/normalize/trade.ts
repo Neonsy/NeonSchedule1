@@ -75,7 +75,7 @@ export function normalizeTrade(
         )
         .sort((left, right) => left.personId.localeCompare(right.personId));
     return TradeCatalogSchema.assert({
-        schema: 'neonschedule1-trade-catalog-1',
+        schema: 'neonschedule1-trade-catalog-2',
         dealerMechanics: normalizeDealerMechanics(report.world.dealerMechanics, integrity),
         dealers,
         suppliers,
@@ -131,12 +131,14 @@ function normalizeDealer(
 
     const salesCutPercentage = numberField(raw, 'salesCutPercentage', path);
     const signingFee = numberField(raw, 'signingFee', path);
+    const walkSpeed = numberField(raw, 'walkSpeed', path);
     const negativeTolerance = numberField(raw, 'negativeQualityTolerance', path);
     const positiveTolerance = numberField(raw, 'positiveQualityTolerance', path);
     if (salesCutPercentage < 0 || salesCutPercentage > 1) {
         integrity.addError(`${path}.salesCutPercentage must be between 0 and 1`);
     }
     requireNonNegative(signingFee, `${path}.signingFee`, integrity);
+    if (walkSpeed <= 0) integrity.addError(`${path}.walkSpeed must be positive`);
     if (!Number.isInteger(negativeTolerance) || negativeTolerance > 0) {
         integrity.addError(`${path}.negativeQualityTolerance must be a non-positive integer`);
     }
@@ -148,6 +150,7 @@ function normalizeDealer(
         instanceKey,
         type: stringField(raw, 'dealerType', path),
         homeName: stringField(raw, 'homeName', path),
+        walkSpeed,
         salesCutPercentage,
         signingFee,
         qualityTolerance: { negative: negativeTolerance, positive: positiveTolerance },

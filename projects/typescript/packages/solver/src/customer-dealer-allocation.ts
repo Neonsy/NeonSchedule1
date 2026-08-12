@@ -3,6 +3,7 @@ import {
     TradeCatalogSchema,
     logicalDealerProfiles,
     type CustomerRecommendation,
+    type DealerTravelFeasibility,
     type DealerAssignmentDealerState,
     type DealerCustomerAllocationResult,
     type LogicalDealerProfile,
@@ -26,6 +27,7 @@ export interface CustomerDealerRecommendationSet {
     readonly customerId: string;
     readonly recommendations: readonly CustomerRecommendation[];
     readonly eligibleDealerIds?: readonly string[];
+    readonly travelFeasibility?: DealerTravelFeasibility;
 }
 
 export interface CustomerDealerAllocationInput {
@@ -188,15 +190,19 @@ function indexRecommendations(
     availableDealerIds: ReadonlySet<string>
 ): IndexedRecommendation[] {
     const customerIds = new Set<string>();
-    return sets.flatMap(({ customerId, recommendations, eligibleDealerIds }) => {
+    return sets.flatMap(({ customerId, recommendations, eligibleDealerIds, travelFeasibility }) => {
         requireId(customerId, 'Customer');
         if (customerIds.has(customerId)) {
             throw new Error(`Duplicate customer recommendation set ${JSON.stringify(customerId)}`);
         }
         customerIds.add(customerId);
-        const eligible = eligibleDealerIds === undefined
+        const configuredEligible = eligibleDealerIds === undefined
             ? undefined
             : uniqueIds(eligibleDealerIds, 'eligible dealer');
+        const travelEligible = travelFeasibility === undefined
+            ? undefined
+            : travelEligibleDealerIds(travelFeasibility, availableDealerIds);
+        const eligible = intersectEligibility(configuredEligible, travelEligible);
         for (const dealerId of eligible ?? []) {
             if (!availableDealerIds.has(dealerId)) {
                 throw new Error(`Unknown eligible dealer ${JSON.stringify(dealerId)}`);
@@ -217,6 +223,50 @@ function indexRecommendations(
             ...(eligible === undefined ? {} : { eligibleDealerIds: eligible }),
         }));
     });
+}
+
+function travelEligibleDealerIds(
+    feasibility: DealerTravelFeasibility,
+    availableDealerIds: ReadonlySet<string>
+): readonly string[] {
+    if (feasibility.policy !== 'worst-case-regional-delivery-location') {
+        throw new Error('Unsupported dealer travel feasibility policy');
+    }
+    requireId(feasibility.regionId, 'Dealer travel region');
+    const decisions = new Map<string, DealerTravelFeasibility['decisions'][number]>();
+    for (const decision of feasibility.decisions) {
+        requireId(decision.dealerId, 'Dealer travel decision');
+        if (!availableDealerIds.has(decision.dealerId)) {
+            throw new Error(`Unknown dealer travel decision ${JSON.stringify(decision.dealerId)}`);
+        }
+        if (decisions.has(decision.dealerId)) {
+            throw new Error(`Duplicate dealer travel decision ${JSON.stringify(decision.dealerId)}`);
+        }
+        if (!['feasible', 'infeasible', 'unknown'].includes(decision.status)) {
+            throw new Error(`Invalid dealer travel status for ${JSON.stringify(decision.dealerId)}`);
+        }
+        decisions.set(decision.dealerId, decision);
+    }
+    const eligible = uniqueIds(feasibility.eligibleDealerIds, 'travel-eligible dealer');
+    const resolvedEligible = [...decisions.values()]
+        .filter(({ status }) => status === 'feasible')
+        .map(({ dealerId }) => dealerId)
+        .sort();
+    if (eligible.length !== resolvedEligible.length ||
+        eligible.some((dealerId, index) => dealerId !== resolvedEligible[index])) {
+        throw new Error('Travel-eligible dealers do not match feasible travel decisions');
+    }
+    return eligible;
+}
+
+function intersectEligibility(
+    configured: readonly string[] | undefined,
+    travel: readonly string[] | undefined
+): readonly string[] | undefined {
+    if (configured === undefined) return travel;
+    if (travel === undefined) return configured;
+    const travelIds = new Set(travel);
+    return configured.filter((dealerId) => travelIds.has(dealerId));
 }
 
 function uniqueIds(ids: readonly string[], label: string): string[] {

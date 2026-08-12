@@ -192,6 +192,7 @@ function collapseDealer(personId: string, instances: readonly DealerProfile[]): 
     const first = instances[0]!;
     requireId(first.type, `Dealer ${JSON.stringify(personId)} type`);
     requireId(first.homeName, `Dealer ${JSON.stringify(personId)} home`);
+    requirePositiveFinite(first.walkSpeed, `Dealer ${JSON.stringify(personId)} walk speed`);
     requirePercentage(first.salesCutPercentage, `Dealer ${JSON.stringify(personId)} sales cut`);
     requireNonNegativeFinite(first.signingFee, `Dealer ${JSON.stringify(personId)} signing fee`);
     if (!Number.isFinite(first.qualityTolerance.negative) ||
@@ -210,6 +211,7 @@ function collapseDealer(personId: string, instances: readonly DealerProfile[]): 
         instanceKeys: instances.map(({ instanceKey }) => instanceKey).sort(),
         type: first.type,
         homeName: first.homeName,
+        walkSpeed: first.walkSpeed,
         salesCutPercentage: first.salesCutPercentage,
         signingFee: first.signingFee,
         qualityTolerance: { ...first.qualityTolerance },
@@ -230,6 +232,7 @@ function advanceSubset(selected: boolean[]): boolean {
 function sameCommercialProfile(left: DealerProfile, right: DealerProfile): boolean {
     return left.type === right.type &&
         left.homeName === right.homeName &&
+        left.walkSpeed === right.walkSpeed &&
         left.salesCutPercentage === right.salesCutPercentage &&
         left.signingFee === right.signingFee &&
         left.qualityTolerance.negative === right.qualityTolerance.negative &&
@@ -485,6 +488,10 @@ function requireId(value: string, label: string): void {
 
 function requireNonNegativeFinite(value: number, label: string): void {
     if (!Number.isFinite(value) || value < 0) throw new Error(`${label} must be non-negative`);
+}
+
+function requirePositiveFinite(value: number, label: string): void {
+    if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be positive`);
 }
 
 function requirePercentage(value: number, label: string): void {

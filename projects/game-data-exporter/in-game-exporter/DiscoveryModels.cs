@@ -255,6 +255,13 @@ internal sealed class DiscoveryMapRegionSnapshot
     public float VerticalSize { get; set; }
     public List<VectorSnapshot3> PolygonPoints { get; set; } = new();
     public List<string> AdjacentRegionIds { get; set; } = new();
+    public List<DiscoveryDeliveryLocationSnapshot> DeliveryLocations { get; set; } = new();
+}
+
+internal sealed class DiscoveryDeliveryLocationSnapshot
+{
+    public string Id { get; init; } = string.Empty;
+    public VectorSnapshot3 Position { get; init; } = new();
 }
 
 internal sealed class DiscoveryLocationSnapshot

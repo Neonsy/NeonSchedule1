@@ -937,7 +937,7 @@ function solverDataset(): SolverDataset {
         customers: [customer],
         customerCatalog: customerCatalog(),
         tradeCatalog: {
-            schema: 'neonschedule1-trade-catalog-1',
+            schema: 'neonschedule1-trade-catalog-2',
             dealerMechanics: {
                 maximumCustomers: 10,
                 dealArrivalDelay: 30,

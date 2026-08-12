@@ -611,6 +611,31 @@ internal static partial class DiscoveryCollector
                     }
                 }
 
+                if (region.RegionDeliveryLocations is not null)
+                {
+                    for (var locationIndex = 0;
+                         locationIndex < region.RegionDeliveryLocations.Length;
+                         locationIndex++)
+                    {
+                        var location = region.RegionDeliveryLocations[locationIndex];
+                        if (location?.CustomerStandPoint is null)
+                        {
+                            continue;
+                        }
+
+                        regionSnapshot.DeliveryLocations.Add(
+                            new DiscoveryDeliveryLocationSnapshot
+                            {
+                                Id = location.GUID.ToString(),
+                                Position = VectorSnapshot3.FromVector(
+                                    location.CustomerStandPoint.position),
+                            });
+                    }
+                    regionSnapshot.DeliveryLocations = regionSnapshot.DeliveryLocations
+                        .OrderBy(location => location.Id, StringComparer.Ordinal)
+                        .ToList();
+                }
+
                 if (region.RegionBounds is not null)
                 {
                     regionSnapshot.BoundsPointA = VectorSnapshot3.FromVector(

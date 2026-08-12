@@ -192,6 +192,7 @@ function dealer(
         instanceKey,
         type: 'PlayerDealer',
         homeName: `${personId} home`,
+        walkSpeed: 4,
         salesCutPercentage,
         signingFee,
         qualityTolerance: { negative: -2, positive: 5 },
@@ -203,7 +204,7 @@ function tradeCatalog(
     dealers: TradeCatalog['dealers']
 ): TradeCatalog {
     return {
-        schema: 'neonschedule1-trade-catalog-1',
+        schema: 'neonschedule1-trade-catalog-2',
         dealerMechanics: {
             maximumCustomers,
             dealArrivalDelay: 30,

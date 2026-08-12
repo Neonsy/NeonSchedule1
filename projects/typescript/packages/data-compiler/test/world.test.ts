@@ -45,6 +45,10 @@ describe('world normalization', () => {
             },
             regions: [{ id: 'Downtown', spriteFileId: regionFileId }],
         });
+        expect(world.map.regions[0]?.deliveryLocations).toEqual([{
+            id: 'delivery-1',
+            position: { x: 8, y: 0, z: 9 },
+        }]);
         expect(world.locations.locations).toHaveLength(2);
         expect(world.locations.locations.map((location) => location.sourceId)).toEqual(['shared', 'shared']);
         expect(world.locations.locations[0]?.iconFileIds).toEqual([iconFileId]);
@@ -148,6 +152,10 @@ function report(): RawReport {
                         { x: 10, y: 0, z: 10 },
                     ],
                     adjacentRegionIds: [],
+                    deliveryLocations: [{
+                        id: 'delivery-1',
+                        position: { x: 8, y: 0, z: 9 },
+                    }],
                 }],
             },
             locations: [
