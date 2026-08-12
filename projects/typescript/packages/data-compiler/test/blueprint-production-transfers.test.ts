@@ -303,6 +303,57 @@ describe('blueprint production logistics', () => {
             productionRequirementScope: 'internally-produced-plan-dependencies',
             purchasedInputSupplyScope: 'first-production-consumers',
             routeQuantityAllocation: 'not-evaluated',
+            employeeExecution: {
+                timingScope: 'assigned-production-placement-native-service',
+                workSpeedBasis: 'normalized-employee-role-base-work-speed',
+                travelTiming: 'not-evaluated',
+                taskReadinessTiming: 'not-evaluated',
+                runtimeWorkSpeed: 'not-evaluated',
+                elapsedScheduleComposition: 'not-applied',
+                assignments: [
+                    {
+                        stepIndex: 0,
+                        placementId: 'source-a',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'unassigned',
+                    },
+                    {
+                        stepIndex: 0,
+                        placementId: 'source-b',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'incompatible-employee',
+                        employeeId: 'botanist-1',
+                        employeeType: 'Botanist',
+                    },
+                    {
+                        stepIndex: 1,
+                        placementId: 'destination-a',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'unassigned',
+                    },
+                    {
+                        stepIndex: 1,
+                        placementId: 'destination-b',
+                        requiredEmployeeType: 'Chemist',
+                        kind: 'exact',
+                        employeeId: 'chemist-1',
+                        baseWorkSpeed: 1,
+                        taskDurations: [
+                            { task: 'chemistry-place-ingredients', secondsPerBatch: 8 },
+                            { task: 'chemistry-stir', secondsPerBatch: 6 },
+                            { task: 'chemistry-burner', secondsPerBatch: 6 },
+                        ],
+                        serviceSecondsPerBatch: 20,
+                        totalServiceSeconds: 20,
+                    },
+                ],
+                employeeTotals: [{
+                    employeeId: 'chemist-1',
+                    employeeType: 'Chemist',
+                    kind: 'exact',
+                    totalServiceSeconds: 20,
+                }],
+            },
         });
         const configured = result.requirements[0]?.assignmentPairs.find((pair) =>
             pair.sourcePlacementId === 'source-a' && pair.destinationPlacementId === 'destination-a'
@@ -480,6 +531,93 @@ describe('blueprint production logistics', () => {
         }]);
     });
 
+    it('scales exact service by normalized base speed and totals assigned work', () => {
+        const input = logisticsBlueprint();
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        const chemist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Chemist'
+        )!;
+        botanist.assignedPotPlacementIds = [];
+        chemist.assignedStationPlacementIds = [
+            'source-a',
+            'source-b',
+            'destination-a',
+            'destination-b',
+        ];
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const catalog = {
+            ...inputDataset.productionLogistics,
+            employeeRoles: inputDataset.productionLogistics.employeeRoles.map((role) =>
+                role.employeeType === 'Chemist' ? { ...role, baseWorkSpeed: 2 } : role
+            ),
+        };
+
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            productionLogistics: catalog,
+        }).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution.assignments).toHaveLength(4);
+        expect(result.employeeExecution.assignments).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    kind: 'exact',
+                    baseWorkSpeed: 2,
+                    serviceSecondsPerBatch: 10,
+                    totalServiceSeconds: 10,
+                }),
+            ])
+        );
+        expect(result.employeeExecution.employeeTotals).toEqual([{
+            employeeId: 'chemist-1',
+            employeeType: 'Chemist',
+            kind: 'exact',
+            totalServiceSeconds: 40,
+        }]);
+    });
+
+    it('reports grow-container service as a lower bound when moisture actions are unknown', () => {
+        const inputDataset = seedDataset();
+        const input = blueprint([placement('pot-1', 'pot', 0)]);
+        input.productionLogistics.employees = [{
+            id: 'botanist-1',
+            employeeType: 'Botanist',
+            assignedPotPlacementIds: ['pot-1'],
+            supplyPlacementId: null,
+        }];
+
+        const result = new BlueprintProductionLogisticsAnalyzer(inputDataset)
+            .analyze(input, seedPlan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution).toMatchObject({
+            assignments: [{
+                kind: 'lower-bound',
+                employeeId: 'botanist-1',
+                requiredEmployeeType: 'Botanist',
+                baseWorkSpeed: 2,
+                taskDurations: [
+                    { task: 'grow-container-soil', secondsPerBatch: 5 },
+                    { task: 'sow-seed', secondsPerBatch: 7.5 },
+                    { task: 'harvest-output-unit', secondsPerBatch: 2 },
+                ],
+                omittedTaskKinds: ['moisture-action-count'],
+                serviceSecondsPerBatch: 14.5,
+                totalServiceSeconds: 14.5,
+            }],
+            employeeTotals: [{
+                employeeId: 'botanist-1',
+                kind: 'lower-bound',
+                totalServiceSeconds: 14.5,
+            }],
+        });
+    });
+
     it('does not invent destination capacity when a native slot filter is unsupported', () => {
         const inputDataset = dataset({ employeeCapacity: 3 });
         const destination = inputDataset.productionLogistics.stations.find(
@@ -590,6 +728,39 @@ function plan(): ProductionBatchPlan {
     };
 }
 
+function seedPlan(): ProductionBatchPlan {
+    return {
+        dataset: { gameVersion, datasetSha256 },
+        targetItemId: 'leaf',
+        targetQuantity: 4,
+        totalProcessMinutes: 60,
+        requiredMaterialCost: 0,
+        purchaseCost: 0,
+        purchases: [],
+        productionSteps: [{
+            itemId: 'leaf',
+            routeId: 'seed:seed:leaf:soil',
+            method: 'seed-harvest',
+            requiredQuantity: 4,
+            batchCount: 1,
+            outputQuantityPerBatch: 4,
+            durationMinutesPerBatch: 60,
+            acceptedEquipmentItemIds: ['pot'],
+            equipmentItemId: 'pot',
+            growLightItemId: null,
+            additiveItemIds: [],
+            quality: { level: 0.5, tier: 'Standard', customerScalar: 0.5 },
+            totalProcessMinutes: 60,
+            producedQuantity: 4,
+            leftoverQuantity: 0,
+            inputs: [
+                { itemId: 'seed', quantityPerBatch: 1, totalQuantity: 1 },
+                { itemId: 'soil', quantityPerBatch: 1, totalQuantity: 1 },
+            ],
+        }],
+    };
+}
+
 function layoutBlueprint(): BlueprintDocument {
     return blueprint([
         placement('source-b', 'source-station', 1),
@@ -696,6 +867,49 @@ function dataset(options: DatasetOptions): BlueprintProductionLogisticsDataset {
             item('final', 5),
         ],
         navigation: navigation(),
+    };
+}
+
+function seedDataset(): BlueprintProductionLogisticsDataset {
+    const base = dataset({ employeeCapacity: 1 });
+    return {
+        ...base,
+        buildables: [buildable('pot', [transform('TransitAccess', 1)])],
+        items: [item('leaf', 20)],
+        production: {
+            ...production(),
+            seeds: [{
+                schema: 'neonschedule1-seed-production-3',
+                seedItemId: 'seed',
+                soilItemIds: ['soil'],
+                plantRuntimeType: 'Game.Plant',
+                growthTimeMinutes: 60,
+                baseYieldQuantity: 4,
+                harvestTarget: 'leaf',
+                harvestProducts: [{ itemId: 'leaf', quantity: 1 }],
+            }],
+            stationRecipes: [],
+            stations: [{
+                schema: 'neonschedule1-production-station-3',
+                itemId: 'pot',
+                kind: 'grow-container',
+                yieldMultiplier: 1,
+                growSpeedMultiplier: 1,
+                requiresExternalGrowLight: false,
+                maxTemperatureGrowthMultiplier: 1.5,
+                minimumTemperatureThreshold: 20,
+                maximumTemperatureThreshold: 40,
+                allowedSoilIds: ['soil'],
+                allowedAdditiveIds: [],
+            }],
+        },
+        productionLogistics: {
+            ...base.productionLogistics,
+            employeeRoles: base.productionLogistics.employeeRoles.map((role) =>
+                role.employeeType === 'Botanist' ? { ...role, baseWorkSpeed: 2 } : role
+            ),
+            stations: [station('pot', 1, [])],
+        },
     };
 }
 

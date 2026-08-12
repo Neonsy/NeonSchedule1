@@ -1,0 +1,255 @@
+import type {
+    BlueprintDocument,
+    BlueprintEmployeeAssignment,
+} from '#core/data/blueprint';
+import type { ProductionLogisticsCatalog } from '#core/data/production-logistics';
+import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
+import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
+import type {
+    BlueprintProductionEmployeeExecution,
+    BlueprintProductionEmployeeServiceAssignment,
+    BlueprintProductionEmployeeServiceTaskDuration,
+    BlueprintProductionEmployeeServiceTotal,
+} from '#core/blueprint/production-logistics-types';
+
+interface EmployeeOwner {
+    readonly employee: BlueprintEmployeeAssignment;
+    readonly baseWorkSpeed: number | null;
+}
+
+interface ServiceRule {
+    readonly kind: 'exact' | 'lower-bound';
+    readonly requiredEmployeeType: BlueprintEmployeeAssignment['employeeType'];
+    readonly tasks: readonly BlueprintProductionEmployeeServiceTaskDuration[];
+    readonly omittedTaskKinds: readonly (
+        'moisture-action-count' | 'lab-oven-fixed-animation-overhead'
+    )[];
+}
+
+export function analyzeProductionEmployeeExecution(
+    blueprint: BlueprintDocument,
+    plan: ProductionBatchPlan,
+    schedule: readonly BlueprintProductionScheduledStep[],
+    catalog: ProductionLogisticsCatalog
+): BlueprintProductionEmployeeExecution {
+    const ownerByPlacementId = employeeOwners(blueprint, catalog);
+    const stepByIndex = new Map(plan.productionSteps.map((step, stepIndex) => [stepIndex, step]));
+    const assignments = schedule.flatMap((scheduledStep) => {
+        const step = stepByIndex.get(scheduledStep.stepIndex);
+        if (step === undefined) {
+            throw new Error(`Production schedule references unavailable step ${scheduledStep.stepIndex}`);
+        }
+        return scheduledStep.assignments.map((assignment) => serviceAssignment(
+            scheduledStep,
+            step,
+            assignment.placementId,
+            assignment.batchCount,
+            ownerByPlacementId.get(assignment.placementId)
+        ));
+    });
+    return {
+        timingScope: 'assigned-production-placement-native-service',
+        workSpeedBasis: 'normalized-employee-role-base-work-speed',
+        travelTiming: 'not-evaluated',
+        taskReadinessTiming: 'not-evaluated',
+        runtimeWorkSpeed: 'not-evaluated',
+        elapsedScheduleComposition: 'not-applied',
+        assignments,
+        employeeTotals: employeeTotals(assignments),
+    };
+}
+
+function employeeOwners(
+    blueprint: BlueprintDocument,
+    catalog: ProductionLogisticsCatalog
+): ReadonlyMap<string, EmployeeOwner> {
+    const speedByType = new Map(
+        catalog.employeeRoles.map((role) => [role.employeeType, role.baseWorkSpeed])
+    );
+    const owners = new Map<string, EmployeeOwner>();
+    for (const employee of blueprint.productionLogistics.employees) {
+        const placementIds = employee.employeeType === 'Botanist'
+            ? employee.assignedPotPlacementIds
+            : employee.assignedStationPlacementIds;
+        for (const placementId of placementIds) {
+            owners.set(placementId, {
+                employee,
+                baseWorkSpeed: speedByType.get(employee.employeeType) ?? null,
+            });
+        }
+    }
+    return owners;
+}
+
+function serviceAssignment(
+    scheduledStep: BlueprintProductionScheduledStep,
+    step: ProductionBatchStep,
+    placementId: string,
+    batchCount: number,
+    owner: EmployeeOwner | undefined
+): BlueprintProductionEmployeeServiceAssignment {
+    const rule = serviceRule(step);
+    const base = {
+        stepIndex: scheduledStep.stepIndex,
+        itemId: step.itemId,
+        routeId: step.routeId,
+        placementId,
+        batchCount,
+        requiredEmployeeType: rule.requiredEmployeeType,
+    };
+    if (owner === undefined) {
+        return { ...base, kind: 'unassigned', employeeId: null, employeeType: null };
+    }
+    if (owner.employee.employeeType !== rule.requiredEmployeeType) {
+        return {
+            ...base,
+            kind: 'incompatible-employee',
+            employeeId: owner.employee.id,
+            employeeType: owner.employee.employeeType,
+        };
+    }
+    if (
+        owner.baseWorkSpeed === null ||
+        !Number.isFinite(owner.baseWorkSpeed) ||
+        owner.baseWorkSpeed <= 0
+    ) {
+        return {
+            ...base,
+            kind: 'work-speed-unavailable',
+            employeeId: owner.employee.id,
+            employeeType: owner.employee.employeeType,
+        };
+    }
+    const baseWorkSpeed = owner.baseWorkSpeed;
+    const taskDurations = rule.tasks.map((task) => ({
+        ...task,
+        secondsPerBatch: divideFinite(
+            task.secondsPerBatch,
+            baseWorkSpeed,
+            `${step.routeId} ${task.task} service time`
+        ),
+    }));
+    const serviceSecondsPerBatch = taskDurations.reduce(
+        (total, task) => addFinite(total, task.secondsPerBatch, `${step.routeId} service time`),
+        0
+    );
+    return {
+        ...base,
+        kind: rule.kind,
+        employeeId: owner.employee.id,
+        employeeType: owner.employee.employeeType,
+        baseWorkSpeed,
+        taskDurations,
+        omittedTaskKinds: rule.omittedTaskKinds,
+        serviceSecondsPerBatch,
+        totalServiceSeconds: multiplyFinite(
+            serviceSecondsPerBatch,
+            batchCount,
+            `${step.routeId} assigned service time`
+        ),
+    };
+}
+
+function serviceRule(step: ProductionBatchStep): ServiceRule {
+    switch (step.method) {
+        case 'seed-harvest':
+            return {
+                kind: 'lower-bound',
+                requiredEmployeeType: 'Botanist',
+                tasks: [
+                    { task: 'grow-container-soil', secondsPerBatch: 10 },
+                    { task: 'sow-seed', secondsPerBatch: 15 },
+                    ...step.additiveItemIds.map(() => ({
+                        task: 'apply-grow-additive' as const,
+                        secondsPerBatch: 10,
+                    })),
+                    { task: 'harvest-output-unit', secondsPerBatch: step.outputQuantityPerBatch },
+                ],
+                omittedTaskKinds: ['moisture-action-count'],
+            };
+        case 'shroom-harvest':
+            return {
+                kind: 'lower-bound',
+                requiredEmployeeType: 'Botanist',
+                tasks: [
+                    { task: 'grow-container-soil', secondsPerBatch: 10 },
+                    { task: 'apply-mushroom-spawn', secondsPerBatch: 15 },
+                    { task: 'harvest-output-unit', secondsPerBatch: step.outputQuantityPerBatch },
+                ],
+                omittedTaskKinds: ['moisture-action-count'],
+            };
+        case 'station-recipe':
+            return {
+                kind: 'exact',
+                requiredEmployeeType: 'Chemist',
+                tasks: [
+                    { task: 'chemistry-place-ingredients', secondsPerBatch: 8 },
+                    { task: 'chemistry-stir', secondsPerBatch: 6 },
+                    { task: 'chemistry-burner', secondsPerBatch: 6 },
+                ],
+                omittedTaskKinds: [],
+            };
+        case 'oven':
+            return {
+                kind: 'lower-bound',
+                requiredEmployeeType: 'Chemist',
+                tasks: [{ task: 'lab-oven-speed-scaled-operation', secondsPerBatch: 15 }],
+                omittedTaskKinds: ['lab-oven-fixed-animation-overhead'],
+            };
+        case 'cauldron':
+            return {
+                kind: 'exact',
+                requiredEmployeeType: 'Chemist',
+                tasks: [{ task: 'cauldron-operation', secondsPerBatch: 15 }],
+                omittedTaskKinds: [],
+            };
+        case 'mushroom-spawn':
+            return {
+                kind: 'exact',
+                requiredEmployeeType: 'Botanist',
+                tasks: [{ task: 'mushroom-spawn-station-operation', secondsPerBatch: 6 }],
+                omittedTaskKinds: [],
+            };
+    }
+}
+
+function employeeTotals(
+    assignments: readonly BlueprintProductionEmployeeServiceAssignment[]
+): BlueprintProductionEmployeeServiceTotal[] {
+    const totals = new Map<string, BlueprintProductionEmployeeServiceTotal>();
+    for (const assignment of assignments) {
+        if (assignment.kind !== 'exact' && assignment.kind !== 'lower-bound') continue;
+        const current = totals.get(assignment.employeeId);
+        totals.set(assignment.employeeId, {
+            employeeId: assignment.employeeId,
+            employeeType: assignment.employeeType,
+            kind: current?.kind === 'lower-bound' || assignment.kind === 'lower-bound'
+                ? 'lower-bound'
+                : 'exact',
+            totalServiceSeconds: addFinite(
+                current?.totalServiceSeconds ?? 0,
+                assignment.totalServiceSeconds,
+                `${assignment.employeeId} total service time`
+            ),
+        });
+    }
+    return [...totals.values()].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+}
+
+function divideFinite(value: number, divisor: number, label: string): number {
+    const result = value / divisor;
+    if (!Number.isFinite(result) || result < 0) throw new RangeError(`${label} must be non-negative`);
+    return result;
+}
+
+function multiplyFinite(left: number, right: number, label: string): number {
+    const result = left * right;
+    if (!Number.isFinite(result) || result < 0) throw new RangeError(`${label} must be non-negative`);
+    return result;
+}
+
+function addFinite(left: number, right: number, label: string): number {
+    const result = left + right;
+    if (!Number.isFinite(result) || result < 0) throw new RangeError(`${label} must be non-negative`);
+    return result;
+}

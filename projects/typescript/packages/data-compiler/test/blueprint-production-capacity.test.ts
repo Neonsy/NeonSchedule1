@@ -356,7 +356,7 @@ describe('blueprint production capacity', () => {
             crossStepConcurrency: 'production-dependency-and-equipment-constrained',
             batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
-            employeeScheduling: 'not-evaluated-no-task-duration-contract',
+            employeeScheduling: 'not-applied-reported-by-production-logistics',
             lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',

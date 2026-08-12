@@ -15,6 +15,7 @@ import {
 import type { ProductionBatchPlan } from '#core/production/plan';
 import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
 import { BlueprintProductionLogisticsConfigurationAnalyzer } from '#core/blueprint/production-logistics-configuration';
+import { analyzeProductionEmployeeExecution } from '#core/blueprint/production-employee-execution';
 import {
     BlueprintProductionTransferAnalyzer,
     type BlueprintProductionTransferAssignmentPair,
@@ -115,6 +116,12 @@ export class BlueprintProductionLogisticsAnalyzer {
             routes,
             placementById
         );
+        const employeeExecution = analyzeProductionEmployeeExecution(
+            blueprint,
+            plan,
+            transfers.schedule.schedule,
+            this.#catalog
+        );
         return {
             kind: 'analyzed',
             transfers,
@@ -123,6 +130,7 @@ export class BlueprintProductionLogisticsAnalyzer {
             purchasedInputSupplyScope: 'first-production-consumers',
             routeQuantityAllocation: 'not-evaluated',
             transferTiming: 'not-evaluated',
+            employeeExecution,
             requirements,
             purchasedInputRequirements,
         };

@@ -176,7 +176,7 @@ export type BlueprintProductionScheduleResult =
         readonly crossStepConcurrency: 'production-dependency-and-equipment-constrained';
         readonly batchPipelining: 'cumulative-plan-order-produced-quantity';
         readonly routing: 'not-evaluated';
-        readonly employeeScheduling: 'not-evaluated-no-task-duration-contract';
+        readonly employeeScheduling: 'not-applied-reported-by-production-logistics';
         readonly lightingCoverage: 'native-matched-standard-tile-exposure-and-duration';
         readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly temperatureDuration: 'native-capped-linear-process-rate';

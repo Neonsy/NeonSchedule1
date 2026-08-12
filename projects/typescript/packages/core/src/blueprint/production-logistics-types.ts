@@ -198,6 +198,80 @@ export interface BlueprintProductionPurchasedInputRequirement {
     readonly supplyPairs: readonly BlueprintProductionInputSupplyPair[];
 }
 
+export type BlueprintProductionEmployeeServiceTask =
+    | 'grow-container-soil'
+    | 'sow-seed'
+    | 'apply-grow-additive'
+    | 'harvest-output-unit'
+    | 'apply-mushroom-spawn'
+    | 'chemistry-place-ingredients'
+    | 'chemistry-stir'
+    | 'chemistry-burner'
+    | 'cauldron-operation'
+    | 'mushroom-spawn-station-operation'
+    | 'lab-oven-speed-scaled-operation';
+
+export interface BlueprintProductionEmployeeServiceTaskDuration {
+    readonly task: BlueprintProductionEmployeeServiceTask;
+    readonly secondsPerBatch: number;
+}
+
+interface BlueprintProductionEmployeeServiceAssignmentBase {
+    readonly stepIndex: number;
+    readonly itemId: string;
+    readonly routeId: string;
+    readonly placementId: string;
+    readonly batchCount: number;
+    readonly requiredEmployeeType: BlueprintEmployeeAssignment['employeeType'];
+}
+
+export type BlueprintProductionEmployeeServiceAssignment =
+    | BlueprintProductionEmployeeServiceAssignmentBase & {
+        readonly kind: 'unassigned';
+        readonly employeeId: null;
+        readonly employeeType: null;
+    }
+    | BlueprintProductionEmployeeServiceAssignmentBase & {
+        readonly kind: 'incompatible-employee';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeServiceAssignmentBase & {
+        readonly kind: 'work-speed-unavailable';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeServiceAssignmentBase & {
+        readonly kind: 'exact' | 'lower-bound';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+        readonly baseWorkSpeed: number;
+        readonly taskDurations: readonly BlueprintProductionEmployeeServiceTaskDuration[];
+        readonly omittedTaskKinds: readonly (
+            'moisture-action-count' | 'lab-oven-fixed-animation-overhead'
+        )[];
+        readonly serviceSecondsPerBatch: number;
+        readonly totalServiceSeconds: number;
+    };
+
+export interface BlueprintProductionEmployeeServiceTotal {
+    readonly employeeId: string;
+    readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    readonly kind: 'exact' | 'lower-bound';
+    readonly totalServiceSeconds: number;
+}
+
+export interface BlueprintProductionEmployeeExecution {
+    readonly timingScope: 'assigned-production-placement-native-service';
+    readonly workSpeedBasis: 'normalized-employee-role-base-work-speed';
+    readonly travelTiming: 'not-evaluated';
+    readonly taskReadinessTiming: 'not-evaluated';
+    readonly runtimeWorkSpeed: 'not-evaluated';
+    readonly elapsedScheduleComposition: 'not-applied';
+    readonly assignments: readonly BlueprintProductionEmployeeServiceAssignment[];
+    readonly employeeTotals: readonly BlueprintProductionEmployeeServiceTotal[];
+}
+
 export type BlueprintProductionLogisticsResult =
     | {
         readonly kind: 'rejected';
@@ -225,6 +299,7 @@ export type BlueprintProductionLogisticsResult =
         readonly purchasedInputSupplyScope: 'first-production-consumers';
         readonly routeQuantityAllocation: 'not-evaluated';
         readonly transferTiming: 'not-evaluated';
+        readonly employeeExecution: BlueprintProductionEmployeeExecution;
         readonly requirements: readonly BlueprintProductionLogisticsRequirement[];
         readonly purchasedInputRequirements: readonly BlueprintProductionPurchasedInputRequirement[];
     };
