@@ -24,6 +24,9 @@ import {
     productionLightingAssessment,
     productionLightingContext,
 } from '#core/blueprint/production-lighting';
+import {
+    productionMoistureAssessment,
+} from '#core/blueprint/production-moisture';
 
 export * from '#core/blueprint/production-schedule-types';
 
@@ -104,7 +107,8 @@ export class BlueprintProductionScheduleAnalyzer {
         return {
             kind: 'scheduled',
             capacity,
-            durationBasis: 'production-batch-plan-with-native-light-exposure-and-temperature-rate',
+            durationBasis:
+                'production-batch-plan-with-native-light-exposure-temperature-and-conditional-moisture-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -115,6 +119,7 @@ export class BlueprintProductionScheduleAnalyzer {
             lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
+            moistureDuration: 'native-binary-threshold-with-conditional-mutable-state',
             constraintStatus: constrained.constraintStatus,
             baseSerialProcessMinutes: plan.totalProcessMinutes,
             lightingAdjustedSerialProcessMinutes:
@@ -207,22 +212,30 @@ function resolveCompatibleEquipment(
             incompatiblePlacementIds.push(placement.placementId);
             continue;
         }
+        const moisture = productionMoistureAssessment(match.process.moistureRule);
         placements.push({
             placementId: placement.placementId,
             lighting: placementLighting.assessment,
             temperature: temperature.assessment,
+            moisture: moisture.assessment,
             lightingProcessMultiplier: placementLighting.processMultiplier,
             temperatureProcessMultiplier: temperature.processMultiplier,
+            moistureProcessMultiplier: moisture.processMultiplier,
             processMultiplier: multiplyFinite(
-                placementLighting.processMultiplier,
-                temperature.processMultiplier,
+                multiplyFinite(
+                    placementLighting.processMultiplier,
+                    temperature.processMultiplier,
+                    'Placement lighting and temperature process multiplier'
+                ),
+                moisture.processMultiplier,
                 'Placement production process multiplier'
             ),
             constraintStatus:
                 (
                     placementLighting.assessment.kind === 'selected-external-grow-light' &&
                     placementLighting.assessment.physicalCoverage === 'not-evaluated'
-                ) || temperature.assessment.kind === 'conditional'
+                ) || temperature.assessment.kind === 'conditional' ||
+                    moisture.constraintStatus === 'conditional'
                     ? 'conditional'
                     : 'satisfied',
         });

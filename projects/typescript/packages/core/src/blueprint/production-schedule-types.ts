@@ -1,6 +1,7 @@
 import type { ProductionBatchStep } from '#core/production/plan';
 import type {
     BlueprintProductionCapacityResult,
+    BlueprintProductionMoistureRule,
     BlueprintProductionTemperatureRule,
 } from '#core/blueprint/production-capacity';
 
@@ -59,6 +60,20 @@ export type BlueprintProductionTemperatureAssessment =
         >;
     };
 
+export type BlueprintProductionMoistureAssessment =
+    | {
+        readonly kind: 'not-applicable';
+        readonly reason: 'process-has-no-moisture-rule';
+        readonly rule: null;
+    }
+    | {
+        readonly kind: 'conditional';
+        readonly reason: 'mutable-soil-moisture-and-replenishment-not-recorded';
+        readonly normalizedMoisture: null;
+        readonly processMultiplier: null;
+        readonly rule: BlueprintProductionMoistureRule;
+    };
+
 export interface BlueprintProductionBatchAssignment {
     readonly equipmentItemId: string;
     readonly placementId: string;
@@ -66,6 +81,7 @@ export interface BlueprintProductionBatchAssignment {
     readonly batchCount: number;
     readonly lighting: BlueprintProductionLightingAssessment;
     readonly temperature: BlueprintProductionTemperatureAssessment;
+    readonly moisture: BlueprintProductionMoistureAssessment;
     readonly constraintStatus: 'satisfied' | 'conditional';
 }
 
@@ -90,7 +106,7 @@ export interface BlueprintProductionScheduledStep {
     readonly batchCount: number;
     readonly durationMinutesPerBatch: number;
     readonly durationMinutesPerBatchBasis:
-        'production-batch-plan-before-placement-lighting-and-temperature';
+        'production-batch-plan-before-placement-lighting-temperature-and-moisture';
     readonly startMinute: number;
     readonly endMinute: number;
     readonly elapsedMinutes: number;
@@ -153,7 +169,7 @@ export type BlueprintProductionScheduleResult =
         readonly kind: 'scheduled';
         readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'analyzed' }>;
         readonly durationBasis:
-            'production-batch-plan-with-native-light-exposure-and-temperature-rate';
+            'production-batch-plan-with-native-light-exposure-temperature-and-conditional-moisture-rate';
         readonly schedulingAlgorithm: 'deterministic-critical-path-list-scheduling';
         readonly optimality: 'not-proven';
         readonly parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars';
@@ -164,6 +180,7 @@ export type BlueprintProductionScheduleResult =
         readonly lightingCoverage: 'native-matched-standard-tile-exposure-and-duration';
         readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly temperatureDuration: 'native-capped-linear-process-rate';
+        readonly moistureDuration: 'native-binary-threshold-with-conditional-mutable-state';
         readonly constraintStatus: 'satisfied' | 'conditional';
         readonly baseSerialProcessMinutes: number;
         readonly lightingAdjustedSerialProcessMinutes: number;

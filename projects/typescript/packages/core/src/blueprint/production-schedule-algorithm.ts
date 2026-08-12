@@ -2,6 +2,7 @@ import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/
 import type {
     BlueprintProductionBatchAssignment,
     BlueprintProductionLightingAssessment,
+    BlueprintProductionMoistureAssessment,
     BlueprintProductionScheduledBatch,
     BlueprintProductionScheduledStep,
     BlueprintProductionTemperatureAssessment,
@@ -11,8 +12,10 @@ export interface BlueprintProductionSchedulePlacement {
     readonly placementId: string;
     readonly lighting: BlueprintProductionLightingAssessment;
     readonly temperature: BlueprintProductionTemperatureAssessment;
+    readonly moisture: BlueprintProductionMoistureAssessment;
     readonly lightingProcessMultiplier: number;
     readonly temperatureProcessMultiplier: number;
+    readonly moistureProcessMultiplier: number;
     readonly processMultiplier: number;
     readonly constraintStatus: 'satisfied' | 'conditional';
 }
@@ -190,7 +193,7 @@ function scheduleStep(
         batchCount: step.batchCount,
         durationMinutesPerBatch: step.durationMinutesPerBatch,
         durationMinutesPerBatchBasis:
-            'production-batch-plan-before-placement-lighting-and-temperature',
+            'production-batch-plan-before-placement-lighting-temperature-and-moisture',
         startMinute,
         endMinute,
         elapsedMinutes: subtractFinite(endMinute, startMinute, `${step.routeId} elapsed duration`),
@@ -301,8 +304,12 @@ function choosePlacement(
         );
         const adjustedDurationMinutes = divideFinite(
             lightingAdjustedDurationMinutes,
-            placement.temperatureProcessMultiplier,
-            'Temperature-adjusted batch duration'
+            multiplyFinite(
+                placement.temperatureProcessMultiplier,
+                placement.moistureProcessMultiplier,
+                'Temperature and moisture process multiplier'
+            ),
+            'Temperature-and-moisture-adjusted batch duration'
         );
         const startMinute = earliestCalendarSlot(
             calendars.get(placement.placementId) ?? [],
@@ -378,6 +385,7 @@ function summarizeAssignments(
                 batchCount: batchNumbers.length,
                 lighting: placement.lighting,
                 temperature: placement.temperature,
+                moisture: placement.moisture,
                 constraintStatus: placement.constraintStatus,
             };
         });

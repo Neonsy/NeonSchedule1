@@ -69,6 +69,7 @@ describe('blueprint production capacity', () => {
                     maximumTemperature: 40,
                     maximumMultiplier: 1.5,
                 },
+                moistureRule: null,
             }],
         });
         expect(pot.placements[0]?.temperature).toEqual({
@@ -160,6 +161,13 @@ describe('blueprint production capacity', () => {
                 temperatureRule: {
                     kind: 'environmental-maximum',
                     maximumTemperature: 15,
+                },
+                moistureRule: {
+                    kind: 'binary-minimum',
+                    minimumSoilMoistureForGrowth: 0.0001,
+                    comparison: 'strictly-greater-than',
+                    processMultiplierAboveMinimum: 1,
+                    processMultiplierAtOrBelowMinimum: 0,
                 },
             }],
         });
@@ -311,6 +319,21 @@ describe('blueprint production capacity', () => {
         })).toThrow('Grow-container minimum temperature must be below its maximum');
     });
 
+    it('rejects negative shroom moisture thresholds', () => {
+        const source = dataset();
+
+        expect(() => new BlueprintProductionCapacityAnalyzer({
+            ...source,
+            production: {
+                ...source.production,
+                shrooms: source.production.shrooms.map((shroom) => ({
+                    ...shroom,
+                    minimumSoilMoistureForGrowth: -0.0001,
+                })),
+            },
+        })).toThrow('Shroom minimum soil moisture for growth must be non-negative');
+    });
+
     it('schedules whole batches across installed units within each production step', () => {
         const result = new BlueprintProductionScheduleAnalyzer(dataset()).analyze(
             blueprint([
@@ -325,7 +348,8 @@ describe('blueprint production capacity', () => {
         expect(result.kind).toBe('scheduled');
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
-            durationBasis: 'production-batch-plan-with-native-light-exposure-and-temperature-rate',
+            durationBasis:
+                'production-batch-plan-with-native-light-exposure-temperature-and-conditional-moisture-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -336,6 +360,7 @@ describe('blueprint production capacity', () => {
             lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
+            moistureDuration: 'native-binary-threshold-with-conditional-mutable-state',
             constraintStatus: 'conditional',
             baseSerialProcessMinutes: 350,
             lightingAdjustedSerialProcessMinutes: 350,
@@ -722,7 +747,7 @@ describe('blueprint production capacity', () => {
         }]);
     });
 
-    it('uses emitter-adjusted temperature for hard growth feasibility', () => {
+    it('uses emitter-adjusted temperature and keeps unknown shroom moisture conditional', () => {
         const source = dataset();
         const result = new BlueprintProductionScheduleAnalyzer({
             ...source,
@@ -754,6 +779,35 @@ describe('blueprint production capacity', () => {
                 maximumTemperature: 15,
             },
         });
+        expect(result).toMatchObject({
+            constraintStatus: 'conditional',
+            baseSerialProcessMinutes: 1_080,
+            serialProcessMinutes: 1_080,
+            scheduledElapsedMinutes: 1_080,
+            schedule: [{
+                durationMinutesPerBatch: 1_080,
+                durationMinutesPerBatchBasis:
+                    'production-batch-plan-before-placement-lighting-temperature-and-moisture',
+                constraintStatus: 'conditional',
+                assignments: [{
+                    constraintStatus: 'conditional',
+                    moisture: {
+                        kind: 'conditional',
+                        reason: 'mutable-soil-moisture-and-replenishment-not-recorded',
+                        normalizedMoisture: null,
+                        processMultiplier: null,
+                        rule: {
+                            kind: 'binary-minimum',
+                            minimumSoilMoistureForGrowth: 0.0001,
+                            comparison: 'strictly-greater-than',
+                            processMultiplierAboveMinimum: 1,
+                            processMultiplierAtOrBelowMinimum: 0,
+                        },
+                    },
+                }],
+                batches: [{ durationMinutes: 1_080, startMinute: 0, endMinute: 1_080 }],
+            }],
+        });
     });
 
     it('caps native temperature acceleration above the performance range', () => {
@@ -783,7 +837,7 @@ describe('blueprint production capacity', () => {
             schedule: [{
                 durationMinutesPerBatch: 60,
                 durationMinutesPerBatchBasis:
-                    'production-batch-plan-before-placement-lighting-and-temperature',
+                    'production-batch-plan-before-placement-lighting-temperature-and-moisture',
                 assignments: [{
                     temperature: {
                         kind: 'satisfied',
@@ -1149,7 +1203,7 @@ function production(): ProductionCatalog {
             growTimeMinutes: 1_080,
             baseYieldQuantity: 16,
             maximumTemperatureForGrowth: 15,
-            minimumSoilMoistureForGrowth: 0,
+            minimumSoilMoistureForGrowth: 0.0001,
         }],
         stationRecipes: [{
             schema: 'neonschedule1-station-recipe-2',

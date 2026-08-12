@@ -38,6 +38,14 @@ export type BlueprintProductionTemperatureRule =
         readonly tolerance: number;
     };
 
+export interface BlueprintProductionMoistureRule {
+    readonly kind: 'binary-minimum';
+    readonly minimumSoilMoistureForGrowth: number;
+    readonly comparison: 'strictly-greater-than';
+    readonly processMultiplierAboveMinimum: 1;
+    readonly processMultiplierAtOrBelowMinimum: 0;
+}
+
 export type BlueprintProductionDuration =
     | { readonly kind: 'fixed'; readonly minutes: number }
     | { readonly kind: 'per-item'; readonly minutes: number }
@@ -63,6 +71,7 @@ export interface BlueprintProductionProcessCapacity {
     readonly recordedItemLimit: number | null;
     readonly recordedDuration: BlueprintProductionDuration;
     readonly temperatureRule: BlueprintProductionTemperatureRule | null;
+    readonly moistureRule: BlueprintProductionMoistureRule | null;
 }
 
 export interface BlueprintProductionTemperatureTileEvidence {
@@ -269,6 +278,16 @@ function indexProcesses(
                     'Shroom maximum growth temperature'
                 ),
             },
+            moistureRule: {
+                kind: 'binary-minimum',
+                minimumSoilMoistureForGrowth: nonNegative(
+                    shroom.minimumSoilMoistureForGrowth,
+                    'Shroom minimum soil moisture for growth'
+                ),
+                comparison: 'strictly-greater-than',
+                processMultiplierAboveMinimum: 1,
+                processMultiplierAtOrBelowMinimum: 0,
+            },
         };
         for (const itemId of uniqueSorted(shroom.acceptedEquipmentItemIds)) add(itemId, process);
     }
@@ -289,6 +308,7 @@ function indexProcesses(
                     'Station recipe cook temperature tolerance'
                 ),
             },
+            moistureRule: null,
         };
         for (const itemId of uniqueSorted(recipe.acceptedEquipmentItemIds)) add(itemId, process);
     }
@@ -305,6 +325,7 @@ function indexProcesses(
             recordedItemLimit: null,
             recordedDuration: fixedDuration(transform.cookTimeMinutes, 'Oven cook time'),
             temperatureRule: null,
+            moistureRule: null,
         };
         for (const itemId of labOvenItemIds) add(itemId, process);
     }
@@ -350,6 +371,7 @@ function stationProcesses(
                         station.maxTemperatureGrowthMultiplier,
                         'Grow-container'
                     ),
+                    moistureRule: null,
                 }));
             });
         case 'drying-rack':
@@ -370,6 +392,7 @@ function stationProcesses(
                     station.maxProcessMultiplier,
                     'Drying-rack'
                 ),
+                moistureRule: null,
             }];
         case 'mixing':
         case 'mixing-mk2':
@@ -382,6 +405,7 @@ function stationProcesses(
                 recordedItemLimit: positive(station.capacity, 'Mixing-station capacity'),
                 recordedDuration: perItemDuration(station.timePerItem, 'Mixing-station time per item'),
                 temperatureRule: null,
+                moistureRule: null,
             }];
         case 'cauldron':
             return [{
@@ -393,6 +417,7 @@ function stationProcesses(
                 recordedItemLimit: null,
                 recordedDuration: fixedDuration(station.cookTimeMinutes, 'Cauldron cook time'),
                 temperatureRule: null,
+                moistureRule: null,
             }];
         case 'mushroom-spawn':
             return station.sporeSyringes.map((transform) => ({
@@ -407,6 +432,7 @@ function stationProcesses(
                 recordedItemLimit: null,
                 recordedDuration: fixedDuration(station.workTimeMinutes, 'Mushroom-spawn work time'),
                 temperatureRule: null,
+                moistureRule: null,
             }));
         case 'packaging':
         case 'packaging-mk2':
@@ -419,6 +445,7 @@ function stationProcesses(
                 recordedItemLimit: null,
                 recordedDuration: { kind: 'not-recorded' },
                 temperatureRule: null,
+                moistureRule: null,
             }];
         case 'brick-press':
             return [{
@@ -430,6 +457,7 @@ function stationProcesses(
                 recordedItemLimit: null,
                 recordedDuration: { kind: 'not-recorded' },
                 temperatureRule: null,
+                moistureRule: null,
             }];
         case 'lab-oven':
         case 'grow-light':
