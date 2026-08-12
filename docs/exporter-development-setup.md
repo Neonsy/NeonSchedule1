@@ -38,4 +38,5 @@ The offline stage is complete when every requested mesh reference has a terminal
 
 ## Continue the workflow
 
-Use the [complete exporter manual](/projects/game-data-exporter/README.md) for commands, output formats, recovery, and cleanup.
+Use the [complete exporter manual](/projects/game-data-exporter/README.md) for commands, validation modes, output formats, exit codes, recovery, and cleanup.
+When the acquisition is complete, use the [TypeScript workspace guide](/projects/typescript/README.md#normalize-an-acquisition) to normalize it.

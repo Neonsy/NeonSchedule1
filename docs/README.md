@@ -32,9 +32,12 @@ The repository currently supports:
 Plans are not release promises.
 The source and tests define current behavior.
 
-## Development
+## Choose a path
 
+- [Understand the repository and start contributing](/docs/development.md)
+- [Work on the TypeScript calculations and solver](/projects/typescript/README.md)
 - [Set up the local game-data tools](/docs/exporter-development-setup.md)
+- [Use the complete exporter manual](/projects/game-data-exporter/README.md)
 
 ## Data boundary
 
