@@ -41,7 +41,7 @@ describe('blueprint production capacity', () => {
         expect(result.capacityScope).toBe('installed-production-equipment');
         expect(result.processValues).toBe('normalized-records');
         expect(result.parallelScheduling).toBe('not-evaluated');
-        expect(result.effectiveTemperature).toBe('not-evaluated');
+        expect(result.effectiveTemperature).toBe('native-distance-weighted-tile-average');
         expect(result.equipment.map((entry) => entry.itemId)).toEqual([
             'chemistry',
             'dryer',
@@ -74,17 +74,20 @@ describe('blueprint production capacity', () => {
         expect(pot.placements[0]?.temperature).toEqual({
             kind: 'property-grid-tiles',
             coverageProofStatus: 'exact',
-            temperatureCombination: 'not-evaluated',
+            temperatureCombination: 'native-distance-weighted-emitter-blend',
+            averageTemperature: 20,
             tiles: [{
                 gridId: 'main',
                 x: 1,
                 y: 0,
                 ambientTemperature: 20,
+                effectiveTemperature: 20,
                 sources: [{
                     placementId: 'cooler',
                     emitterIndex: 0,
                     temperature: 0,
                     distance: 2,
+                    influence: 0,
                 }],
             }],
         });
@@ -194,15 +197,21 @@ describe('blueprint production capacity', () => {
         expect(result.temperature.kind).toBe('rejected');
     });
 
-    it('keeps overlapping emitter evidence without choosing an effective temperature', () => {
+    it('combines overlapping emitters into the production placement temperature', () => {
         const source = dataset();
         const result = new BlueprintProductionCapacityAnalyzer({
             ...source,
             buildables: [
-                ...source.buildables,
+                ...source.buildables.map((entry) => entry.itemId === 'cooler'
+                    ? buildable('cooler', [{
+                        temperature: 0,
+                        range: 4,
+                        emissionPoint: vector(0, 0, 0),
+                    }])
+                    : entry),
                 buildable('heater', [{
                     temperature: 30,
-                    range: 2,
+                    range: 4,
                     emissionPoint: vector(0, 0, 0),
                 }]),
             ],
@@ -214,16 +223,66 @@ describe('blueprint production capacity', () => {
 
         expect(result.kind).toBe('analyzed');
         if (result.kind !== 'analyzed') return;
-        expect(result.effectiveTemperature).toBe('not-evaluated');
+        expect(result.effectiveTemperature).toBe('native-distance-weighted-tile-average');
         expect(result.equipment[0]?.placements[0]?.temperature).toMatchObject({
-            temperatureCombination: 'not-evaluated',
+            temperatureCombination: 'native-distance-weighted-emitter-blend',
+            averageTemperature: 15,
             tiles: [{
                 x: 1,
+                effectiveTemperature: 15,
                 sources: [
-                    { placementId: 'cooler', temperature: 0, distance: 2 },
-                    { placementId: 'heater', temperature: 30, distance: 2 },
+                    { placementId: 'cooler', temperature: 0, distance: 2, influence: 0.75 },
+                    { placementId: 'heater', temperature: 30, distance: 2, influence: 0.75 },
                 ],
             }],
+        });
+    });
+
+    it('averages effective temperature across every occupied footprint tile', () => {
+        const source = dataset();
+        const pot = source.buildables.find((entry) => entry.itemId === 'pot')!;
+        if (pot.placement.kind !== 'grid') throw new Error('Test pot must use grid placement');
+        const footprint = pot.placement.footprintTiles[0]!;
+        const result = new BlueprintProductionCapacityAnalyzer({
+            ...source,
+            buildables: source.buildables.map((entry) => {
+                if (entry.itemId === 'cooler') {
+                    return buildable('cooler', [{
+                        temperature: 0,
+                        range: 4,
+                        emissionPoint: vector(0, 0, 0),
+                    }]);
+                }
+                if (entry.itemId !== 'pot') return entry;
+                return {
+                    ...pot,
+                    placement: {
+                        ...pot.placement,
+                        footprintWidth: 2,
+                        footprintTiles: [
+                            footprint,
+                            {
+                                ...footprint,
+                                x: 1,
+                                transform: transform('Footprint/[1,0]'),
+                            },
+                        ],
+                    },
+                };
+            }),
+        }).analyze(blueprint([
+            placement('cooler', 'cooler', 0),
+            placement('pot', 'pot', 1),
+        ]));
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.equipment[0]?.placements[0]?.temperature).toMatchObject({
+            averageTemperature: 12.5,
+            tiles: [
+                { x: 1, effectiveTemperature: 5 },
+                { x: 2, effectiveTemperature: 20 },
+            ],
         });
     });
 
@@ -275,7 +334,7 @@ describe('blueprint production capacity', () => {
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
             lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
-            effectiveTemperature: 'ambient-only-without-covering-emitters',
+            effectiveTemperature: 'native-distance-weighted-tile-average',
             constraintStatus: 'conditional',
             serialProcessMinutes: 350,
             scheduledElapsedMinutes: 190,
@@ -306,8 +365,9 @@ describe('blueprint production capacity', () => {
                             },
                             temperature: {
                                 kind: 'satisfied',
-                                basis: 'ambient-without-covering-emitters',
+                                basis: 'native-effective-temperature',
                                 ambientTemperature: 20,
+                                effectiveTemperature: 20,
                             },
                         },
                         {
@@ -482,6 +542,39 @@ describe('blueprint production capacity', () => {
                 maximumTemperature: 15,
             },
         }]);
+    });
+
+    it('uses emitter-adjusted temperature for hard growth feasibility', () => {
+        const source = dataset();
+        const result = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            buildables: source.buildables.map((entry) => entry.itemId === 'cooler'
+                ? buildable('cooler', [{
+                    temperature: 0,
+                    range: 4,
+                    emissionPoint: vector(0, 0, 0),
+                }])
+                : entry),
+        }).analyze(
+            blueprint([
+                placement('cooler', 'cooler', 0),
+                placement('mushroom-bed', 'mushroom-bed', 1),
+            ]),
+            shroomSchedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result.schedule[0]?.assignments[0]?.temperature).toEqual({
+            kind: 'satisfied',
+            basis: 'native-effective-temperature',
+            ambientTemperature: 20,
+            effectiveTemperature: 5,
+            rule: {
+                kind: 'environmental-maximum',
+                maximumTemperature: 15,
+            },
+        });
     });
 
     it('requires an equipment choice instead of combining heterogeneous station types', () => {

@@ -99,7 +99,7 @@ export class BlueprintProductionScheduleAnalyzer {
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
             lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
-            effectiveTemperature: 'ambient-only-without-covering-emitters',
+            effectiveTemperature: 'native-distance-weighted-tile-average',
             constraintStatus: constrained.constraintStatus,
             serialProcessMinutes: plan.totalProcessMinutes,
             scheduledElapsedMinutes: constrained.scheduledElapsedMinutes,
@@ -274,6 +274,7 @@ function temperatureAssessment(
                 kind: 'conditional',
                 reason: 'placement-not-on-property-grid',
                 ambientTemperature: null,
+                effectiveTemperature: null,
                 rule,
             },
         };
@@ -282,38 +283,30 @@ function temperatureAssessment(
     if (ambientTemperature === undefined) {
         throw new Error('Property-grid production placement has no occupied temperature tiles');
     }
-    if (placement.temperature.tiles.some((tile) => tile.sources.length > 0)) {
-        return {
-            kind: 'eligible',
-            assessment: {
-                kind: 'conditional',
-                reason: 'effective-emitter-temperature-not-evaluated',
-                ambientTemperature,
-                rule,
-            },
-        };
-    }
+    const effectiveTemperature = placement.temperature.averageTemperature;
     if (rule.kind === 'environmental-maximum') {
-        return ambientTemperature <= rule.maximumTemperature
+        return effectiveTemperature <= rule.maximumTemperature
             ? {
                 kind: 'eligible',
                 assessment: {
                     kind: 'satisfied',
-                    basis: 'ambient-without-covering-emitters',
+                    basis: 'native-effective-temperature',
                     ambientTemperature,
+                    effectiveTemperature,
                     rule,
                 },
             }
             : { kind: 'unsatisfied', rule };
     }
-    if (ambientTemperature >= rule.minimumTemperature &&
-        ambientTemperature <= rule.maximumTemperature) {
+    if (effectiveTemperature >= rule.minimumTemperature &&
+        effectiveTemperature <= rule.maximumTemperature) {
         return {
             kind: 'eligible',
             assessment: {
                 kind: 'satisfied',
-                basis: 'ambient-without-covering-emitters',
+                basis: 'native-effective-temperature',
                 ambientTemperature,
+                effectiveTemperature,
                 rule,
             },
         };
@@ -324,6 +317,7 @@ function temperatureAssessment(
             kind: 'conditional',
             reason: 'temperature-duration-multiplier-not-evaluated',
             ambientTemperature,
+            effectiveTemperature,
             rule,
         },
     };

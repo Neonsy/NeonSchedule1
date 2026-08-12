@@ -67,6 +67,7 @@ export interface BlueprintProductionTemperatureTileEvidence {
     readonly x: number;
     readonly y: number;
     readonly ambientTemperature: number;
+    readonly effectiveTemperature: number;
     readonly sources: readonly BlueprintTemperatureTileSource[];
 }
 
@@ -74,7 +75,8 @@ export type BlueprintProductionPlacementTemperature =
     | {
         readonly kind: 'property-grid-tiles';
         readonly coverageProofStatus: 'exact';
-        readonly temperatureCombination: 'not-evaluated';
+        readonly temperatureCombination: 'native-distance-weighted-emitter-blend';
+        readonly averageTemperature: number;
         readonly tiles: readonly BlueprintProductionTemperatureTileEvidence[];
     }
     | {
@@ -111,7 +113,7 @@ export type BlueprintProductionCapacityResult =
         readonly capacityScope: 'installed-production-equipment';
         readonly processValues: 'normalized-records';
         readonly parallelScheduling: 'not-evaluated';
-        readonly effectiveTemperature: 'not-evaluated';
+        readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly equipment: readonly BlueprintProductionEquipmentCapacity[];
     };
 
@@ -194,7 +196,7 @@ export class BlueprintProductionCapacityAnalyzer {
             capacityScope: 'installed-production-equipment',
             processValues: 'normalized-records',
             parallelScheduling: 'not-evaluated',
-            effectiveTemperature: 'not-evaluated',
+            effectiveTemperature: 'native-distance-weighted-tile-average',
             equipment,
         };
     }
@@ -407,6 +409,7 @@ function placementTemperature(
         readonly gridId: string;
         readonly x: number;
         readonly y: number;
+        readonly effectiveTemperature: number;
         readonly sources: readonly BlueprintTemperatureTileSource[];
     }>
 ): BlueprintProductionPlacementTemperature {
@@ -417,23 +420,32 @@ function placementTemperature(
             tiles: [],
         };
     }
+    const tiles = placement.occupiedTiles.map((tile) => {
+        const coverage = tileByCoordinate.get(tileKey(placement.gridId, tile.x, tile.y));
+        if (coverage === undefined) {
+            throw new Error('Production placement references unavailable temperature tile data');
+        }
+        return {
+            gridId: placement.gridId,
+            x: tile.x,
+            y: tile.y,
+            ambientTemperature,
+            effectiveTemperature: coverage.effectiveTemperature,
+            sources: coverage.sources,
+        };
+    });
+    if (tiles.length === 0) {
+        throw new Error('Property-grid production placement has no occupied temperature tiles');
+    }
     return {
         kind: 'property-grid-tiles',
         coverageProofStatus: 'exact',
-        temperatureCombination: 'not-evaluated',
-        tiles: placement.occupiedTiles.map((tile) => {
-            const coverage = tileByCoordinate.get(tileKey(placement.gridId, tile.x, tile.y));
-            if (coverage === undefined) {
-                throw new Error('Production placement references unavailable temperature tile data');
-            }
-            return {
-                gridId: placement.gridId,
-                x: tile.x,
-                y: tile.y,
-                ambientTemperature,
-                sources: coverage.sources,
-            };
-        }),
+        temperatureCombination: 'native-distance-weighted-emitter-blend',
+        averageTemperature: tiles.reduce(
+            (total, tile) => total + tile.effectiveTemperature,
+            0
+        ) / tiles.length,
+        tiles,
     };
 }
 

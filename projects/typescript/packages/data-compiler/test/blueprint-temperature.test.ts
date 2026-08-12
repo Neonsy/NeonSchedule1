@@ -16,7 +16,7 @@ const gameVersion = '0.4.6f12';
 const datasetSha256 = 'a'.repeat(64);
 
 describe('blueprint temperature coverage', () => {
-    it('reports exact emitter coverage without inventing overlap temperature behavior', () => {
+    it('combines overlapping emitters with the native distance-weighted blend', () => {
         const result = analyzer().analyze(blueprint([
             placement('cooler', 'cooler', 0),
             placement('heater', 'heater', 2),
@@ -26,7 +26,7 @@ describe('blueprint temperature coverage', () => {
         if (result.kind !== 'analyzed') return;
         expect(result.coverageProofStatus).toBe('exact');
         expect(result.coverageScope).toBe('blueprint-emitters-over-property-grid-tiles');
-        expect(result.temperatureCombination).toBe('not-evaluated');
+        expect(result.temperatureCombination).toBe('native-distance-weighted-emitter-blend');
         expect(result.propertyCode).toBe('warehouse');
         expect(result.ambientTemperature).toBe(20);
         expect(result.emitters).toEqual([
@@ -34,64 +34,133 @@ describe('blueprint temperature coverage', () => {
                 placementId: 'cooler',
                 emitterIndex: 0,
                 temperature: 0,
-                range: 2,
+                range: 4,
                 worldPosition: vector(0, 0, 0),
             },
             {
                 placementId: 'heater',
                 emitterIndex: 0,
                 temperature: 30,
-                range: 2,
+                range: 4,
                 worldPosition: vector(4, 0, 0),
             },
         ]);
-        expect(result.tiles.map(({ x, sources }) => ({ x, sources }))).toEqual([
+        expect(result.tiles.map(({ x, effectiveTemperature, sources }) => ({
+            x,
+            effectiveTemperature,
+            sources,
+        }))).toEqual([
             {
                 x: 0,
-                sources: [{
-                    placementId: 'cooler',
-                    emitterIndex: 0,
-                    temperature: 0,
-                    distance: 0,
-                }],
+                effectiveTemperature: 0,
+                sources: [
+                    {
+                        placementId: 'cooler',
+                        emitterIndex: 0,
+                        temperature: 0,
+                        distance: 0,
+                        influence: 1,
+                    },
+                    {
+                        placementId: 'heater',
+                        emitterIndex: 0,
+                        temperature: 30,
+                        distance: 4,
+                        influence: 0,
+                    },
+                ],
             },
             {
                 x: 1,
+                effectiveTemperature: 15,
                 sources: [
                     {
                         placementId: 'cooler',
                         emitterIndex: 0,
                         temperature: 0,
                         distance: 2,
+                        influence: 0.75,
                     },
                     {
                         placementId: 'heater',
                         emitterIndex: 0,
                         temperature: 30,
                         distance: 2,
+                        influence: 0.75,
                     },
                 ],
             },
             {
                 x: 2,
-                sources: [{
-                    placementId: 'heater',
-                    emitterIndex: 0,
-                    temperature: 30,
-                    distance: 0,
-                }],
+                effectiveTemperature: 30,
+                sources: [
+                    {
+                        placementId: 'cooler',
+                        emitterIndex: 0,
+                        temperature: 0,
+                        distance: 4,
+                        influence: 0,
+                    },
+                    {
+                        placementId: 'heater',
+                        emitterIndex: 0,
+                        temperature: 30,
+                        distance: 0,
+                        influence: 1,
+                    },
+                ],
             },
             {
                 x: 3,
+                effectiveTemperature: 27.5,
                 sources: [{
                     placementId: 'heater',
                     emitterIndex: 0,
                     temperature: 30,
                     distance: 2,
+                    influence: 0.75,
                 }],
             },
-            { x: 4, sources: [] },
+            {
+                x: 4,
+                effectiveTemperature: 20,
+                sources: [{
+                    placementId: 'heater',
+                    emitterIndex: 0,
+                    temperature: 30,
+                    distance: 4,
+                    influence: 0,
+                }],
+            },
         ]);
+    });
+
+    it('weights different source temperatures by their unequal native influence', () => {
+        const heater = buildable('heater', 30, 4);
+        const result = new BlueprintTemperatureCoverageAnalyzer({
+            manifest: { gameVersion, datasetSha256 },
+            properties: [property()],
+            buildables: [
+                buildable('cooler', 0, 4),
+                {
+                    ...heater,
+                    temperatureEmitters: [{
+                        ...heater.temperatureEmitters[0]!,
+                        emissionPoint: vector(1, 0, 0),
+                    }],
+                },
+            ],
+            propertyLayouts: [propertyLayout()],
+        }).analyze(blueprint([
+            placement('cooler', 'cooler', 0),
+            placement('heater', 'heater', 2),
+        ]));
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        const overlap = result.tiles.find((tile) => tile.x === 1)!;
+        expect(overlap.sources.map((source) => source.influence)).toEqual([0.75, 0.4375]);
+        expect(overlap.effectiveTemperature).toBeCloseTo(210 / 19);
     });
 
     it('preserves blueprint rejection without claiming temperature coverage', () => {
@@ -131,7 +200,7 @@ function analyzer(): BlueprintTemperatureCoverageAnalyzer {
     const dataset: BlueprintTemperatureDataset = {
         manifest: { gameVersion, datasetSha256 },
         properties: [property()],
-        buildables: [buildable('cooler', 0), buildable('heater', 30)],
+        buildables: [buildable('cooler', 0, 4), buildable('heater', 30, 4)],
         propertyLayouts: [propertyLayout()],
     };
     return new BlueprintTemperatureCoverageAnalyzer(dataset);
@@ -173,7 +242,7 @@ function property(): Property {
     };
 }
 
-function buildable(itemId: string, temperature: number): Buildable {
+function buildable(itemId: string, temperature: number, range = 2): Buildable {
     return {
         schema: 'neonschedule1-buildable-4',
         itemId,
@@ -203,7 +272,7 @@ function buildable(itemId: string, temperature: number): Buildable {
         componentTypes: [],
         colliders: [],
         storage: null,
-        temperatureEmitters: [{ temperature, range: 2, emissionPoint: vector(0, 0, 0) }],
+        temperatureEmitters: [{ temperature, range, emissionPoint: vector(0, 0, 0) }],
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],

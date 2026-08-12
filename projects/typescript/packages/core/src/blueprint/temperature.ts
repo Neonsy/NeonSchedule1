@@ -26,6 +26,7 @@ export interface BlueprintTemperatureTileSource {
     readonly emitterIndex: number;
     readonly temperature: number;
     readonly distance: number;
+    readonly influence: number;
 }
 
 export interface BlueprintTemperatureTileCoverage {
@@ -33,6 +34,7 @@ export interface BlueprintTemperatureTileCoverage {
     readonly x: number;
     readonly y: number;
     readonly worldPosition: Vector3;
+    readonly effectiveTemperature: number;
     readonly sources: readonly BlueprintTemperatureTileSource[];
 }
 
@@ -53,7 +55,7 @@ export type BlueprintTemperatureCoverageResult =
         readonly projection: Extract<BlueprintProjectionResult, { readonly kind: 'projected' }>;
         readonly coverageProofStatus: 'exact';
         readonly coverageScope: 'blueprint-emitters-over-property-grid-tiles';
-        readonly temperatureCombination: 'not-evaluated';
+        readonly temperatureCombination: 'native-distance-weighted-emitter-blend';
         readonly propertyCode: string;
         readonly ambientTemperature: number;
         readonly emitters: readonly BlueprintTemperatureEmitterCoverage[];
@@ -115,12 +117,17 @@ export class BlueprintTemperatureCoverageAnalyzer {
             projection,
             coverageProofStatus: 'exact',
             coverageScope: 'blueprint-emitters-over-property-grid-tiles',
-            temperatureCombination: 'not-evaluated',
+            temperatureCombination: 'native-distance-weighted-emitter-blend',
             propertyCode,
             ambientTemperature: property.ambientTemperature,
             emitters,
             tiles: layout.grids.flatMap((grid) =>
-                grid.tiles.map((tile) => tileCoverage(grid.id, tile, emitters))
+                grid.tiles.map((tile) => tileCoverage(
+                    grid.id,
+                    tile,
+                    property.ambientTemperature,
+                    emitters
+                ))
             ).sort(compareTiles),
         };
     }
@@ -143,24 +150,48 @@ function projectedEmitters(
 function tileCoverage(
     gridId: string,
     tile: PropertyGridTile,
+    ambientTemperature: number,
     emitters: readonly BlueprintTemperatureEmitterCoverage[]
 ): BlueprintTemperatureTileCoverage {
+    const sources = emitters.flatMap((emitter) => {
+        const distance = distanceBetween(tile.worldPosition, emitter.worldPosition);
+        if (distance > emitter.range) return [];
+        return [{
+            placementId: emitter.placementId,
+            emitterIndex: emitter.emitterIndex,
+            temperature: emitter.temperature,
+            distance,
+            influence: emitterInfluence(distance, emitter.range),
+        }];
+    });
     return {
         gridId,
         x: tile.x,
         y: tile.y,
         worldPosition: tile.worldPosition,
-        sources: emitters.flatMap((emitter) => {
-            const distance = distanceBetween(tile.worldPosition, emitter.worldPosition);
-            if (distance > emitter.range) return [];
-            return [{
-                placementId: emitter.placementId,
-                emitterIndex: emitter.emitterIndex,
-                temperature: emitter.temperature,
-                distance,
-            }];
-        }),
+        effectiveTemperature: effectiveTemperature(ambientTemperature, sources),
+        sources,
     };
+}
+
+function emitterInfluence(distance: number, range: number): number {
+    if (range === 0) return 0;
+    return Math.max(1 - distance ** 2 / range ** 2, 0);
+}
+
+// Mirrors TemperatureAlgorithm.GetTemperatureAtPoint in the native game.
+function effectiveTemperature(
+    ambientTemperature: number,
+    sources: readonly BlueprintTemperatureTileSource[]
+): number {
+    const totalInfluence = sources.reduce((total, source) => total + source.influence, 0);
+    if (totalInfluence === 0) return ambientTemperature;
+    const sourceTemperature = sources.reduce(
+        (total, source) => total + source.temperature * source.influence,
+        0
+    ) / totalInfluence;
+    return ambientTemperature +
+        (sourceTemperature - ambientTemperature) * Math.min(totalInfluence, 1);
 }
 
 function distanceBetween(left: Vector3, right: Vector3): number {

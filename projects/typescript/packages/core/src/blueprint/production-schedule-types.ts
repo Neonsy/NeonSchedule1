@@ -27,8 +27,9 @@ export type BlueprintProductionTemperatureAssessment =
     }
     | {
         readonly kind: 'satisfied';
-        readonly basis: 'ambient-without-covering-emitters';
+        readonly basis: 'native-effective-temperature';
         readonly ambientTemperature: number;
+        readonly effectiveTemperature: number;
         readonly rule: Exclude<
             BlueprintProductionTemperatureRule,
             { readonly kind: 'internal-cook-setpoint' }
@@ -38,9 +39,9 @@ export type BlueprintProductionTemperatureAssessment =
         readonly kind: 'conditional';
         readonly reason:
             | 'placement-not-on-property-grid'
-            | 'effective-emitter-temperature-not-evaluated'
             | 'temperature-duration-multiplier-not-evaluated';
         readonly ambientTemperature: number | null;
+        readonly effectiveTemperature: number | null;
         readonly rule: Exclude<
             BlueprintProductionTemperatureRule,
             { readonly kind: 'internal-cook-setpoint' }
@@ -139,7 +140,7 @@ export type BlueprintProductionScheduleResult =
         readonly routing: 'not-evaluated';
         readonly employeeScheduling: 'not-evaluated-no-task-duration-contract';
         readonly lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated';
-        readonly effectiveTemperature: 'ambient-only-without-covering-emitters';
+        readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly constraintStatus: 'satisfied' | 'conditional';
         readonly serialProcessMinutes: number;
         readonly scheduledElapsedMinutes: number;
