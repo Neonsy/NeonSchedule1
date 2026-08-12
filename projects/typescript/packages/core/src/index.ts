@@ -19,6 +19,7 @@ export * from '#core/data/trade';
 export * from '#core/data/visual';
 export * from '#core/data/world';
 export * from '#core/customer/allocation';
+export * from '#core/customer/composition';
 export * from '#core/customer/demand';
 export * from '#core/customer/enjoyment';
 export * from '#core/customer/offer';

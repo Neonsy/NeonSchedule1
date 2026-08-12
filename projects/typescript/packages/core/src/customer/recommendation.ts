@@ -166,7 +166,7 @@ function compareRankedRecommendations(
     left: RankedRecommendation,
     right: RankedRecommendation
 ): number {
-    return compareRecommendations(left.recommendation, right.recommendation) ||
+    return compareCustomerRecommendations(left.recommendation, right.recommendation) ||
         left.ordinal - right.ordinal;
 }
 
@@ -179,7 +179,7 @@ export function customerMarketRelativePrice(
     return Math.fround(marketPrice * Math.fround(priceMultiplier));
 }
 
-function compareRecommendations(
+export function compareCustomerRecommendations(
     left: CustomerRecommendation,
     right: CustomerRecommendation
 ): number {
