@@ -115,6 +115,7 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
                 employeeType: employee.employeeType,
                 dailyWage: role?.dailyWage ?? null,
                 baseWorkSpeed: role?.baseWorkSpeed ?? null,
+                walkSpeed: role?.walkSpeed ?? null,
                 inventorySlotCount: role?.inventorySlotCount ?? null,
                 assignmentKind: role?.assignmentKind ?? null,
                 assignedStationLimit: role?.assignedStationLimit ?? null,

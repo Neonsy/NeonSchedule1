@@ -170,6 +170,9 @@ function normalizeEmployeeRoles(
             runtimeType: stringField(raw, 'runtimeType', path),
             dailyWage: positiveNumber(raw, 'dailyWage', path, integrity),
             baseWorkSpeed: positiveNumber(raw, 'baseWorkSpeed', path, integrity),
+            walkSpeed: raw.walkSpeed === undefined
+                ? null
+                : positiveNumber(raw, 'walkSpeed', path, integrity),
             inventorySlotCount: positiveInteger(raw, 'inventorySlotCount', path, integrity),
             assignmentKind: assignment.kind,
             assignedStationLimit,
@@ -185,6 +188,7 @@ function missingEmployeeRole(employeeType: ProductionEmployeeType): ProductionLo
         runtimeType: '',
         dailyWage: 0,
         baseWorkSpeed: 0,
+        walkSpeed: null,
         inventorySlotCount: 0,
         assignmentKind: assignmentMechanics[employeeType].kind,
         assignedStationLimit: 0,

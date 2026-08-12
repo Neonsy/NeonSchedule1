@@ -626,6 +626,7 @@ internal sealed class EmployeeTypeSnapshot
     public string RuntimeType { get; init; } = string.Empty;
     public float DailyWage { get; init; }
     public float BaseWorkSpeed { get; init; }
+    public float WalkSpeed { get; init; }
     public int InventorySlotCount { get; init; }
     public Dictionary<string, string> Mechanics { get; init; } = new();
 }

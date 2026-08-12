@@ -32,6 +32,7 @@ describe('production logistics normalization', () => {
                 runtimeType: 'ScheduleOne.Employees.Botanist',
                 dailyWage: 200,
                 baseWorkSpeed: 1,
+                walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'pots',
                 assignedStationLimit: 8,
@@ -43,6 +44,7 @@ describe('production logistics normalization', () => {
                 runtimeType: 'ScheduleOne.Employees.Chemist',
                 dailyWage: 300,
                 baseWorkSpeed: 1,
+                walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'stations',
                 assignedStationLimit: 4,
@@ -54,6 +56,7 @@ describe('production logistics normalization', () => {
                 runtimeType: 'ScheduleOne.Employees.Packager',
                 dailyWage: 200,
                 baseWorkSpeed: 1,
+                walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'stations',
                 assignedStationLimit: 3,
@@ -112,6 +115,7 @@ describe('production logistics normalization', () => {
         const handler = report.world.employeeTypes[2];
         if (handler !== undefined) {
             handler.inventorySlotCount = 0;
+            handler.walkSpeed = 0;
             handler.mechanics = { MaxAssignedStations: '3', MaxAssignedRoutes: '4' };
         }
         const station = report.productionStations[0];
@@ -133,11 +137,33 @@ describe('production logistics normalization', () => {
             'report.world.employeeTypes["Handler"].inventorySlotCount must be a positive integer'
         );
         expect(integrity.errors).toContain(
+            'report.world.employeeTypes["Handler"].walkSpeed must be positive'
+        );
+        expect(integrity.errors).toContain(
             'report.productionStations["packagingstation"].inputFilters[0].slotIndex 2 is outside 2 slots'
         );
         expect(integrity.errors).toContain(
             'report.productionStations["packagingstation"].inputFilters[0].itemIds references missing id "missing"'
         );
+    });
+
+    it('preserves compatibility with acquisitions that predate employee walk speed', () => {
+        const report = logisticsReport();
+        for (const employeeType of report.world.employeeTypes) delete employeeType.walkSpeed;
+        const integrity = new Integrity();
+
+        const logistics = normalizeProductionLogistics(
+            report,
+            new Set(['packagingstation', 'package', 'product']),
+            integrity
+        );
+
+        expect(integrity.errors).toEqual([]);
+        expect(logistics.employeeRoles.map(({ walkSpeed }) => walkSpeed)).toEqual([
+            null,
+            null,
+            null,
+        ]);
     });
 });
 
@@ -216,7 +242,15 @@ function employee(
     inventorySlotCount: number,
     mechanics: Record<string, string>
 ) {
-    return { type, runtimeType, dailyWage, baseWorkSpeed: 1, inventorySlotCount, mechanics };
+    return {
+        type,
+        runtimeType,
+        dailyWage,
+        baseWorkSpeed: 1,
+        walkSpeed: 1.2,
+        inventorySlotCount,
+        mechanics,
+    };
 }
 
 function idFilter(slotIndex: number, itemId: string) {

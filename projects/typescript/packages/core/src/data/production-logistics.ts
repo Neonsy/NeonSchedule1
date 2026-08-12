@@ -27,6 +27,7 @@ export const ProductionLogisticsEmployeeRoleSchema = type({
     runtimeType: 'string',
     dailyWage: 'number',
     baseWorkSpeed: 'number',
+    'walkSpeed?': 'number | null',
     inventorySlotCount: 'number',
     assignmentKind: "'pots' | 'stations'",
     assignedStationLimit: 'number',

@@ -96,6 +96,7 @@ export interface BlueprintProductionEmployeeLogistics {
     readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
     readonly dailyWage: number | null;
     readonly baseWorkSpeed: number | null;
+    readonly walkSpeed: number | null;
     readonly inventorySlotCount: number | null;
     readonly assignmentKind: ProductionLogisticsEmployeeRole['assignmentKind'] | null;
     readonly assignedStationLimit: number | null;

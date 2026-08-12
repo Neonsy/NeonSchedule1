@@ -516,18 +516,17 @@ internal static partial class GameDataCollector
                         Il2CppScheduleOne.Employees.Cleaner.MAX_ASSIGNED_BINS.ToString(
                             CultureInfo.InvariantCulture);
                 }
+                // Registry prefabs have not applied NPCData yet. Read the serialized
+                // source used by native initialization instead of the empty runtime field.
+                var originalNpcData = prefab._npcData?.GetOriginalData();
                 result.EmployeeTypes.Add(new EmployeeTypeSnapshot
                 {
                     Type = employeeType.ToString(),
                     RuntimeType = DiscoveryReflection.RuntimeTypeName(prefab),
                     DailyWage = prefab.DailyWage,
                     BaseWorkSpeed = prefab.CurrentWorkSpeed,
-                    // Registry prefabs have not applied NPCData yet. Read the serialized
-                    // source used by native initialization instead of the empty runtime field.
-                    InventorySlotCount = prefab._npcData
-                        ?.GetOriginalData()
-                        ?.Inventory
-                        ?.InventorySlotCount ?? 0,
+                    WalkSpeed = originalNpcData?.Movement?.WalkSpeed ?? 0,
+                    InventorySlotCount = originalNpcData?.Inventory?.InventorySlotCount ?? 0,
                     Mechanics = mechanics,
                 });
             }
