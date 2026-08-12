@@ -48,6 +48,7 @@ import {
     type ProductionPurchase,
     ProductionBatchPlanner,
 } from '#core/production/plan';
+import { temperatureProcessMultiplier } from '#core/production/process-temperature';
 
 export interface FinishedRecipeProductionOptions {
     readonly mixingStationItemId?: string;
@@ -664,24 +665,13 @@ function dryingTierCount(
 }
 
 function dryingProcessMultiplier(station: DryingRackStation, temperature: number): number {
-    if (!Number.isFinite(temperature)) throw new Error('Drying average temperature must be finite');
-    const minimum = station.minimumTemperatureThreshold;
-    const maximum = station.maximumTemperatureThreshold;
-    if (
-        !Number.isFinite(minimum) ||
-        !Number.isFinite(maximum) ||
-        minimum <= 0 ||
-        !close(maximum, minimum * 2)
-    ) {
-        throw new Error('Drying rack temperature thresholds are invalid');
-    }
-    if (temperature <= minimum) return 1;
-    const progress = Math.min(1, Math.max(0, (temperature - minimum) / minimum));
-    return 1 + progress * station.maxProcessMultiplier;
-}
-
-function close(left: number, right: number): boolean {
-    return Math.abs(left - right) <= Math.max(1, Math.abs(left), Math.abs(right)) * 1e-9;
+    return temperatureProcessMultiplier(
+        temperature,
+        station.minimumTemperatureThreshold,
+        station.maximumTemperatureThreshold,
+        station.maxProcessMultiplier,
+        'Drying rack'
+    );
 }
 
 function mixingStep(

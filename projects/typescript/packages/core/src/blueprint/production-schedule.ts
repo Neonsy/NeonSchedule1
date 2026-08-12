@@ -1,6 +1,7 @@
 import type { BlueprintDocument } from '#core/data/blueprint';
 import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
 import type { ProductionStation } from '#core/data/production';
+import { temperatureProcessMultiplier } from '#core/production/process-temperature';
 import {
     BlueprintProductionCapacityAnalyzer,
     type BlueprintProductionCapacityDataset,
@@ -33,6 +34,7 @@ type TemperatureResolution =
     | {
         readonly kind: 'eligible';
         readonly assessment: BlueprintProductionTemperatureAssessment;
+        readonly processMultiplier: number;
     }
     | {
         readonly kind: 'unsatisfied';
@@ -82,15 +84,20 @@ export class BlueprintProductionScheduleAnalyzer {
         }
 
         const constrained = scheduleConstrainedProduction(plan, resolved);
-        const savedMinutes = subtractFinite(
+        const temperatureSavedMinutes = subtractFinite(
             plan.totalProcessMinutes,
+            constrained.serialProcessMinutes,
+            'Production temperature time saved'
+        );
+        const parallelSavedMinutes = subtractFinite(
+            constrained.serialProcessMinutes,
             constrained.scheduledElapsedMinutes,
             'Production parallel time saved'
         );
         return {
             kind: 'scheduled',
             capacity,
-            durationBasis: 'production-batch-plan',
+            durationBasis: 'production-batch-plan-with-native-temperature-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -100,10 +107,13 @@ export class BlueprintProductionScheduleAnalyzer {
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
             lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
             effectiveTemperature: 'native-distance-weighted-tile-average',
+            temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: constrained.constraintStatus,
-            serialProcessMinutes: plan.totalProcessMinutes,
+            baseSerialProcessMinutes: plan.totalProcessMinutes,
+            serialProcessMinutes: constrained.serialProcessMinutes,
+            temperatureTimeSavedMinutes: cleanZero(temperatureSavedMinutes),
             scheduledElapsedMinutes: constrained.scheduledElapsedMinutes,
-            parallelTimeSavedMinutes: cleanZero(savedMinutes),
+            parallelTimeSavedMinutes: cleanZero(parallelSavedMinutes),
             schedule: constrained.schedule,
         };
     }
@@ -184,6 +194,7 @@ function resolveCompatibleEquipment(
             placementId: placement.placementId,
             lighting,
             temperature: temperature.assessment,
+            processMultiplier: temperature.processMultiplier,
             constraintStatus:
                 lighting.kind === 'selected-external-grow-light' ||
                 temperature.assessment.kind === 'conditional'
@@ -259,12 +270,14 @@ function temperatureAssessment(
         return {
             kind: 'eligible',
             assessment: { kind: 'not-applicable', reason: 'process-has-no-temperature-rule', rule },
+            processMultiplier: 1,
         };
     }
     if (rule.kind === 'internal-cook-setpoint') {
         return {
             kind: 'eligible',
             assessment: { kind: 'not-applicable', reason: 'internal-cook-setpoint', rule },
+            processMultiplier: 1,
         };
     }
     if (placement.temperature.kind === 'not-evaluated') {
@@ -275,8 +288,10 @@ function temperatureAssessment(
                 reason: 'placement-not-on-property-grid',
                 ambientTemperature: null,
                 effectiveTemperature: null,
+                processMultiplier: null,
                 rule,
             },
+            processMultiplier: 1,
         };
     }
     const ambientTemperature = placement.temperature.tiles[0]?.ambientTemperature;
@@ -293,33 +308,31 @@ function temperatureAssessment(
                     basis: 'native-effective-temperature',
                     ambientTemperature,
                     effectiveTemperature,
+                    processMultiplier: 1,
                     rule,
                 },
+                processMultiplier: 1,
             }
             : { kind: 'unsatisfied', rule };
     }
-    if (effectiveTemperature >= rule.minimumTemperature &&
-        effectiveTemperature <= rule.maximumTemperature) {
-        return {
-            kind: 'eligible',
-            assessment: {
-                kind: 'satisfied',
-                basis: 'native-effective-temperature',
-                ambientTemperature,
-                effectiveTemperature,
-                rule,
-            },
-        };
-    }
+    const processMultiplier = temperatureProcessMultiplier(
+        effectiveTemperature,
+        rule.minimumTemperature,
+        rule.maximumTemperature,
+        rule.maximumMultiplier,
+        'Blueprint production'
+    );
     return {
         kind: 'eligible',
         assessment: {
-            kind: 'conditional',
-            reason: 'temperature-duration-multiplier-not-evaluated',
+            kind: 'satisfied',
+            basis: 'native-effective-temperature',
             ambientTemperature,
             effectiveTemperature,
+            processMultiplier,
             rule,
         },
+        processMultiplier,
     };
 }
 

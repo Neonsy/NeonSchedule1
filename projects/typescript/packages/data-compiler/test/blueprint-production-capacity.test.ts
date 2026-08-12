@@ -308,7 +308,7 @@ describe('blueprint production capacity', () => {
                         : station
                 ),
             },
-        })).toThrow('Grow-container minimum temperature must not exceed its maximum');
+        })).toThrow('Grow-container minimum temperature must be below its maximum');
     });
 
     it('schedules whole batches across installed units within each production step', () => {
@@ -325,7 +325,7 @@ describe('blueprint production capacity', () => {
         expect(result.kind).toBe('scheduled');
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
-            durationBasis: 'production-batch-plan',
+            durationBasis: 'production-batch-plan-with-native-temperature-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -335,8 +335,11 @@ describe('blueprint production capacity', () => {
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
             lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
             effectiveTemperature: 'native-distance-weighted-tile-average',
+            temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: 'conditional',
+            baseSerialProcessMinutes: 350,
             serialProcessMinutes: 350,
+            temperatureTimeSavedMinutes: 0,
             scheduledElapsedMinutes: 190,
             parallelTimeSavedMinutes: 160,
             schedule: [
@@ -368,6 +371,7 @@ describe('blueprint production capacity', () => {
                                 basis: 'native-effective-temperature',
                                 ambientTemperature: 20,
                                 effectiveTemperature: 20,
+                                processMultiplier: 1,
                             },
                         },
                         {
@@ -570,10 +574,71 @@ describe('blueprint production capacity', () => {
             basis: 'native-effective-temperature',
             ambientTemperature: 20,
             effectiveTemperature: 5,
+            processMultiplier: 1,
             rule: {
                 kind: 'environmental-maximum',
                 maximumTemperature: 15,
             },
+        });
+    });
+
+    it('caps native temperature acceleration above the performance range', () => {
+        const source = dataset();
+        const result = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            properties: [{ ...property(), ambientTemperature: 50 }],
+        }).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('light', 'light', 7),
+            ]),
+            seedSchedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result).toMatchObject({
+            baseSerialProcessMinutes: 60,
+            serialProcessMinutes: 40,
+            temperatureTimeSavedMinutes: 20,
+            scheduledElapsedMinutes: 40,
+            parallelTimeSavedMinutes: 0,
+            schedule: [{
+                durationMinutesPerBatch: 60,
+                durationMinutesPerBatchBasis:
+                    'production-batch-plan-before-placement-temperature',
+                assignments: [{
+                    temperature: {
+                        kind: 'satisfied',
+                        effectiveTemperature: 50,
+                        processMultiplier: 1.5,
+                    },
+                }],
+                batches: [{ durationMinutes: 40, startMinute: 0, endMinute: 40 }],
+            }],
+        });
+
+        const coolResult = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            properties: [{ ...property(), ambientTemperature: 10 }],
+        }).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('light', 'light', 7),
+            ]),
+            seedSchedulePlan()
+        );
+        expect(coolResult.kind).toBe('scheduled');
+        if (coolResult.kind !== 'scheduled') return;
+        expect(coolResult.schedule[0]).toMatchObject({
+            assignments: [{
+                temperature: {
+                    kind: 'satisfied',
+                    effectiveTemperature: 10,
+                    processMultiplier: 1,
+                },
+            }],
+            batches: [{ durationMinutes: 60, startMinute: 0, endMinute: 60 }],
         });
     });
 
@@ -725,6 +790,29 @@ function shroomSchedulePlan(): ProductionBatchPlan {
         costs,
         { gameVersion, datasetSha256 }
     ).plan('shroom', 16);
+}
+
+function seedSchedulePlan(): ProductionBatchPlan {
+    const plan = schedulePlan();
+    const step = plan.productionSteps[0]!;
+    return {
+        ...plan,
+        targetItemId: step.itemId,
+        targetQuantity: step.outputQuantityPerBatch,
+        productionSteps: [{
+            ...step,
+            requiredQuantity: step.outputQuantityPerBatch,
+            batchCount: 1,
+            totalProcessMinutes: step.durationMinutesPerBatch,
+            producedQuantity: step.outputQuantityPerBatch,
+            leftoverQuantity: 0,
+            inputs: step.inputs.map((input) => ({
+                ...input,
+                totalQuantity: input.quantityPerBatch,
+            })),
+        }],
+        totalProcessMinutes: step.durationMinutesPerBatch,
+    };
 }
 
 function branchingSchedulePlan(): ProductionBatchPlan {

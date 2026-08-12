@@ -153,20 +153,20 @@ describe('finished recipe production plans', () => {
             inputQuantity: 3,
             outputQuantity: 3,
             averageTemperature: 40,
-            processMultiplier: 2.5,
+            processMultiplier: 1.5,
             baseMinutesPerTier: 720,
-            effectiveMinutesPerTier: 288,
-            minutesPerBatch: 576,
-            totalProcessMinutes: 1_152,
+            effectiveMinutesPerTier: 480,
+            minutesPerBatch: 960,
+            totalProcessMinutes: 1_920,
         });
         expect(plan.duration).toEqual({
             baseProductProcessMinutes: 20,
             mixingProcessMinutes: 54,
-            dryingProcessMinutes: 1_152,
+            dryingProcessMinutes: 1_920,
             packagingEmployeeRealSeconds: null,
             brickPressingEmployeeRealSeconds: null,
-            knownProcessMinutes: 1_226,
-            modeledTotalProcessMinutes: 1_226,
+            knownProcessMinutes: 1_994,
+            modeledTotalProcessMinutes: 1_994,
         });
         expect(plan.evidence).toMatchObject({
             modeledScope: 'base-product-ordered-mixing-and-selected-drying',
@@ -192,6 +192,22 @@ describe('finished recipe production plans', () => {
             processMultiplier: 1,
             effectiveMinutesPerTier: 720,
             totalProcessMinutes: 1_440,
+        });
+
+        expect(
+            planner.plan(recipe, 3, {
+                mixingStationItemId: 'mixer',
+                drying: {
+                    stationItemId: 'dryer',
+                    startingQuality: 'Standard',
+                    targetQuality: 'Premium',
+                    averageTemperature: 30,
+                },
+            }).dryingStep
+        ).toMatchObject({
+            processMultiplier: 1.25,
+            effectiveMinutesPerTier: 576,
+            totalProcessMinutes: 1_152,
         });
     });
 

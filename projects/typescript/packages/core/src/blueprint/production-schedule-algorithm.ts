@@ -11,6 +11,7 @@ export interface BlueprintProductionSchedulePlacement {
     readonly placementId: string;
     readonly lighting: BlueprintProductionLightingAssessment;
     readonly temperature: BlueprintProductionTemperatureAssessment;
+    readonly processMultiplier: number;
     readonly constraintStatus: 'satisfied' | 'conditional';
 }
 
@@ -22,6 +23,7 @@ export interface BlueprintProductionScheduleResolvedStep {
 
 export interface BlueprintProductionConstrainedSchedule {
     readonly constraintStatus: 'satisfied' | 'conditional';
+    readonly serialProcessMinutes: number;
     readonly scheduledElapsedMinutes: number;
     readonly schedule: readonly BlueprintProductionScheduledStep[];
 }
@@ -34,6 +36,7 @@ interface CalendarInterval {
 interface PlacementChoice {
     readonly placement: BlueprintProductionSchedulePlacement;
     readonly startMinute: number;
+    readonly durationMinutes: number;
     readonly endMinute: number;
 }
 
@@ -94,6 +97,21 @@ export function scheduleConstrainedProduction(
         constraintStatus: schedule.some((step) => step.constraintStatus === 'conditional')
             ? 'conditional'
             : 'satisfied',
+        serialProcessMinutes: schedule.reduce(
+            (total, step) => addFinite(
+                total,
+                step.batches.reduce(
+                    (stepTotal, batch) => addFinite(
+                        stepTotal,
+                        batch.durationMinutes,
+                        'Scheduled step serial process minutes'
+                    ),
+                    0
+                ),
+                'Scheduled serial process minutes'
+            ),
+            0
+        ),
         scheduledElapsedMinutes: schedule.reduce((maximum, step) => Math.max(maximum, step.endMinute), 0),
         schedule,
     };
@@ -134,6 +152,7 @@ function scheduleStep(
             equipmentItemId: equipment.equipmentItemId,
             placementId: choice.placement.placementId,
             dependencyReadyMinute,
+            durationMinutes: choice.durationMinutes,
             startMinute: choice.startMinute,
             endMinute: choice.endMinute,
         });
@@ -150,6 +169,7 @@ function scheduleStep(
         usedUnitCount: assignments.length,
         batchCount: step.batchCount,
         durationMinutesPerBatch: step.durationMinutesPerBatch,
+        durationMinutesPerBatchBasis: 'production-batch-plan-before-placement-temperature',
         startMinute,
         endMinute,
         elapsedMinutes: subtractFinite(endMinute, startMinute, `${step.routeId} elapsed duration`),
@@ -253,15 +273,25 @@ function choosePlacement(
     const satisfied = placements.filter((placement) => placement.constraintStatus === 'satisfied');
     const eligible = satisfied.length > 0 ? satisfied : placements;
     const choices = eligible.map((placement) => {
+        const adjustedDurationMinutes = divideFinite(
+            durationMinutes,
+            placement.processMultiplier,
+            'Temperature-adjusted batch duration'
+        );
         const startMinute = earliestCalendarSlot(
             calendars.get(placement.placementId) ?? [],
             releaseMinute,
-            durationMinutes
+            adjustedDurationMinutes
         );
         return {
             placement,
             startMinute,
-            endMinute: addFinite(startMinute, durationMinutes, 'Scheduled batch end minute'),
+            durationMinutes: adjustedDurationMinutes,
+            endMinute: addFinite(
+                startMinute,
+                adjustedDurationMinutes,
+                'Scheduled batch end minute'
+            ),
         };
     }).sort((left, right) =>
         left.endMinute - right.endMinute ||
@@ -335,10 +365,18 @@ function criticalPathMinutes(
     for (let stepIndex = plan.productionSteps.length - 1; stepIndex >= 0; stepIndex--) {
         const step = plan.productionSteps[stepIndex]!;
         const equipment = resolved[stepIndex]!;
-        const ownMinutes = multiplyFinite(
+        const baseOwnMinutes = multiplyFinite(
             Math.ceil(step.batchCount / equipment.placements.length),
             step.durationMinutesPerBatch,
             `${step.routeId} estimated elapsed duration`
+        );
+        const fastestMultiplier = Math.max(
+            ...equipment.placements.map((placement) => placement.processMultiplier)
+        );
+        const ownMinutes = divideFinite(
+            baseOwnMinutes,
+            fastestMultiplier,
+            `${step.routeId} temperature-adjusted estimated elapsed duration`
         );
         const downstreamMinutes = Math.max(
             0,
@@ -380,5 +418,11 @@ function addFinite(left: number, right: number, label: string): number {
 function subtractFinite(left: number, right: number, label: string): number {
     const result = left - right;
     if (!Number.isFinite(result) || result < 0) throw new RangeError(`${label} must be non-negative`);
+    return result;
+}
+
+function divideFinite(numerator: number, denominator: number, label: string): number {
+    const result = numerator / denominator;
+    if (!Number.isFinite(result) || result <= 0) throw new RangeError(`${label} must be positive`);
     return result;
 }

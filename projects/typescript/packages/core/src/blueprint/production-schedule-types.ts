@@ -30,6 +30,7 @@ export type BlueprintProductionTemperatureAssessment =
         readonly basis: 'native-effective-temperature';
         readonly ambientTemperature: number;
         readonly effectiveTemperature: number;
+        readonly processMultiplier: number;
         readonly rule: Exclude<
             BlueprintProductionTemperatureRule,
             { readonly kind: 'internal-cook-setpoint' }
@@ -37,11 +38,10 @@ export type BlueprintProductionTemperatureAssessment =
     }
     | {
         readonly kind: 'conditional';
-        readonly reason:
-            | 'placement-not-on-property-grid'
-            | 'temperature-duration-multiplier-not-evaluated';
+        readonly reason: 'placement-not-on-property-grid';
         readonly ambientTemperature: number | null;
         readonly effectiveTemperature: number | null;
+        readonly processMultiplier: null;
         readonly rule: Exclude<
             BlueprintProductionTemperatureRule,
             { readonly kind: 'internal-cook-setpoint' }
@@ -63,6 +63,7 @@ export interface BlueprintProductionScheduledBatch {
     readonly equipmentItemId: string;
     readonly placementId: string;
     readonly dependencyReadyMinute: number;
+    readonly durationMinutes: number;
     readonly startMinute: number;
     readonly endMinute: number;
 }
@@ -76,6 +77,7 @@ export interface BlueprintProductionScheduledStep {
     readonly usedUnitCount: number;
     readonly batchCount: number;
     readonly durationMinutesPerBatch: number;
+    readonly durationMinutesPerBatchBasis: 'production-batch-plan-before-placement-temperature';
     readonly startMinute: number;
     readonly endMinute: number;
     readonly elapsedMinutes: number;
@@ -131,7 +133,7 @@ export type BlueprintProductionScheduleResult =
     | {
         readonly kind: 'scheduled';
         readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'analyzed' }>;
-        readonly durationBasis: 'production-batch-plan';
+        readonly durationBasis: 'production-batch-plan-with-native-temperature-rate';
         readonly schedulingAlgorithm: 'deterministic-critical-path-list-scheduling';
         readonly optimality: 'not-proven';
         readonly parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars';
@@ -141,8 +143,11 @@ export type BlueprintProductionScheduleResult =
         readonly employeeScheduling: 'not-evaluated-no-task-duration-contract';
         readonly lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated';
         readonly effectiveTemperature: 'native-distance-weighted-tile-average';
+        readonly temperatureDuration: 'native-capped-linear-process-rate';
         readonly constraintStatus: 'satisfied' | 'conditional';
+        readonly baseSerialProcessMinutes: number;
         readonly serialProcessMinutes: number;
+        readonly temperatureTimeSavedMinutes: number;
         readonly scheduledElapsedMinutes: number;
         readonly parallelTimeSavedMinutes: number;
         readonly schedule: readonly BlueprintProductionScheduledStep[];

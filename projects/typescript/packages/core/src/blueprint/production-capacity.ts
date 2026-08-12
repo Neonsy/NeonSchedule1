@@ -478,14 +478,18 @@ function performanceTemperatureRule(
 }> {
     const minimum = finite(minimumTemperature, `${label} minimum temperature`);
     const maximum = finite(maximumTemperature, `${label} maximum temperature`);
-    if (minimum > maximum) {
-        throw new RangeError(`${label} minimum temperature must not exceed its maximum`);
+    if (minimum >= maximum) {
+        throw new RangeError(`${label} minimum temperature must be below its maximum`);
+    }
+    const multiplier = positive(maximumMultiplier, `${label} maximum temperature multiplier`);
+    if (multiplier < 1) {
+        throw new RangeError(`${label} maximum temperature multiplier must be at least one`);
     }
     return {
         kind: 'environmental-performance-range',
         minimumTemperature: minimum,
         maximumTemperature: maximum,
-        maximumMultiplier: positive(maximumMultiplier, `${label} maximum temperature multiplier`),
+        maximumMultiplier: multiplier,
     };
 }
 
