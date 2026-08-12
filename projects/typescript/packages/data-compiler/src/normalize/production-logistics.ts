@@ -2,6 +2,7 @@ import {
     ProductionLogisticsCatalogSchema,
     type ProductionLogisticsCatalog,
     type ProductionLogisticsEmployeeRole,
+    type ProductionLogisticsEmployeeScheduling,
     type ProductionLogisticsSlot,
     type ProductionLogisticsSlotFilter,
     type ProductionLogisticsStation,
@@ -34,6 +35,36 @@ const movementKinds = {
     Chemist: ['station-specific'],
     Handler: ['assigned-station-supply', 'configured-route'],
 } as const;
+
+const botanistTaskPriority = [
+    'grow-container-watering-below-0.2',
+    'mushroom-bed-misting-below-0.2',
+    'grow-container-additive',
+    'grow-container-soil-pour',
+    'pot-sow-seed',
+    'mushroom-bed-apply-spawn',
+    'pot-harvest',
+    'mushroom-bed-harvest',
+    'drying-rack-stop',
+    'drying-rack-output-move',
+    'mushroom-spawn-station-work',
+    'mushroom-spawn-station-output-move',
+    'grow-container-watering-below-0.3',
+    'mushroom-bed-misting-below-0.3',
+    'drying-rack-input-move',
+] as const;
+
+const chemistTaskPriority = [
+    'lab-oven-finish',
+    'lab-oven-start',
+    'chemistry-station-start',
+    'cauldron-start',
+    'mixing-station-start',
+    'lab-oven-output-move',
+    'chemistry-station-output-move',
+    'cauldron-output-move',
+    'mixing-station-output-move',
+] as const;
 
 const transitTopology = new Map<string, readonly [inputSlots: number, outputSlots: number]>([
     ['brick-press', [2, 1]],
@@ -116,11 +147,94 @@ export function normalizeProductionLogistics(
             'report.productionLogistics.handlerTaskPriority',
             integrity
         ),
+        employeeScheduling: normalizeEmployeeScheduling(raw, integrity),
         employeeRoles: normalizeEmployeeRoles(report, routeLimit, integrity),
         stations: normalizeStations(report.productionStations, itemIds, integrity),
     };
 
     return ProductionLogisticsCatalogSchema.assert(catalog);
+}
+
+function normalizeEmployeeScheduling(
+    productionLogistics: JsonObject,
+    integrity: Integrity
+): ProductionLogisticsEmployeeScheduling | null {
+    if (productionLogistics.employeeScheduling === undefined) return null;
+    const path = 'report.productionLogistics.employeeScheduling';
+    const raw = asObject(productionLogistics.employeeScheduling, path);
+    const workPath = `${path}.workAvailability`;
+    const work = asObject(raw.workAvailability, workPath);
+    const endOfDayTime = numberField(work, 'endOfDayTime', workPath);
+    integrity.check(
+        `${workPath}.endOfDayTime matches the native contract`,
+        endOfDayTime === 400,
+        `${workPath}.endOfDayTime must be 400`
+    );
+    return {
+        dispatchAuthority: literal(
+            stringField(raw, 'dispatchAuthority', path),
+            'server',
+            `${path}.dispatchAuthority`,
+            integrity
+        ),
+        dispatchPrerequisite: literal(
+            stringField(raw, 'dispatchPrerequisite', path),
+            'can-work-and-no-active-behaviour',
+            `${path}.dispatchPrerequisite`,
+            integrity
+        ),
+        taskSelection: literal(
+            stringField(raw, 'taskSelection', path),
+            'first-ready-in-native-priority-order',
+            `${path}.taskSelection`,
+            integrity
+        ),
+        taskReadiness: literal(
+            stringField(raw, 'taskReadiness', path),
+            'native-mutable-runtime-state-not-recorded',
+            `${path}.taskReadiness`,
+            integrity
+        ),
+        workAvailability: {
+            employeeHome: literal(
+                stringField(work, 'employeeHome', workPath),
+                'required',
+                `${workPath}.employeeHome`,
+                integrity
+            ),
+            dailyPayment: literal(
+                stringField(work, 'dailyPayment', workPath),
+                'paid-for-today-required-auto-from-employee-home-cash',
+                `${workPath}.dailyPayment`,
+                integrity
+            ),
+            shiftSchedule: literal(
+                stringField(work, 'shiftSchedule', workPath),
+                'no-fixed-shift',
+                `${workPath}.shiftSchedule`,
+                integrity
+            ),
+            endOfDayTime: 400,
+            consumeProduct: literal(
+                stringField(work, 'consumeProduct', workPath),
+                'blocks-work',
+                `${workPath}.consumeProduct`,
+                integrity
+            ),
+        },
+        botanistTaskPriority: literals(
+            stringArrayField(raw, 'botanistTaskPriority', path),
+            botanistTaskPriority,
+            `${path}.botanistTaskPriority`,
+            integrity
+        ),
+        chemistTaskPriority: literals(
+            stringArrayField(raw, 'chemistTaskPriority', path),
+            chemistTaskPriority,
+            `${path}.chemistTaskPriority`,
+            integrity
+        ),
+    };
 }
 
 function normalizeEmployeeRoles(

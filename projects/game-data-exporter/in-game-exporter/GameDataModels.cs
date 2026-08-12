@@ -500,7 +500,28 @@ internal sealed class ProductionLogisticsSnapshot
     public List<string> MovedQuantityLimits { get; init; } = new();
     public string AccessPointSelection { get; init; } = string.Empty;
     public List<string> HandlerTaskPriority { get; init; } = new();
+    public EmployeeSchedulingSnapshot EmployeeScheduling { get; init; } = new();
     public List<string> StationMovementEmployeeTypes { get; init; } = new();
+}
+
+internal sealed class EmployeeSchedulingSnapshot
+{
+    public string DispatchAuthority { get; init; } = string.Empty;
+    public string DispatchPrerequisite { get; init; } = string.Empty;
+    public string TaskSelection { get; init; } = string.Empty;
+    public string TaskReadiness { get; init; } = string.Empty;
+    public EmployeeWorkAvailabilitySnapshot WorkAvailability { get; init; } = new();
+    public List<string> BotanistTaskPriority { get; init; } = new();
+    public List<string> ChemistTaskPriority { get; init; } = new();
+}
+
+internal sealed class EmployeeWorkAvailabilitySnapshot
+{
+    public string EmployeeHome { get; init; } = string.Empty;
+    public string DailyPayment { get; init; } = string.Empty;
+    public string ShiftSchedule { get; init; } = string.Empty;
+    public int EndOfDayTime { get; init; }
+    public string ConsumeProduct { get; init; } = string.Empty;
 }
 
 internal sealed class SporeSyringeSnapshot

@@ -51,11 +51,25 @@ export function analyzeProductionEmployeeExecution(
         timingScope: 'assigned-production-placement-native-service',
         workSpeedBasis: 'normalized-employee-role-base-work-speed',
         travelTiming: 'not-evaluated',
-        taskReadinessTiming: 'not-evaluated',
+        taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
+        scheduling: employeeScheduling(catalog),
         runtimeWorkSpeed: 'not-evaluated',
         elapsedScheduleComposition: 'not-applied',
         assignments,
         employeeTotals: employeeTotals(assignments),
+    };
+}
+
+function employeeScheduling(
+    catalog: ProductionLogisticsCatalog
+): BlueprintProductionEmployeeExecution['scheduling'] {
+    const scheduling = catalog.employeeScheduling;
+    if (scheduling === undefined || scheduling === null) return null;
+    return {
+        ...scheduling,
+        workAvailability: { ...scheduling.workAvailability },
+        botanistTaskPriority: [...scheduling.botanistTaskPriority],
+        chemistTaskPriority: [...scheduling.chemistTaskPriority],
     };
 }
 

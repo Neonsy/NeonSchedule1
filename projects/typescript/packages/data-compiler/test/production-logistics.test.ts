@@ -26,6 +26,47 @@ describe('production logistics normalization', () => {
             ],
             accessPointSelection: 'npc-reachable',
         });
+        expect(logistics.employeeScheduling).toEqual({
+            dispatchAuthority: 'server',
+            dispatchPrerequisite: 'can-work-and-no-active-behaviour',
+            taskSelection: 'first-ready-in-native-priority-order',
+            taskReadiness: 'native-mutable-runtime-state-not-recorded',
+            workAvailability: {
+                employeeHome: 'required',
+                dailyPayment: 'paid-for-today-required-auto-from-employee-home-cash',
+                shiftSchedule: 'no-fixed-shift',
+                endOfDayTime: 400,
+                consumeProduct: 'blocks-work',
+            },
+            botanistTaskPriority: [
+                'grow-container-watering-below-0.2',
+                'mushroom-bed-misting-below-0.2',
+                'grow-container-additive',
+                'grow-container-soil-pour',
+                'pot-sow-seed',
+                'mushroom-bed-apply-spawn',
+                'pot-harvest',
+                'mushroom-bed-harvest',
+                'drying-rack-stop',
+                'drying-rack-output-move',
+                'mushroom-spawn-station-work',
+                'mushroom-spawn-station-output-move',
+                'grow-container-watering-below-0.3',
+                'mushroom-bed-misting-below-0.3',
+                'drying-rack-input-move',
+            ],
+            chemistTaskPriority: [
+                'lab-oven-finish',
+                'lab-oven-start',
+                'chemistry-station-start',
+                'cauldron-start',
+                'mixing-station-start',
+                'lab-oven-output-move',
+                'chemistry-station-output-move',
+                'cauldron-output-move',
+                'mixing-station-output-move',
+            ],
+        });
         expect(logistics.employeeRoles).toEqual([
             {
                 employeeType: 'Botanist',
@@ -122,6 +163,12 @@ describe('production logistics normalization', () => {
         if (station !== undefined) {
             station.inputFilters = [idFilter(2, 'missing')];
         }
+        const scheduling = employeeScheduling();
+        report.productionLogistics.employeeScheduling = {
+            ...scheduling,
+            workAvailability: { ...scheduling.workAvailability, endOfDayTime: 401 },
+            chemistTaskPriority: [...scheduling.chemistTaskPriority].reverse(),
+        };
         const integrity = new Integrity();
 
         normalizeProductionLogistics(
@@ -140,6 +187,12 @@ describe('production logistics normalization', () => {
             'report.world.employeeTypes["Handler"].walkSpeed must be positive'
         );
         expect(integrity.errors).toContain(
+            'report.productionLogistics.employeeScheduling.workAvailability.endOfDayTime must be 400'
+        );
+        expect(integrity.errors).toContain(
+            'report.productionLogistics.employeeScheduling.chemistTaskPriority must equal ["lab-oven-finish","lab-oven-start","chemistry-station-start","cauldron-start","mixing-station-start","lab-oven-output-move","chemistry-station-output-move","cauldron-output-move","mixing-station-output-move"]'
+        );
+        expect(integrity.errors).toContain(
             'report.productionStations["packagingstation"].inputFilters[0].slotIndex 2 is outside 2 slots'
         );
         expect(integrity.errors).toContain(
@@ -147,9 +200,10 @@ describe('production logistics normalization', () => {
         );
     });
 
-    it('preserves compatibility with acquisitions that predate employee walk speed', () => {
+    it('preserves compatibility with acquisitions that predate employee scheduling facts', () => {
         const report = logisticsReport();
         for (const employeeType of report.world.employeeTypes) delete employeeType.walkSpeed;
+        delete report.productionLogistics.employeeScheduling;
         const integrity = new Integrity();
 
         const logistics = normalizeProductionLogistics(
@@ -164,6 +218,7 @@ describe('production logistics normalization', () => {
             null,
             null,
         ]);
+        expect(logistics.employeeScheduling).toBeNull();
     });
 });
 
@@ -186,6 +241,7 @@ function logisticsReport(): RawReport {
                 'brick-press-supply-move',
                 'configured-transit-route',
             ],
+            employeeScheduling: employeeScheduling(),
             stationMovementEmployeeTypes: ['Botanist', 'Chemist'],
         },
         productionStations: [
@@ -233,6 +289,50 @@ function logisticsReport(): RawReport {
             ],
         },
     } as unknown as RawReport;
+}
+
+function employeeScheduling() {
+    return {
+        dispatchAuthority: 'server',
+        dispatchPrerequisite: 'can-work-and-no-active-behaviour',
+        taskSelection: 'first-ready-in-native-priority-order',
+        taskReadiness: 'native-mutable-runtime-state-not-recorded',
+        workAvailability: {
+            employeeHome: 'required',
+            dailyPayment: 'paid-for-today-required-auto-from-employee-home-cash',
+            shiftSchedule: 'no-fixed-shift',
+            endOfDayTime: 400,
+            consumeProduct: 'blocks-work',
+        },
+        botanistTaskPriority: [
+            'grow-container-watering-below-0.2',
+            'mushroom-bed-misting-below-0.2',
+            'grow-container-additive',
+            'grow-container-soil-pour',
+            'pot-sow-seed',
+            'mushroom-bed-apply-spawn',
+            'pot-harvest',
+            'mushroom-bed-harvest',
+            'drying-rack-stop',
+            'drying-rack-output-move',
+            'mushroom-spawn-station-work',
+            'mushroom-spawn-station-output-move',
+            'grow-container-watering-below-0.3',
+            'mushroom-bed-misting-below-0.3',
+            'drying-rack-input-move',
+        ],
+        chemistTaskPriority: [
+            'lab-oven-finish',
+            'lab-oven-start',
+            'chemistry-station-start',
+            'cauldron-start',
+            'mixing-station-start',
+            'lab-oven-output-move',
+            'chemistry-station-output-move',
+            'cauldron-output-move',
+            'mixing-station-output-move',
+        ],
+    };
 }
 
 function employee(

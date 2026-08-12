@@ -517,6 +517,51 @@ internal static partial class GameDataCollector
             "brick-press-supply-move",
             "configured-transit-route",
         },
+        EmployeeScheduling = new EmployeeSchedulingSnapshot
+        {
+            DispatchAuthority = "server",
+            DispatchPrerequisite = "can-work-and-no-active-behaviour",
+            TaskSelection = "first-ready-in-native-priority-order",
+            TaskReadiness = "native-mutable-runtime-state-not-recorded",
+            WorkAvailability = new EmployeeWorkAvailabilitySnapshot
+            {
+                EmployeeHome = "required",
+                DailyPayment = "paid-for-today-required-auto-from-employee-home-cash",
+                ShiftSchedule = "no-fixed-shift",
+                EndOfDayTime = 400,
+                ConsumeProduct = "blocks-work",
+            },
+            BotanistTaskPriority = new List<string>
+            {
+                "grow-container-watering-below-0.2",
+                "mushroom-bed-misting-below-0.2",
+                "grow-container-additive",
+                "grow-container-soil-pour",
+                "pot-sow-seed",
+                "mushroom-bed-apply-spawn",
+                "pot-harvest",
+                "mushroom-bed-harvest",
+                "drying-rack-stop",
+                "drying-rack-output-move",
+                "mushroom-spawn-station-work",
+                "mushroom-spawn-station-output-move",
+                "grow-container-watering-below-0.3",
+                "mushroom-bed-misting-below-0.3",
+                "drying-rack-input-move",
+            },
+            ChemistTaskPriority = new List<string>
+            {
+                "lab-oven-finish",
+                "lab-oven-start",
+                "chemistry-station-start",
+                "cauldron-start",
+                "mixing-station-start",
+                "lab-oven-output-move",
+                "chemistry-station-output-move",
+                "cauldron-output-move",
+                "mixing-station-output-move",
+            },
+        },
         StationMovementEmployeeTypes = new List<string> { "Botanist", "Chemist" },
     };
 

@@ -45,11 +45,32 @@ export const ProductionLogisticsRouteRulesSchema = type({
 });
 export type ProductionLogisticsRouteRules = typeof ProductionLogisticsRouteRulesSchema.infer;
 
+export const ProductionLogisticsEmployeeSchedulingSchema = type({
+    dispatchAuthority: "'server'",
+    dispatchPrerequisite: "'can-work-and-no-active-behaviour'",
+    taskSelection: "'first-ready-in-native-priority-order'",
+    taskReadiness: "'native-mutable-runtime-state-not-recorded'",
+    workAvailability: {
+        employeeHome: "'required'",
+        dailyPayment: "'paid-for-today-required-auto-from-employee-home-cash'",
+        shiftSchedule: "'no-fixed-shift'",
+        endOfDayTime: '400',
+        consumeProduct: "'blocks-work'",
+    },
+    botanistTaskPriority:
+        "('grow-container-watering-below-0.2' | 'mushroom-bed-misting-below-0.2' | 'grow-container-additive' | 'grow-container-soil-pour' | 'pot-sow-seed' | 'mushroom-bed-apply-spawn' | 'pot-harvest' | 'mushroom-bed-harvest' | 'drying-rack-stop' | 'drying-rack-output-move' | 'mushroom-spawn-station-work' | 'mushroom-spawn-station-output-move' | 'grow-container-watering-below-0.3' | 'mushroom-bed-misting-below-0.3' | 'drying-rack-input-move')[]",
+    chemistTaskPriority:
+        "('lab-oven-finish' | 'lab-oven-start' | 'chemistry-station-start' | 'cauldron-start' | 'mixing-station-start' | 'lab-oven-output-move' | 'chemistry-station-output-move' | 'cauldron-output-move' | 'mixing-station-output-move')[]",
+});
+export type ProductionLogisticsEmployeeScheduling =
+    typeof ProductionLogisticsEmployeeSchedulingSchema.infer;
+
 export const ProductionLogisticsCatalogSchema = type({
     schema: "'neonschedule1-production-logistics-1'",
     routeRules: ProductionLogisticsRouteRulesSchema,
     handlerTaskPriority:
         "('packaging-station-work' | 'brick-press-work' | 'packaging-station-supply-move' | 'brick-press-supply-move' | 'configured-transit-route')[]",
+    'employeeScheduling?': ProductionLogisticsEmployeeSchedulingSchema.or('null'),
     employeeRoles: ProductionLogisticsEmployeeRoleSchema.array(),
     stations: ProductionLogisticsStationSchema.array(),
 });

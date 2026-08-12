@@ -7,6 +7,7 @@ import type { Item } from '#core/data/item';
 import type {
     ProductionLogisticsCatalog,
     ProductionLogisticsEmployeeRole,
+    ProductionLogisticsEmployeeScheduling,
     ProductionLogisticsRouteRules,
 } from '#core/data/production-logistics';
 import type { BlueprintProductionEndpointAccessDataset } from '#core/blueprint/production-endpoint-access';
@@ -266,7 +267,8 @@ export interface BlueprintProductionEmployeeExecution {
     readonly timingScope: 'assigned-production-placement-native-service';
     readonly workSpeedBasis: 'normalized-employee-role-base-work-speed';
     readonly travelTiming: 'not-evaluated';
-    readonly taskReadinessTiming: 'not-evaluated';
+    readonly taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded';
+    readonly scheduling: ProductionLogisticsEmployeeScheduling | null;
     readonly runtimeWorkSpeed: 'not-evaluated';
     readonly elapsedScheduleComposition: 'not-applied';
     readonly assignments: readonly BlueprintProductionEmployeeServiceAssignment[];
