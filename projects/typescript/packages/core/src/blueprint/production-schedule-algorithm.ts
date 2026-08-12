@@ -11,6 +11,8 @@ export interface BlueprintProductionSchedulePlacement {
     readonly placementId: string;
     readonly lighting: BlueprintProductionLightingAssessment;
     readonly temperature: BlueprintProductionTemperatureAssessment;
+    readonly lightingProcessMultiplier: number;
+    readonly temperatureProcessMultiplier: number;
     readonly processMultiplier: number;
     readonly constraintStatus: 'satisfied' | 'conditional';
 }
@@ -23,6 +25,7 @@ export interface BlueprintProductionScheduleResolvedStep {
 
 export interface BlueprintProductionConstrainedSchedule {
     readonly constraintStatus: 'satisfied' | 'conditional';
+    readonly lightingAdjustedSerialProcessMinutes: number;
     readonly serialProcessMinutes: number;
     readonly scheduledElapsedMinutes: number;
     readonly schedule: readonly BlueprintProductionScheduledStep[];
@@ -36,6 +39,7 @@ interface CalendarInterval {
 interface PlacementChoice {
     readonly placement: BlueprintProductionSchedulePlacement;
     readonly startMinute: number;
+    readonly lightingAdjustedDurationMinutes: number;
     readonly durationMinutes: number;
     readonly endMinute: number;
 }
@@ -97,6 +101,21 @@ export function scheduleConstrainedProduction(
         constraintStatus: schedule.some((step) => step.constraintStatus === 'conditional')
             ? 'conditional'
             : 'satisfied',
+        lightingAdjustedSerialProcessMinutes: schedule.reduce(
+            (total, step) => addFinite(
+                total,
+                step.batches.reduce(
+                    (stepTotal, batch) => addFinite(
+                        stepTotal,
+                        batch.lightingAdjustedDurationMinutes,
+                        'Lighting-adjusted step serial process minutes'
+                    ),
+                    0
+                ),
+                'Lighting-adjusted serial process minutes'
+            ),
+            0
+        ),
         serialProcessMinutes: schedule.reduce(
             (total, step) => addFinite(
                 total,
@@ -152,6 +171,7 @@ function scheduleStep(
             equipmentItemId: equipment.equipmentItemId,
             placementId: choice.placement.placementId,
             dependencyReadyMinute,
+            lightingAdjustedDurationMinutes: choice.lightingAdjustedDurationMinutes,
             durationMinutes: choice.durationMinutes,
             startMinute: choice.startMinute,
             endMinute: choice.endMinute,
@@ -169,7 +189,8 @@ function scheduleStep(
         usedUnitCount: assignments.length,
         batchCount: step.batchCount,
         durationMinutesPerBatch: step.durationMinutesPerBatch,
-        durationMinutesPerBatchBasis: 'production-batch-plan-before-placement-temperature',
+        durationMinutesPerBatchBasis:
+            'production-batch-plan-before-placement-lighting-and-temperature',
         startMinute,
         endMinute,
         elapsedMinutes: subtractFinite(endMinute, startMinute, `${step.routeId} elapsed duration`),
@@ -273,9 +294,14 @@ function choosePlacement(
     const satisfied = placements.filter((placement) => placement.constraintStatus === 'satisfied');
     const eligible = satisfied.length > 0 ? satisfied : placements;
     const choices = eligible.map((placement) => {
-        const adjustedDurationMinutes = divideFinite(
+        const lightingAdjustedDurationMinutes = divideFinite(
             durationMinutes,
-            placement.processMultiplier,
+            placement.lightingProcessMultiplier,
+            'Lighting-adjusted batch duration'
+        );
+        const adjustedDurationMinutes = divideFinite(
+            lightingAdjustedDurationMinutes,
+            placement.temperatureProcessMultiplier,
             'Temperature-adjusted batch duration'
         );
         const startMinute = earliestCalendarSlot(
@@ -286,6 +312,7 @@ function choosePlacement(
         return {
             placement,
             startMinute,
+            lightingAdjustedDurationMinutes,
             durationMinutes: adjustedDurationMinutes,
             endMinute: addFinite(
                 startMinute,
@@ -376,7 +403,7 @@ function criticalPathMinutes(
         const ownMinutes = divideFinite(
             baseOwnMinutes,
             fastestMultiplier,
-            `${step.routeId} temperature-adjusted estimated elapsed duration`
+            `${step.routeId} placement-rate-adjusted estimated elapsed duration`
         );
         const downstreamMinutes = Math.max(
             0,

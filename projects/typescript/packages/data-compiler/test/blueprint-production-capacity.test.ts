@@ -325,7 +325,7 @@ describe('blueprint production capacity', () => {
         expect(result.kind).toBe('scheduled');
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
-            durationBasis: 'production-batch-plan-with-native-temperature-rate',
+            durationBasis: 'production-batch-plan-with-native-light-exposure-and-temperature-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -333,11 +333,14 @@ describe('blueprint production capacity', () => {
             batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
-            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
+            lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: 'conditional',
             baseSerialProcessMinutes: 350,
+            lightingAdjustedSerialProcessMinutes: 350,
+            lightingTimeAddedMinutes: 0,
+            lightingTimeSavedMinutes: 0,
             serialProcessMinutes: 350,
             temperatureTimeSavedMinutes: 0,
             scheduledElapsedMinutes: 190,
@@ -481,8 +484,15 @@ describe('blueprint production capacity', () => {
         expect(result.kind).toBe('scheduled');
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
-            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
+            lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             constraintStatus: 'satisfied',
+            baseSerialProcessMinutes: 60,
+            lightingAdjustedSerialProcessMinutes: 30,
+            lightingTimeAddedMinutes: 0,
+            lightingTimeSavedMinutes: 30,
+            serialProcessMinutes: 30,
+            temperatureTimeSavedMinutes: 0,
+            scheduledElapsedMinutes: 30,
             schedule: [{
                 constraintStatus: 'satisfied',
                 assignments: [{
@@ -495,7 +505,14 @@ describe('blueprint production capacity', () => {
                         contributingPlacementIds: ['light'],
                         physicalCoverage: 'exact-native-matched-standard-tiles',
                         averageExposure: 1,
+                        averageGrowSpeedMultiplier: 2,
+                        planGrowSpeedMultiplier: 1,
+                        planRelativeProcessMultiplier: 2,
                     },
+                }],
+                batches: [{
+                    lightingAdjustedDurationMinutes: 30,
+                    durationMinutes: 30,
                 }],
             }],
         });
@@ -506,6 +523,34 @@ describe('blueprint production capacity', () => {
             coverageRule: 'native-matched-standard-tiles',
             tiles: [{ gridId: 'main', x: 0, y: 0 }],
         });
+    });
+
+    it('corrects the selected-light plan baseline with the native light rate', () => {
+        const growSpeedMultiplier = 1.3;
+        const result = new BlueprintProductionScheduleAnalyzer(
+            lightingDataset(growSpeedMultiplier)
+        ).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('rack', 'rack', 0),
+                proceduralLightPlacement('light', 'rack'),
+            ]),
+            seedSchedulePlan(growSpeedMultiplier)
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result.baseSerialProcessMinutes).toBe(47);
+        expect(result.lightingAdjustedSerialProcessMinutes).toBeCloseTo(47 / (2.3 / 1.3));
+        expect(result.lightingTimeSavedMinutes).toBeCloseTo(47 - 47 / (2.3 / 1.3));
+        const lighting = result.schedule[0]?.assignments[0]?.lighting;
+        expect(lighting?.kind).toBe('selected-external-grow-light');
+        if (lighting?.kind !== 'selected-external-grow-light' ||
+            lighting.physicalCoverage !== 'exact-native-matched-standard-tiles') return;
+        expect(lighting.averageExposure).toBe(1);
+        expect(lighting.averageGrowSpeedMultiplier).toBeCloseTo(2.3);
+        expect(lighting.planGrowSpeedMultiplier).toBe(1.3);
+        expect(lighting.planRelativeProcessMultiplier).toBeCloseTo(2.3 / 1.3);
     });
 
     it('rejects a grow container outside the selected grow light matched tiles', () => {
@@ -533,7 +578,7 @@ describe('blueprint production capacity', () => {
         }]);
     });
 
-    it('reports partial native light exposure without claiming exact planned duration', () => {
+    it('applies partial native light exposure to placement-specific duration', () => {
         const source = lightingDataset();
         const pot = source.buildables.find((entry) => entry.itemId === 'pot')!;
         const footprint = pot.placement.footprintTiles[0]!;
@@ -568,16 +613,30 @@ describe('blueprint production capacity', () => {
         expect(result.kind).toBe('scheduled');
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
-            constraintStatus: 'conditional',
+            constraintStatus: 'satisfied',
+            baseSerialProcessMinutes: 60,
+            lightingAdjustedSerialProcessMinutes: 120,
+            lightingTimeAddedMinutes: 60,
+            lightingTimeSavedMinutes: 0,
+            serialProcessMinutes: 120,
+            temperatureTimeSavedMinutes: 0,
+            scheduledElapsedMinutes: 120,
             schedule: [{
-                constraintStatus: 'conditional',
+                constraintStatus: 'satisfied',
                 assignments: [{
-                    constraintStatus: 'conditional',
+                    constraintStatus: 'satisfied',
                     lighting: {
                         contributingPlacementIds: ['light'],
                         physicalCoverage: 'exact-native-matched-standard-tiles',
                         averageExposure: 0.5,
+                        averageGrowSpeedMultiplier: 1,
+                        planGrowSpeedMultiplier: 1,
+                        planRelativeProcessMultiplier: 0.5,
                     },
+                }],
+                batches: [{
+                    lightingAdjustedDurationMinutes: 120,
+                    durationMinutes: 120,
                 }],
             }],
         });
@@ -714,6 +773,9 @@ describe('blueprint production capacity', () => {
         if (result.kind !== 'scheduled') return;
         expect(result).toMatchObject({
             baseSerialProcessMinutes: 60,
+            lightingAdjustedSerialProcessMinutes: 60,
+            lightingTimeAddedMinutes: 0,
+            lightingTimeSavedMinutes: 0,
             serialProcessMinutes: 40,
             temperatureTimeSavedMinutes: 20,
             scheduledElapsedMinutes: 40,
@@ -721,7 +783,7 @@ describe('blueprint production capacity', () => {
             schedule: [{
                 durationMinutesPerBatch: 60,
                 durationMinutesPerBatchBasis:
-                    'production-batch-plan-before-placement-temperature',
+                    'production-batch-plan-before-placement-lighting-and-temperature',
                 assignments: [{
                     temperature: {
                         kind: 'satisfied',
@@ -729,7 +791,12 @@ describe('blueprint production capacity', () => {
                         processMultiplier: 1.5,
                     },
                 }],
-                batches: [{ durationMinutes: 40, startMinute: 0, endMinute: 40 }],
+                batches: [{
+                    lightingAdjustedDurationMinutes: 60,
+                    durationMinutes: 40,
+                    startMinute: 0,
+                    endMinute: 40,
+                }],
             }],
         });
 
@@ -870,10 +937,18 @@ describe('blueprint production capacity', () => {
     });
 });
 
-function schedulePlan(): ProductionBatchPlan {
+function schedulePlan(lightGrowSpeedMultiplier = 1): ProductionBatchPlan {
     const items = ['seed', 'soil', 'leaf', 'liquid', 'pot', 'chemistry', 'light']
         .map((itemId) => item(itemId, ['seed', 'soil'].includes(itemId) ? 1 : null));
-    const catalog = production();
+    const source = production();
+    const catalog = {
+        ...source,
+        stations: source.stations.map((station) =>
+            station.kind === 'grow-light' && station.itemId === 'light'
+                ? { ...station, growSpeedMultiplier: lightGrowSpeedMultiplier }
+                : station
+        ),
+    };
     const costs = new ProductionMaterialCostEvaluator(
         new Map(items.map((entry) => [entry.id, entry])),
         { ...catalog, shrooms: [] },
@@ -907,8 +982,8 @@ function shroomSchedulePlan(): ProductionBatchPlan {
     ).plan('shroom', 16);
 }
 
-function seedSchedulePlan(): ProductionBatchPlan {
-    const plan = schedulePlan();
+function seedSchedulePlan(lightGrowSpeedMultiplier = 1): ProductionBatchPlan {
+    const plan = schedulePlan(lightGrowSpeedMultiplier);
     const step = plan.productionSteps[0]!;
     return {
         ...plan,
@@ -1009,7 +1084,7 @@ function dataset(): BlueprintProductionCapacityDataset {
     };
 }
 
-function lightingDataset(): BlueprintProductionCapacityDataset {
+function lightingDataset(growSpeedMultiplier = 1): BlueprintProductionCapacityDataset {
     const source = dataset();
     return {
         ...source,
@@ -1018,6 +1093,14 @@ function lightingDataset(): BlueprintProductionCapacityDataset {
             rackBuildable(),
             proceduralLightBuildable(),
         ],
+        production: {
+            ...source.production,
+            stations: source.production.stations.map((station) =>
+                station.kind === 'grow-light' && station.itemId === 'light'
+                    ? { ...station, growSpeedMultiplier }
+                    : station
+            ),
+        },
     };
 }
 

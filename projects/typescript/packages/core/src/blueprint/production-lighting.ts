@@ -14,11 +14,16 @@ export type ProductionLightingContext =
     | {
         readonly kind: 'external-grow-light-context';
         readonly growLightItemId: string;
+        readonly planGrowSpeedMultiplier: number;
         readonly installed: BlueprintProductionEquipmentCapacity;
     };
 
 export type ProductionLightingResolution =
-    | { readonly kind: 'eligible'; readonly assessment: BlueprintProductionLightingAssessment }
+    | {
+        readonly kind: 'eligible';
+        readonly assessment: BlueprintProductionLightingAssessment;
+        readonly processMultiplier: number;
+    }
     | { readonly kind: 'unsatisfied' };
 
 export function productionLightingContext(
@@ -56,6 +61,7 @@ export function productionLightingContext(
     return {
         kind: 'external-grow-light-context',
         growLightItemId: step.growLightItemId,
+        planGrowSpeedMultiplier: installed.station.growSpeedMultiplier,
         installed,
     };
 }
@@ -65,7 +71,7 @@ export function productionLightingAssessment(
     equipmentPlacement: BlueprintProductionPlacementCapacity
 ): ProductionLightingResolution {
     if (context.kind !== 'external-grow-light-context') {
-        return { kind: 'eligible', assessment: context };
+        return { kind: 'eligible', assessment: context, processMultiplier: 1 };
     }
     const installedPlacementIds = context.installed.placements
         .map((placement) => placement.placementId)
@@ -73,6 +79,7 @@ export function productionLightingAssessment(
     if (equipmentPlacement.temperature.kind !== 'property-grid-tiles') {
         return {
             kind: 'eligible',
+            processMultiplier: 1,
             assessment: {
                 kind: 'selected-external-grow-light',
                 growLightItemId: context.growLightItemId,
@@ -96,33 +103,55 @@ export function productionLightingAssessment(
         ))
         .map((placement) => placement.placementId)
         .sort();
-    const coveredTileKeys = new Set(exact.flatMap((placement) =>
-        placement.tiles.map((tile) => gridTileKey(tile))
-    ));
-    const coveredTileCount = targetTileKeys.filter((key) => coveredTileKeys.has(key)).length;
-    if (coveredTileCount > 0) {
+    if (unknown) {
         return {
             kind: 'eligible',
+            processMultiplier: 1,
+            assessment: {
+                kind: 'selected-external-grow-light',
+                growLightItemId: context.growLightItemId,
+                installedPlacementIds,
+                physicalCoverage: 'not-evaluated',
+            },
+        };
+    }
+    const sourceCountByTileKey = new Map<string, number>();
+    for (const placement of exact) {
+        for (const tile of placement.tiles) {
+            const key = gridTileKey(tile);
+            if (!targetTileKeySet.has(key)) continue;
+            sourceCountByTileKey.set(key, (sourceCountByTileKey.get(key) ?? 0) + 1);
+        }
+    }
+    const totalExposure = [...sourceCountByTileKey.values()].reduce(
+        (total, sourceCount) => total + sourceCount,
+        0
+    );
+    if (totalExposure > 0) {
+        const averageExposure = totalExposure / targetTileKeys.length;
+        const averageGrowSpeedMultiplier = (
+            1 + sourceCountByTileKey.size * context.planGrowSpeedMultiplier
+        ) / targetTileKeys.length;
+        const processMultiplier = (
+            averageExposure * averageGrowSpeedMultiplier
+        ) / context.planGrowSpeedMultiplier;
+        return {
+            kind: 'eligible',
+            processMultiplier,
             assessment: {
                 kind: 'selected-external-grow-light',
                 growLightItemId: context.growLightItemId,
                 installedPlacementIds,
                 contributingPlacementIds,
                 physicalCoverage: 'exact-native-matched-standard-tiles',
-                averageExposure: coveredTileCount / targetTileKeys.length,
+                averageExposure,
+                averageGrowSpeedMultiplier,
+                planGrowSpeedMultiplier: context.planGrowSpeedMultiplier,
+                planRelativeProcessMultiplier: processMultiplier,
             },
         };
     }
-    if (!unknown) return { kind: 'unsatisfied' };
-    return {
-        kind: 'eligible',
-        assessment: {
-            kind: 'selected-external-grow-light',
-            growLightItemId: context.growLightItemId,
-            installedPlacementIds,
-            physicalCoverage: 'not-evaluated',
-        },
-    };
+    return { kind: 'unsatisfied' };
 }
 
 function growContainer(

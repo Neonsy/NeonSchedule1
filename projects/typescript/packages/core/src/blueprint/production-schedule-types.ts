@@ -25,6 +25,9 @@ export type BlueprintProductionLightingAssessment =
         readonly contributingPlacementIds: readonly string[];
         readonly physicalCoverage: 'exact-native-matched-standard-tiles';
         readonly averageExposure: number;
+        readonly averageGrowSpeedMultiplier: number;
+        readonly planGrowSpeedMultiplier: number;
+        readonly planRelativeProcessMultiplier: number;
     };
 
 export type BlueprintProductionTemperatureAssessment =
@@ -71,6 +74,7 @@ export interface BlueprintProductionScheduledBatch {
     readonly equipmentItemId: string;
     readonly placementId: string;
     readonly dependencyReadyMinute: number;
+    readonly lightingAdjustedDurationMinutes: number;
     readonly durationMinutes: number;
     readonly startMinute: number;
     readonly endMinute: number;
@@ -85,7 +89,8 @@ export interface BlueprintProductionScheduledStep {
     readonly usedUnitCount: number;
     readonly batchCount: number;
     readonly durationMinutesPerBatch: number;
-    readonly durationMinutesPerBatchBasis: 'production-batch-plan-before-placement-temperature';
+    readonly durationMinutesPerBatchBasis:
+        'production-batch-plan-before-placement-lighting-and-temperature';
     readonly startMinute: number;
     readonly endMinute: number;
     readonly elapsedMinutes: number;
@@ -147,7 +152,8 @@ export type BlueprintProductionScheduleResult =
     | {
         readonly kind: 'scheduled';
         readonly capacity: Extract<BlueprintProductionCapacityResult, { readonly kind: 'analyzed' }>;
-        readonly durationBasis: 'production-batch-plan-with-native-temperature-rate';
+        readonly durationBasis:
+            'production-batch-plan-with-native-light-exposure-and-temperature-rate';
         readonly schedulingAlgorithm: 'deterministic-critical-path-list-scheduling';
         readonly optimality: 'not-proven';
         readonly parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars';
@@ -155,11 +161,14 @@ export type BlueprintProductionScheduleResult =
         readonly batchPipelining: 'cumulative-plan-order-produced-quantity';
         readonly routing: 'not-evaluated';
         readonly employeeScheduling: 'not-evaluated-no-task-duration-contract';
-        readonly lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration';
+        readonly lightingCoverage: 'native-matched-standard-tile-exposure-and-duration';
         readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly temperatureDuration: 'native-capped-linear-process-rate';
         readonly constraintStatus: 'satisfied' | 'conditional';
         readonly baseSerialProcessMinutes: number;
+        readonly lightingAdjustedSerialProcessMinutes: number;
+        readonly lightingTimeAddedMinutes: number;
+        readonly lightingTimeSavedMinutes: number;
         readonly serialProcessMinutes: number;
         readonly temperatureTimeSavedMinutes: number;
         readonly scheduledElapsedMinutes: number;

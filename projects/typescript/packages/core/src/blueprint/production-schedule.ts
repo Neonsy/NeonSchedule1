@@ -86,8 +86,13 @@ export class BlueprintProductionScheduleAnalyzer {
         }
 
         const constrained = scheduleConstrainedProduction(plan, resolved);
-        const temperatureSavedMinutes = subtractFinite(
+        const lightingTimeChangeMinutes = differenceFinite(
+            constrained.lightingAdjustedSerialProcessMinutes,
             plan.totalProcessMinutes,
+            'Production lighting time change'
+        );
+        const temperatureSavedMinutes = subtractFinite(
+            constrained.lightingAdjustedSerialProcessMinutes,
             constrained.serialProcessMinutes,
             'Production temperature time saved'
         );
@@ -99,7 +104,7 @@ export class BlueprintProductionScheduleAnalyzer {
         return {
             kind: 'scheduled',
             capacity,
-            durationBasis: 'production-batch-plan-with-native-temperature-rate',
+            durationBasis: 'production-batch-plan-with-native-light-exposure-and-temperature-rate',
             schedulingAlgorithm: 'deterministic-critical-path-list-scheduling',
             optimality: 'not-proven',
             parallelScheduling: 'non-overlapping-whole-batch-equipment-calendars',
@@ -107,11 +112,15 @@ export class BlueprintProductionScheduleAnalyzer {
             batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
-            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
+            lightingCoverage: 'native-matched-standard-tile-exposure-and-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: constrained.constraintStatus,
             baseSerialProcessMinutes: plan.totalProcessMinutes,
+            lightingAdjustedSerialProcessMinutes:
+                constrained.lightingAdjustedSerialProcessMinutes,
+            lightingTimeAddedMinutes: cleanZero(Math.max(0, lightingTimeChangeMinutes)),
+            lightingTimeSavedMinutes: cleanZero(Math.max(0, -lightingTimeChangeMinutes)),
             serialProcessMinutes: constrained.serialProcessMinutes,
             temperatureTimeSavedMinutes: cleanZero(temperatureSavedMinutes),
             scheduledElapsedMinutes: constrained.scheduledElapsedMinutes,
@@ -202,14 +211,17 @@ function resolveCompatibleEquipment(
             placementId: placement.placementId,
             lighting: placementLighting.assessment,
             temperature: temperature.assessment,
-            processMultiplier: temperature.processMultiplier,
+            lightingProcessMultiplier: placementLighting.processMultiplier,
+            temperatureProcessMultiplier: temperature.processMultiplier,
+            processMultiplier: multiplyFinite(
+                placementLighting.processMultiplier,
+                temperature.processMultiplier,
+                'Placement production process multiplier'
+            ),
             constraintStatus:
                 (
                     placementLighting.assessment.kind === 'selected-external-grow-light' &&
-                    (
-                        placementLighting.assessment.physicalCoverage === 'not-evaluated' ||
-                        placementLighting.assessment.averageExposure < 1
-                    )
+                    placementLighting.assessment.physicalCoverage === 'not-evaluated'
                 ) || temperature.assessment.kind === 'conditional'
                     ? 'conditional'
                     : 'satisfied',
@@ -514,6 +526,12 @@ function subtractFinite(left: number, right: number, label: string): number {
     if (!Number.isFinite(result) || result < -numberTolerance(left, right)) {
         throw new RangeError(`${label} must be non-negative`);
     }
+    return result;
+}
+
+function differenceFinite(left: number, right: number, label: string): number {
+    const result = left - right;
+    if (!Number.isFinite(result)) throw new RangeError(`${label} must be finite`);
     return result;
 }
 
