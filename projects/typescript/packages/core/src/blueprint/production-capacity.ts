@@ -13,6 +13,9 @@ import {
 import type {
     ResolvedBlueprintPlacement,
 } from '#core/blueprint/validation';
+import {
+    productionGrowLightCoverage,
+} from '#core/blueprint/production-lighting-coverage';
 
 export interface BlueprintProductionCapacityDataset extends BlueprintTemperatureDataset {
     readonly production: ProductionCatalog;
@@ -71,6 +74,25 @@ export interface BlueprintProductionTemperatureTileEvidence {
     readonly sources: readonly BlueprintTemperatureTileSource[];
 }
 
+export interface BlueprintProductionGridTile {
+    readonly gridId: string;
+    readonly x: number;
+    readonly y: number;
+}
+
+export type BlueprintProductionGrowLightCoverage =
+    | {
+        readonly kind: 'property-grid-tiles';
+        readonly coverageProofStatus: 'exact';
+        readonly coverageRule: 'native-matched-standard-tiles';
+        readonly tiles: readonly BlueprintProductionGridTile[];
+    }
+    | {
+        readonly kind: 'not-evaluated';
+        readonly reason: 'placement-not-on-grid-backed-procedural-tiles';
+        readonly tiles: readonly [];
+    };
+
 export type BlueprintProductionPlacementTemperature =
     | {
         readonly kind: 'property-grid-tiles';
@@ -89,6 +111,7 @@ export interface BlueprintProductionPlacementCapacity {
     readonly placementId: string;
     readonly placementKind: ResolvedBlueprintPlacement['kind'];
     readonly temperature: BlueprintProductionPlacementTemperature;
+    readonly growLightCoverage: BlueprintProductionGrowLightCoverage | null;
 }
 
 export interface BlueprintProductionEquipmentCapacity {
@@ -119,11 +142,17 @@ export type BlueprintProductionCapacityResult =
 
 export class BlueprintProductionCapacityAnalyzer {
     readonly #temperature: BlueprintTemperatureCoverageAnalyzer;
+    readonly #buildableByItemId: ReadonlyMap<string, BlueprintProductionCapacityDataset['buildables'][number]>;
     readonly #stationByItemId: ReadonlyMap<string, ProductionStation>;
     readonly #processesByItemId: ReadonlyMap<string, readonly BlueprintProductionProcessCapacity[]>;
 
     constructor(dataset: BlueprintProductionCapacityDataset) {
         this.#temperature = new BlueprintTemperatureCoverageAnalyzer(dataset);
+        this.#buildableByItemId = indexUnique(
+            dataset.buildables,
+            (buildable) => buildable.itemId,
+            'buildable item ID'
+        );
         const production = ProductionCatalogSchema.assert(dataset.production);
         this.#stationByItemId = indexUnique(
             production.stations,
@@ -165,6 +194,13 @@ export class BlueprintProductionCapacityAnalyzer {
                     temperature.ambientTemperature,
                     temperatureTileByCoordinate
                 ),
+                growLightCoverage: station?.kind === 'grow-light'
+                    ? productionGrowLightCoverage(
+                        resolved,
+                        resolvedById,
+                        this.#buildableByItemId
+                    )
+                    : null,
             };
             const placements = placementsByItemId.get(projected.itemId);
             if (placements === undefined) placementsByItemId.set(projected.itemId, [placement]);

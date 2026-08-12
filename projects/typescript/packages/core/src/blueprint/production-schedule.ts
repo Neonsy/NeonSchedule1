@@ -1,6 +1,5 @@
 import type { BlueprintDocument } from '#core/data/blueprint';
 import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
-import type { ProductionStation } from '#core/data/production';
 import { temperatureProcessMultiplier } from '#core/production/process-temperature';
 import {
     BlueprintProductionCapacityAnalyzer,
@@ -17,11 +16,14 @@ import {
 } from '#core/blueprint/production-schedule-algorithm';
 import {
     productionScheduleProcessKind,
-    type BlueprintProductionLightingAssessment,
     type BlueprintProductionScheduleIssue,
     type BlueprintProductionScheduleResult,
     type BlueprintProductionTemperatureAssessment,
 } from '#core/blueprint/production-schedule-types';
+import {
+    productionLightingAssessment,
+    productionLightingContext,
+} from '#core/blueprint/production-lighting';
 
 export * from '#core/blueprint/production-schedule-types';
 
@@ -105,7 +107,7 @@ export class BlueprintProductionScheduleAnalyzer {
             batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
-            lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
+            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: constrained.constraintStatus,
@@ -180,11 +182,17 @@ function resolveCompatibleEquipment(
     stepIndex: number,
     allEquipment: readonly BlueprintProductionEquipmentCapacity[]
 ): BlueprintProductionScheduleResolvedStep | BlueprintProductionScheduleIssue {
-    const lighting = lightingAssessment(match.equipment, step, stepIndex, allEquipment);
+    const lighting = productionLightingContext(match.equipment, step, stepIndex, allEquipment);
     if ('code' in lighting) return lighting;
     const placements: BlueprintProductionSchedulePlacement[] = [];
     const incompatiblePlacementIds: string[] = [];
+    const lightingIncompatiblePlacementIds: string[] = [];
     for (const placement of match.equipment.placements) {
+        const placementLighting = productionLightingAssessment(lighting, placement);
+        if (placementLighting.kind === 'unsatisfied') {
+            lightingIncompatiblePlacementIds.push(placement.placementId);
+            continue;
+        }
         const temperature = temperatureAssessment(placement, match.process.temperatureRule);
         if (temperature.kind === 'unsatisfied') {
             incompatiblePlacementIds.push(placement.placementId);
@@ -192,15 +200,37 @@ function resolveCompatibleEquipment(
         }
         placements.push({
             placementId: placement.placementId,
-            lighting,
+            lighting: placementLighting.assessment,
             temperature: temperature.assessment,
             processMultiplier: temperature.processMultiplier,
             constraintStatus:
-                lighting.kind === 'selected-external-grow-light' ||
-                temperature.assessment.kind === 'conditional'
+                (
+                    placementLighting.assessment.kind === 'selected-external-grow-light' &&
+                    (
+                        placementLighting.assessment.physicalCoverage === 'not-evaluated' ||
+                        placementLighting.assessment.averageExposure < 1
+                    )
+                ) || temperature.assessment.kind === 'conditional'
                     ? 'conditional'
                     : 'satisfied',
         });
+    }
+    if (
+        placements.length === 0 &&
+        lightingIncompatiblePlacementIds.length === match.equipment.placements.length
+    ) {
+        if (lighting.kind !== 'external-grow-light-context') {
+            throw new Error('Built-in lighting unexpectedly rejected production placements');
+        }
+        return {
+            ...issueBase(step, stepIndex),
+            code: 'grow-light-coverage-unsatisfied',
+            selectedGrowLightItemId: lighting.growLightItemId,
+            installedGrowLightPlacementIds: lighting.installed.placements
+                .map((placement) => placement.placementId)
+                .sort(),
+            incompatiblePlacementIds: lightingIncompatiblePlacementIds.sort(),
+        };
     }
     if (placements.length === 0 && incompatiblePlacementIds.length > 0) {
         return {
@@ -214,51 +244,6 @@ function resolveCompatibleEquipment(
         equipmentItemId: match.equipment.itemId,
         installedUnitCount: match.equipment.installedUnitCount,
         placements: placements.sort((left, right) => left.placementId.localeCompare(right.placementId)),
-    };
-}
-
-function lightingAssessment(
-    equipment: BlueprintProductionEquipmentCapacity,
-    step: ProductionBatchStep,
-    stepIndex: number,
-    allEquipment: readonly BlueprintProductionEquipmentCapacity[]
-): BlueprintProductionLightingAssessment | BlueprintProductionScheduleIssue {
-    if (step.method !== 'seed-harvest') return { kind: 'not-required' };
-    const station = growContainer(equipment.station, equipment.itemId);
-    if (!station.requiresExternalGrowLight) {
-        if (step.growLightItemId !== null) {
-            throw new Error(
-                `Production step ${JSON.stringify(step.routeId)} selects a grow light for built-in lighting`
-            );
-        }
-        return { kind: 'built-in', equipmentItemId: equipment.itemId };
-    }
-    if (step.growLightItemId === null) {
-        return {
-            ...issueBase(step, stepIndex),
-            code: 'grow-light-selection-required',
-            equipmentPlacementIds: equipment.placements.map((placement) => placement.placementId).sort(),
-        };
-    }
-    const installed = allEquipment.find((candidate) => candidate.itemId === step.growLightItemId);
-    const installedPlacementIds = installed?.station?.kind === 'grow-light'
-        ? installed.placements
-        .map((placement) => placement.placementId)
-        .sort()
-        : [];
-    if (installedPlacementIds.length === 0) {
-        return {
-            ...issueBase(step, stepIndex),
-            code: 'missing-selected-grow-light',
-            selectedGrowLightItemId: step.growLightItemId,
-            equipmentPlacementIds: equipment.placements.map((placement) => placement.placementId).sort(),
-        };
-    }
-    return {
-        kind: 'selected-external-grow-light',
-        growLightItemId: step.growLightItemId,
-        installedPlacementIds,
-        physicalCoverage: 'not-evaluated',
     };
 }
 
@@ -353,16 +338,6 @@ function routeMatchesProcess(step: ProductionBatchStep, processId: string): bool
         return step.routeId === processId || step.routeId.startsWith(`${processId}:`);
     }
     return step.routeId === processId;
-}
-
-function growContainer(
-    station: ProductionStation | null,
-    itemId: string
-): Extract<ProductionStation, { readonly kind: 'grow-container' }> {
-    if (station?.kind !== 'grow-container') {
-        throw new Error(`Seed production equipment ${JSON.stringify(itemId)} is not a grow container`);
-    }
-    return station;
 }
 
 function equipmentIssue(

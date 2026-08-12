@@ -17,6 +17,14 @@ export type BlueprintProductionLightingAssessment =
         readonly growLightItemId: string;
         readonly installedPlacementIds: readonly string[];
         readonly physicalCoverage: 'not-evaluated';
+    }
+    | {
+        readonly kind: 'selected-external-grow-light';
+        readonly growLightItemId: string;
+        readonly installedPlacementIds: readonly string[];
+        readonly contributingPlacementIds: readonly string[];
+        readonly physicalCoverage: 'exact-native-matched-standard-tiles';
+        readonly averageExposure: number;
     };
 
 export type BlueprintProductionTemperatureAssessment =
@@ -113,6 +121,12 @@ export type BlueprintProductionScheduleIssue =
         readonly equipmentPlacementIds: readonly string[];
     }
     | BlueprintProductionScheduleIssueBase & {
+        readonly code: 'grow-light-coverage-unsatisfied';
+        readonly selectedGrowLightItemId: string;
+        readonly installedGrowLightPlacementIds: readonly string[];
+        readonly incompatiblePlacementIds: readonly string[];
+    }
+    | BlueprintProductionScheduleIssueBase & {
         readonly code: 'temperature-constraint-unsatisfied';
         readonly incompatiblePlacementIds: readonly string[];
         readonly temperatureRule: BlueprintProductionTemperatureRule;
@@ -141,7 +155,7 @@ export type BlueprintProductionScheduleResult =
         readonly batchPipelining: 'cumulative-plan-order-produced-quantity';
         readonly routing: 'not-evaluated';
         readonly employeeScheduling: 'not-evaluated-no-task-duration-contract';
-        readonly lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated';
+        readonly lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration';
         readonly effectiveTemperature: 'native-distance-weighted-tile-average';
         readonly temperatureDuration: 'native-capped-linear-process-rate';
         readonly constraintStatus: 'satisfied' | 'conditional';

@@ -333,7 +333,7 @@ describe('blueprint production capacity', () => {
             batchPipelining: 'cumulative-plan-order-produced-quantity',
             routing: 'not-evaluated',
             employeeScheduling: 'not-evaluated-no-task-duration-contract',
-            lightingCoverage: 'built-in-or-selected-installed-physical-coverage-not-evaluated',
+            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
             effectiveTemperature: 'native-distance-weighted-tile-average',
             temperatureDuration: 'native-capped-linear-process-rate',
             constraintStatus: 'conditional',
@@ -466,6 +466,121 @@ describe('blueprint production capacity', () => {
             selectedGrowLightItemId: 'light',
             equipmentPlacementIds: ['pot'],
         }]);
+    });
+
+    it('proves native grow-light coverage through matched rack and property-grid tiles', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(lightingDataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('rack', 'rack', 0),
+                proceduralLightPlacement('light', 'rack'),
+            ]),
+            seedSchedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result).toMatchObject({
+            lightingCoverage: 'native-matched-standard-tile-exposure-with-conditional-partial-duration',
+            constraintStatus: 'satisfied',
+            schedule: [{
+                constraintStatus: 'satisfied',
+                assignments: [{
+                    placementId: 'pot',
+                    constraintStatus: 'satisfied',
+                    lighting: {
+                        kind: 'selected-external-grow-light',
+                        growLightItemId: 'light',
+                        installedPlacementIds: ['light'],
+                        contributingPlacementIds: ['light'],
+                        physicalCoverage: 'exact-native-matched-standard-tiles',
+                        averageExposure: 1,
+                    },
+                }],
+            }],
+        });
+        const light = result.capacity.equipment.find((entry) => entry.itemId === 'light')!;
+        expect(light.placements[0]?.growLightCoverage).toEqual({
+            kind: 'property-grid-tiles',
+            coverageProofStatus: 'exact',
+            coverageRule: 'native-matched-standard-tiles',
+            tiles: [{ gridId: 'main', x: 0, y: 0 }],
+        });
+    });
+
+    it('rejects a grow container outside the selected grow light matched tiles', () => {
+        const result = new BlueprintProductionScheduleAnalyzer(lightingDataset()).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('rack', 'rack', 1),
+                proceduralLightPlacement('light', 'rack'),
+            ]),
+            seedSchedulePlan()
+        );
+
+        expect(result.kind).toBe('unavailable');
+        if (result.kind !== 'unavailable') return;
+        expect(result.issues).toEqual([{
+            code: 'grow-light-coverage-unsatisfied',
+            stepIndex: 0,
+            itemId: 'leaf',
+            routeId: 'seed:seed:leaf:soil:pot:light',
+            acceptedEquipmentItemIds: ['pot'],
+            selectedEquipmentItemId: 'pot',
+            selectedGrowLightItemId: 'light',
+            installedGrowLightPlacementIds: ['light'],
+            incompatiblePlacementIds: ['pot'],
+        }]);
+    });
+
+    it('reports partial native light exposure without claiming exact planned duration', () => {
+        const source = lightingDataset();
+        const pot = source.buildables.find((entry) => entry.itemId === 'pot')!;
+        const footprint = pot.placement.footprintTiles[0]!;
+        const result = new BlueprintProductionScheduleAnalyzer({
+            ...source,
+            buildables: source.buildables.map((entry) => entry.itemId !== 'pot'
+                ? entry
+                : {
+                    ...pot,
+                    placement: {
+                        ...pot.placement,
+                        footprintWidth: 2,
+                        footprintTiles: [
+                            footprint,
+                            {
+                                ...footprint,
+                                x: 1,
+                                transform: transform('Footprint/[1,0]'),
+                            },
+                        ],
+                    },
+                }),
+        }).analyze(
+            blueprint([
+                placement('pot', 'pot', 0),
+                placement('rack', 'rack', 0),
+                proceduralLightPlacement('light', 'rack'),
+            ]),
+            seedSchedulePlan()
+        );
+
+        expect(result.kind).toBe('scheduled');
+        if (result.kind !== 'scheduled') return;
+        expect(result).toMatchObject({
+            constraintStatus: 'conditional',
+            schedule: [{
+                constraintStatus: 'conditional',
+                assignments: [{
+                    constraintStatus: 'conditional',
+                    lighting: {
+                        contributingPlacementIds: ['light'],
+                        physicalCoverage: 'exact-native-matched-standard-tiles',
+                        averageExposure: 0.5,
+                    },
+                }],
+            }],
+        });
     });
 
     it('allocates producer batches once across branching consumers', () => {
@@ -894,6 +1009,18 @@ function dataset(): BlueprintProductionCapacityDataset {
     };
 }
 
+function lightingDataset(): BlueprintProductionCapacityDataset {
+    const source = dataset();
+    return {
+        ...source,
+        buildables: [
+            ...source.buildables.filter((entry) => entry.itemId !== 'light'),
+            rackBuildable(),
+            proceduralLightBuildable(),
+        ],
+    };
+}
+
 function dryingRules(): ProductionCatalog['drying'] {
     return {
         schema: 'neonschedule1-drying-operation-rules-1',
@@ -1023,6 +1150,19 @@ function placement(
     return { id, kind: 'grid', itemId, gridId: 'main', anchor: { x, y: 0 }, rotation: 0 };
 }
 
+function proceduralLightPlacement(
+    id: string,
+    parentPlacementId: string
+): BlueprintDocument['placements'][number] {
+    return {
+        id,
+        kind: 'procedural-grid',
+        itemId: 'light',
+        parentPlacementId,
+        tiles: [{ x: 0, y: 0, tileId: 'rack/light-tile' }],
+    };
+}
+
 function property(): Property {
     return {
         schema: 'neonschedule1-property-1',
@@ -1079,6 +1219,36 @@ function buildable(
         transitAccessPoints: [],
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
+    };
+}
+
+function rackBuildable(): Buildable {
+    const rack = buildable('rack');
+    return {
+        ...rack,
+        placement: {
+            ...rack.placement,
+            tileSharingRule: 'floor-rack',
+        },
+        proceduralTiles: [{
+            id: 'rack/light-tile',
+            type: 'Rack',
+            transform: transform('Rack/LightTile'),
+        }],
+    };
+}
+
+function proceduralLightBuildable(): Buildable {
+    const light = buildable('light');
+    return {
+        ...light,
+        placement: {
+            ...light.placement,
+            kind: 'procedural-grid',
+            proceduralTileType: 'Rack',
+            tileSharingRule: null,
+            tileSharingImplementation: null,
+        },
     };
 }
 
