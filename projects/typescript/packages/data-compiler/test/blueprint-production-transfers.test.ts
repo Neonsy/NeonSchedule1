@@ -305,15 +305,24 @@ describe('blueprint production logistics', () => {
             routeQuantityAllocation: 'not-evaluated',
             employeeExecution: {
                 timingScope:
-                    'assigned-production-placement-service-and-property-spawn-network-travel-candidates',
+                    'assigned-production-placement-service-and-property-spawn-network-reachability-candidates',
                 workSpeedBasis: 'normalized-employee-role-base-work-speed',
-                travelTiming: {
+                reachabilityTiming: {
                     origin: 'property-spawn',
                     destination: 'assigned-placement-transit-points',
                     pathSelection: 'all-network-reachable-candidates-unselected',
                     distanceScope: 'navigation-graph-edges-only',
                     endpointSnapTraversal: 'not-included-not-proven-walkable',
-                    frequency: 'not-evaluated-dynamic-task-state',
+                    purpose: 'endpoint-reachability-baseline-not-native-task-travel',
+                },
+                taskTravelTiming: {
+                    status:
+                        'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence',
+                    movement: {
+                        taskOrigin: 'current-npc-position',
+                        completionPosition: 'task-endpoint-until-subsequent-behaviour',
+                        taskChaining: 'each-selected-task-starts-from-then-current-npc-position',
+                    },
                 },
                 taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
                 scheduling: {
@@ -335,7 +344,7 @@ describe('blueprint production logistics', () => {
                 },
                 runtimeWorkSpeed: 'not-evaluated',
                 elapsedScheduleComposition:
-                    'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency',
+                    'not-applied-dynamic-task-sequence-readiness-runtime-speed-and-concurrency',
                 assignments: [
                     {
                         stepIndex: 0,
@@ -373,7 +382,7 @@ describe('blueprint production logistics', () => {
                         totalServiceSeconds: 20,
                     },
                 ],
-                travelAssignments: [
+                reachabilityAssignments: [
                     {
                         stepIndex: 0,
                         placementId: 'source-a',
@@ -406,7 +415,7 @@ describe('blueprint production logistics', () => {
                             startSnapDistance: 0,
                             endSnapDistance: 0,
                             networkDistance: 13,
-                            networkTravelSeconds: 6.5,
+                            networkTraversalSeconds: 6.5,
                         }],
                     },
                 ],
@@ -659,7 +668,7 @@ describe('blueprint production logistics', () => {
 
         expect(result.kind).toBe('analyzed');
         if (result.kind !== 'analyzed') return;
-        expect(result.employeeExecution.travelAssignments).toContainEqual(
+        expect(result.employeeExecution.reachabilityAssignments).toContainEqual(
             expect.objectContaining({
                 placementId: 'destination-b',
                 kind: 'walk-speed-unavailable',
@@ -675,7 +684,7 @@ describe('blueprint production logistics', () => {
 
         expect(result.kind).toBe('analyzed');
         if (result.kind !== 'analyzed') return;
-        const assigned = result.employeeExecution.travelAssignments.find(
+        const assigned = result.employeeExecution.reachabilityAssignments.find(
             (assignment) => assignment.placementId === 'destination-b'
         );
         expect(assigned).toMatchObject({
@@ -704,7 +713,7 @@ describe('blueprint production logistics', () => {
 
         expect(result.kind).toBe('analyzed');
         if (result.kind !== 'analyzed') return;
-        expect(result.employeeExecution.travelAssignments).toContainEqual(
+        expect(result.employeeExecution.reachabilityAssignments).toContainEqual(
             expect.objectContaining({
                 placementId: 'source-a',
                 kind: 'no-network-reachable-transit-point',
@@ -1078,6 +1087,53 @@ function logisticsCatalog(): BlueprintProductionLogisticsDataset['productionLogi
                 shiftSchedule: 'no-fixed-shift',
                 endOfDayTime: 400,
                 consumeProduct: 'blocks-work',
+            },
+            movement: {
+                taskOrigin: 'current-npc-position',
+                completionPosition: 'task-endpoint-until-subsequent-behaviour',
+                taskChaining: 'each-selected-task-starts-from-then-current-npc-position',
+                growContainerItemSource: 'employee-inventory-otherwise-assigned-supplies',
+                growContainerTaskKinds: [
+                    'grow-container-watering-below-0.2',
+                    'mushroom-bed-misting-below-0.2',
+                    'grow-container-additive',
+                    'grow-container-soil-pour',
+                    'pot-sow-seed',
+                    'mushroom-bed-apply-spawn',
+                    'pot-harvest',
+                    'mushroom-bed-harvest',
+                    'grow-container-watering-below-0.3',
+                    'mushroom-bed-misting-below-0.3',
+                ],
+                growContainerTaskLegs: [
+                    'current-to-supplies-if-required-item-missing',
+                    'supplies-to-grow-container-if-supplies-visited',
+                    'current-to-grow-container-otherwise',
+                ],
+                stationTaskKinds: [
+                    'drying-rack-stop',
+                    'mushroom-spawn-station-work',
+                    'lab-oven-finish',
+                    'lab-oven-start',
+                    'chemistry-station-start',
+                    'cauldron-start',
+                    'mixing-station-start',
+                ],
+                stationTaskLegs: ['current-to-station-access-point'],
+                moveItemTaskKinds: [
+                    'drying-rack-output-move',
+                    'mushroom-spawn-station-output-move',
+                    'drying-rack-input-move',
+                    'lab-oven-output-move',
+                    'chemistry-station-output-move',
+                    'cauldron-output-move',
+                    'mixing-station-output-move',
+                ],
+                moveItemTaskLegs: [
+                    'current-to-source-access-point',
+                    'source-to-destination-access-point',
+                ],
+                legFrequency: 'once-per-selected-task-activation-if-not-already-at-endpoint',
             },
             botanistTaskPriority: [
                 'grow-container-watering-below-0.2',

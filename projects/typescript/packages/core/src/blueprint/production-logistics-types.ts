@@ -6,6 +6,7 @@ import type {
 import type { Item } from '#core/data/item';
 import type {
     ProductionLogisticsCatalog,
+    ProductionLogisticsEmployeeMovement,
     ProductionLogisticsEmployeeRole,
     ProductionLogisticsEmployeeScheduling,
     ProductionLogisticsRouteRules,
@@ -263,16 +264,16 @@ export interface BlueprintProductionEmployeeServiceTotal {
     readonly totalServiceSeconds: number;
 }
 
-export interface BlueprintProductionEmployeeTravelCandidate {
+export interface BlueprintProductionEmployeeReachabilityCandidate {
     readonly accessPointIndex: number;
     readonly accessPointPath: string;
     readonly startSnapDistance: number;
     readonly endSnapDistance: number;
     readonly networkDistance: number;
-    readonly networkTravelSeconds: number;
+    readonly networkTraversalSeconds: number;
 }
 
-interface BlueprintProductionEmployeeTravelAssignmentBase {
+interface BlueprintProductionEmployeeReachabilityAssignmentBase {
     readonly stepIndex: number;
     readonly itemId: string;
     readonly routeId: string;
@@ -280,55 +281,61 @@ interface BlueprintProductionEmployeeTravelAssignmentBase {
     readonly requiredEmployeeType: BlueprintEmployeeAssignment['employeeType'];
 }
 
-export type BlueprintProductionEmployeeTravelAssignment =
-    | BlueprintProductionEmployeeTravelAssignmentBase & {
+export type BlueprintProductionEmployeeReachabilityAssignment =
+    | BlueprintProductionEmployeeReachabilityAssignmentBase & {
         readonly kind: 'unassigned';
         readonly employeeId: null;
         readonly employeeType: null;
     }
-    | BlueprintProductionEmployeeTravelAssignmentBase & {
+    | BlueprintProductionEmployeeReachabilityAssignmentBase & {
         readonly kind: 'incompatible-employee';
         readonly employeeId: string;
         readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
     }
-    | BlueprintProductionEmployeeTravelAssignmentBase & {
+    | BlueprintProductionEmployeeReachabilityAssignmentBase & {
         readonly kind: 'walk-speed-unavailable';
         readonly employeeId: string;
         readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
     }
-    | BlueprintProductionEmployeeTravelAssignmentBase & {
+    | BlueprintProductionEmployeeReachabilityAssignmentBase & {
         readonly kind: 'no-network-reachable-transit-point';
         readonly employeeId: string;
         readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
         readonly walkSpeed: number;
     }
-    | BlueprintProductionEmployeeTravelAssignmentBase & {
+    | BlueprintProductionEmployeeReachabilityAssignmentBase & {
         readonly kind: 'candidates';
         readonly employeeId: string;
         readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
         readonly walkSpeed: number;
-        readonly candidates: readonly BlueprintProductionEmployeeTravelCandidate[];
+        readonly candidates: readonly BlueprintProductionEmployeeReachabilityCandidate[];
     };
 
 export interface BlueprintProductionEmployeeExecution {
     readonly timingScope:
-        'assigned-production-placement-service-and-property-spawn-network-travel-candidates';
+        'assigned-production-placement-service-and-property-spawn-network-reachability-candidates';
     readonly workSpeedBasis: 'normalized-employee-role-base-work-speed';
-    readonly travelTiming: {
+    readonly reachabilityTiming: {
         readonly origin: 'property-spawn';
         readonly destination: 'assigned-placement-transit-points';
         readonly pathSelection: 'all-network-reachable-candidates-unselected';
         readonly distanceScope: 'navigation-graph-edges-only';
         readonly endpointSnapTraversal: 'not-included-not-proven-walkable';
-        readonly frequency: 'not-evaluated-dynamic-task-state';
+        readonly purpose: 'endpoint-reachability-baseline-not-native-task-travel';
+    };
+    readonly taskTravelTiming: {
+        readonly status:
+            'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence';
+        readonly movement: ProductionLogisticsEmployeeMovement | null;
     };
     readonly taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded';
     readonly scheduling: ProductionLogisticsEmployeeScheduling | null;
     readonly runtimeWorkSpeed: 'not-evaluated';
     readonly elapsedScheduleComposition:
-        'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency';
+        'not-applied-dynamic-task-sequence-readiness-runtime-speed-and-concurrency';
     readonly assignments: readonly BlueprintProductionEmployeeServiceAssignment[];
-    readonly travelAssignments: readonly BlueprintProductionEmployeeTravelAssignment[];
+    readonly reachabilityAssignments:
+        readonly BlueprintProductionEmployeeReachabilityAssignment[];
     readonly employeeTotals: readonly BlueprintProductionEmployeeServiceTotal[];
 }
 

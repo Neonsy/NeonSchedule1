@@ -14,8 +14,8 @@ import type {
     BlueprintProductionEmployeeServiceAssignment,
     BlueprintProductionEmployeeServiceTaskDuration,
     BlueprintProductionEmployeeServiceTotal,
-    BlueprintProductionEmployeeTravelAssignment,
-    BlueprintProductionEmployeeTravelCandidate,
+    BlueprintProductionEmployeeReachabilityAssignment,
+    BlueprintProductionEmployeeReachabilityCandidate,
 } from '#core/blueprint/production-logistics-types';
 
 interface EmployeeOwner {
@@ -71,7 +71,7 @@ export function analyzeProductionEmployeeExecution(
         assignment.batchCount,
         ownerByPlacementId.get(assignment.placementId)
     ));
-    const travelAssignments = scheduledAssignments.map((assignment) => travelAssignment(
+    const reachabilityAssignments = scheduledAssignments.map((assignment) => reachabilityAssignment(
         assignment.scheduledStep,
         assignment.step,
         assignment.placementId,
@@ -80,23 +80,27 @@ export function analyzeProductionEmployeeExecution(
     ));
     return {
         timingScope:
-            'assigned-production-placement-service-and-property-spawn-network-travel-candidates',
+            'assigned-production-placement-service-and-property-spawn-network-reachability-candidates',
         workSpeedBasis: 'normalized-employee-role-base-work-speed',
-        travelTiming: {
+        reachabilityTiming: {
             origin: 'property-spawn',
             destination: 'assigned-placement-transit-points',
             pathSelection: 'all-network-reachable-candidates-unselected',
             distanceScope: 'navigation-graph-edges-only',
             endpointSnapTraversal: 'not-included-not-proven-walkable',
-            frequency: 'not-evaluated-dynamic-task-state',
+            purpose: 'endpoint-reachability-baseline-not-native-task-travel',
+        },
+        taskTravelTiming: {
+            status: 'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence',
+            movement: employeeMovement(catalog),
         },
         taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
         scheduling: employeeScheduling(catalog),
         runtimeWorkSpeed: 'not-evaluated',
         elapsedScheduleComposition:
-            'not-applied-dynamic-travel-origin-frequency-readiness-and-concurrency',
+            'not-applied-dynamic-task-sequence-readiness-runtime-speed-and-concurrency',
         assignments,
-        travelAssignments,
+        reachabilityAssignments,
         employeeTotals: employeeTotals(assignments),
     };
 }
@@ -109,8 +113,25 @@ function employeeScheduling(
     return {
         ...scheduling,
         workAvailability: { ...scheduling.workAvailability },
+        movement: employeeMovement(catalog),
         botanistTaskPriority: [...scheduling.botanistTaskPriority],
         chemistTaskPriority: [...scheduling.chemistTaskPriority],
+    };
+}
+
+function employeeMovement(
+    catalog: ProductionLogisticsCatalog
+): BlueprintProductionEmployeeExecution['taskTravelTiming']['movement'] {
+    const movement = catalog.employeeScheduling?.movement;
+    if (movement === undefined || movement === null) return null;
+    return {
+        ...movement,
+        growContainerTaskKinds: [...movement.growContainerTaskKinds],
+        growContainerTaskLegs: [...movement.growContainerTaskLegs],
+        stationTaskKinds: [...movement.stationTaskKinds],
+        stationTaskLegs: [...movement.stationTaskLegs],
+        moveItemTaskKinds: [...movement.moveItemTaskKinds],
+        moveItemTaskLegs: [...movement.moveItemTaskLegs],
     };
 }
 
@@ -205,13 +226,13 @@ function serviceAssignment(
     };
 }
 
-function travelAssignment(
+function reachabilityAssignment(
     scheduledStep: BlueprintProductionScheduledStep,
     step: ProductionBatchStep,
     placementId: string,
     owner: EmployeeOwner | undefined,
     access: BlueprintProductionPlacementEndpointAccess | undefined
-): BlueprintProductionEmployeeTravelAssignment {
+): BlueprintProductionEmployeeReachabilityAssignment {
     const requiredEmployeeType = serviceRule(step).requiredEmployeeType;
     const base = {
         stepIndex: scheduledStep.stepIndex,
@@ -240,7 +261,7 @@ function travelAssignment(
         };
     }
     const walkSpeed = owner.walkSpeed;
-    const candidates: BlueprintProductionEmployeeTravelCandidate[] =
+    const candidates: BlueprintProductionEmployeeReachabilityCandidate[] =
         access?.transitAccessPoints.flatMap((point) => {
             if (point.employeeReachability.kind !== 'reachable') return [];
             const path = point.employeeReachability.path;
@@ -250,7 +271,7 @@ function travelAssignment(
                 startSnapDistance: path.start.snapDistance,
                 endSnapDistance: path.end.snapDistance,
                 networkDistance: path.networkDistance,
-                networkTravelSeconds: divideFinite(
+                networkTraversalSeconds: divideFinite(
                     path.networkDistance,
                     walkSpeed,
                     `${step.routeId} property-spawn network travel time`

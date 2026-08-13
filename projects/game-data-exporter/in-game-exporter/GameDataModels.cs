@@ -511,8 +511,24 @@ internal sealed class EmployeeSchedulingSnapshot
     public string TaskSelection { get; init; } = string.Empty;
     public string TaskReadiness { get; init; } = string.Empty;
     public EmployeeWorkAvailabilitySnapshot WorkAvailability { get; init; } = new();
+    public EmployeeMovementSnapshot Movement { get; init; } = new();
     public List<string> BotanistTaskPriority { get; init; } = new();
     public List<string> ChemistTaskPriority { get; init; } = new();
+}
+
+internal sealed class EmployeeMovementSnapshot
+{
+    public string TaskOrigin { get; init; } = string.Empty;
+    public string CompletionPosition { get; init; } = string.Empty;
+    public string TaskChaining { get; init; } = string.Empty;
+    public List<string> GrowContainerTaskKinds { get; init; } = new();
+    public List<string> GrowContainerTaskLegs { get; init; } = new();
+    public string GrowContainerItemSource { get; init; } = string.Empty;
+    public List<string> StationTaskKinds { get; init; } = new();
+    public List<string> StationTaskLegs { get; init; } = new();
+    public List<string> MoveItemTaskKinds { get; init; } = new();
+    public List<string> MoveItemTaskLegs { get; init; } = new();
+    public string LegFrequency { get; init; } = string.Empty;
 }
 
 internal sealed class EmployeeWorkAvailabilitySnapshot

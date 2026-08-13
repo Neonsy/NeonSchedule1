@@ -1,6 +1,7 @@
 import {
     ProductionLogisticsCatalogSchema,
     type ProductionLogisticsCatalog,
+    type ProductionLogisticsEmployeeMovement,
     type ProductionLogisticsEmployeeRole,
     type ProductionLogisticsEmployeeScheduling,
     type ProductionLogisticsSlot,
@@ -60,6 +61,52 @@ const chemistTaskPriority = [
     'chemistry-station-start',
     'cauldron-start',
     'mixing-station-start',
+    'lab-oven-output-move',
+    'chemistry-station-output-move',
+    'cauldron-output-move',
+    'mixing-station-output-move',
+] as const;
+
+const growContainerTaskLegs = [
+    'current-to-supplies-if-required-item-missing',
+    'supplies-to-grow-container-if-supplies-visited',
+    'current-to-grow-container-otherwise',
+] as const;
+
+const growContainerTaskKinds = [
+    'grow-container-watering-below-0.2',
+    'mushroom-bed-misting-below-0.2',
+    'grow-container-additive',
+    'grow-container-soil-pour',
+    'pot-sow-seed',
+    'mushroom-bed-apply-spawn',
+    'pot-harvest',
+    'mushroom-bed-harvest',
+    'grow-container-watering-below-0.3',
+    'mushroom-bed-misting-below-0.3',
+] as const;
+
+const stationTaskLegs = ['current-to-station-access-point'] as const;
+
+const stationTaskKinds = [
+    'drying-rack-stop',
+    'mushroom-spawn-station-work',
+    'lab-oven-finish',
+    'lab-oven-start',
+    'chemistry-station-start',
+    'cauldron-start',
+    'mixing-station-start',
+] as const;
+
+const moveItemTaskLegs = [
+    'current-to-source-access-point',
+    'source-to-destination-access-point',
+] as const;
+
+const moveItemTaskKinds = [
+    'drying-rack-output-move',
+    'mushroom-spawn-station-output-move',
+    'drying-rack-input-move',
     'lab-oven-output-move',
     'chemistry-station-output-move',
     'cauldron-output-move',
@@ -222,6 +269,7 @@ function normalizeEmployeeScheduling(
                 integrity
             ),
         },
+        movement: normalizeEmployeeMovement(raw, path, integrity),
         botanistTaskPriority: literals(
             stringArrayField(raw, 'botanistTaskPriority', path),
             botanistTaskPriority,
@@ -232,6 +280,84 @@ function normalizeEmployeeScheduling(
             stringArrayField(raw, 'chemistTaskPriority', path),
             chemistTaskPriority,
             `${path}.chemistTaskPriority`,
+            integrity
+        ),
+    };
+}
+
+function normalizeEmployeeMovement(
+    scheduling: JsonObject,
+    schedulingPath: string,
+    integrity: Integrity
+): ProductionLogisticsEmployeeMovement | null {
+    if (scheduling.movement === undefined) return null;
+    const path = `${schedulingPath}.movement`;
+    const raw = asObject(scheduling.movement, path);
+    return {
+        taskOrigin: literal(
+            stringField(raw, 'taskOrigin', path),
+            'current-npc-position',
+            `${path}.taskOrigin`,
+            integrity
+        ),
+        completionPosition: literal(
+            stringField(raw, 'completionPosition', path),
+            'task-endpoint-until-subsequent-behaviour',
+            `${path}.completionPosition`,
+            integrity
+        ),
+        taskChaining: literal(
+            stringField(raw, 'taskChaining', path),
+            'each-selected-task-starts-from-then-current-npc-position',
+            `${path}.taskChaining`,
+            integrity
+        ),
+        growContainerItemSource: literal(
+            stringField(raw, 'growContainerItemSource', path),
+            'employee-inventory-otherwise-assigned-supplies',
+            `${path}.growContainerItemSource`,
+            integrity
+        ),
+        growContainerTaskKinds: literals(
+            stringArrayField(raw, 'growContainerTaskKinds', path),
+            growContainerTaskKinds,
+            `${path}.growContainerTaskKinds`,
+            integrity
+        ),
+        growContainerTaskLegs: literals(
+            stringArrayField(raw, 'growContainerTaskLegs', path),
+            growContainerTaskLegs,
+            `${path}.growContainerTaskLegs`,
+            integrity
+        ),
+        stationTaskKinds: literals(
+            stringArrayField(raw, 'stationTaskKinds', path),
+            stationTaskKinds,
+            `${path}.stationTaskKinds`,
+            integrity
+        ),
+        stationTaskLegs: literals(
+            stringArrayField(raw, 'stationTaskLegs', path),
+            stationTaskLegs,
+            `${path}.stationTaskLegs`,
+            integrity
+        ),
+        moveItemTaskKinds: literals(
+            stringArrayField(raw, 'moveItemTaskKinds', path),
+            moveItemTaskKinds,
+            `${path}.moveItemTaskKinds`,
+            integrity
+        ),
+        moveItemTaskLegs: literals(
+            stringArrayField(raw, 'moveItemTaskLegs', path),
+            moveItemTaskLegs,
+            `${path}.moveItemTaskLegs`,
+            integrity
+        ),
+        legFrequency: literal(
+            stringField(raw, 'legFrequency', path),
+            'once-per-selected-task-activation-if-not-already-at-endpoint',
+            `${path}.legFrequency`,
             integrity
         ),
     };

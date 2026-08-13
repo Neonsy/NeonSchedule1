@@ -531,6 +531,62 @@ internal static partial class GameDataCollector
                 EndOfDayTime = 400,
                 ConsumeProduct = "blocks-work",
             },
+            Movement = new EmployeeMovementSnapshot
+            {
+                TaskOrigin = "current-npc-position",
+                CompletionPosition = "task-endpoint-until-subsequent-behaviour",
+                TaskChaining = "each-selected-task-starts-from-then-current-npc-position",
+                GrowContainerItemSource = "employee-inventory-otherwise-assigned-supplies",
+                GrowContainerTaskKinds = new List<string>
+                {
+                    "grow-container-watering-below-0.2",
+                    "mushroom-bed-misting-below-0.2",
+                    "grow-container-additive",
+                    "grow-container-soil-pour",
+                    "pot-sow-seed",
+                    "mushroom-bed-apply-spawn",
+                    "pot-harvest",
+                    "mushroom-bed-harvest",
+                    "grow-container-watering-below-0.3",
+                    "mushroom-bed-misting-below-0.3",
+                },
+                GrowContainerTaskLegs = new List<string>
+                {
+                    "current-to-supplies-if-required-item-missing",
+                    "supplies-to-grow-container-if-supplies-visited",
+                    "current-to-grow-container-otherwise",
+                },
+                StationTaskKinds = new List<string>
+                {
+                    "drying-rack-stop",
+                    "mushroom-spawn-station-work",
+                    "lab-oven-finish",
+                    "lab-oven-start",
+                    "chemistry-station-start",
+                    "cauldron-start",
+                    "mixing-station-start",
+                },
+                StationTaskLegs = new List<string>
+                {
+                    "current-to-station-access-point",
+                },
+                MoveItemTaskKinds = new List<string>
+                {
+                    "drying-rack-output-move",
+                    "mushroom-spawn-station-output-move",
+                    "drying-rack-input-move",
+                    "lab-oven-output-move",
+                    "chemistry-station-output-move",
+                    "cauldron-output-move",
+                    "mixing-station-output-move",
+                },
+                MoveItemTaskLegs = new List<string>
+                {
+                    "current-to-source-access-point",
+                    "source-to-destination-access-point",
+                },
+                LegFrequency = "once-per-selected-task-activation-if-not-already-at-endpoint",
+            },
             BotanistTaskPriority = new List<string>
             {
                 "grow-container-watering-below-0.2",

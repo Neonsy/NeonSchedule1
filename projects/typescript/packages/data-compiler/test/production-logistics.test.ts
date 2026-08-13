@@ -38,6 +38,7 @@ describe('production logistics normalization', () => {
                 endOfDayTime: 400,
                 consumeProduct: 'blocks-work',
             },
+            movement: employeeMovement(),
             botanistTaskPriority: [
                 'grow-container-watering-below-0.2',
                 'mushroom-bed-misting-below-0.2',
@@ -167,6 +168,10 @@ describe('production logistics normalization', () => {
         report.productionLogistics.employeeScheduling = {
             ...scheduling,
             workAvailability: { ...scheduling.workAvailability, endOfDayTime: 401 },
+            movement: {
+                ...scheduling.movement,
+                stationTaskLegs: ['source-to-destination-access-point'],
+            },
             chemistTaskPriority: [...scheduling.chemistTaskPriority].reverse(),
         };
         const integrity = new Integrity();
@@ -191,6 +196,9 @@ describe('production logistics normalization', () => {
         );
         expect(integrity.errors).toContain(
             'report.productionLogistics.employeeScheduling.chemistTaskPriority must equal ["lab-oven-finish","lab-oven-start","chemistry-station-start","cauldron-start","mixing-station-start","lab-oven-output-move","chemistry-station-output-move","cauldron-output-move","mixing-station-output-move"]'
+        );
+        expect(integrity.errors).toContain(
+            'report.productionLogistics.employeeScheduling.movement.stationTaskLegs must equal ["current-to-station-access-point"]'
         );
         expect(integrity.errors).toContain(
             'report.productionStations["packagingstation"].inputFilters[0].slotIndex 2 is outside 2 slots'
@@ -219,6 +227,22 @@ describe('production logistics normalization', () => {
             null,
         ]);
         expect(logistics.employeeScheduling).toBeNull();
+    });
+
+    it('preserves scheduling compatibility before movement facts were exported', () => {
+        const report = logisticsReport();
+        const { movement: _movement, ...schedulingWithoutMovement } = employeeScheduling();
+        report.productionLogistics.employeeScheduling = schedulingWithoutMovement;
+        const integrity = new Integrity();
+
+        const logistics = normalizeProductionLogistics(
+            report,
+            new Set(['packagingstation', 'package', 'product']),
+            integrity
+        );
+
+        expect(integrity.errors).toEqual([]);
+        expect(logistics.employeeScheduling?.movement).toBeNull();
     });
 });
 
@@ -304,6 +328,7 @@ function employeeScheduling() {
             endOfDayTime: 400,
             consumeProduct: 'blocks-work',
         },
+        movement: employeeMovement(),
         botanistTaskPriority: [
             'grow-container-watering-below-0.2',
             'mushroom-bed-misting-below-0.2',
@@ -332,6 +357,56 @@ function employeeScheduling() {
             'cauldron-output-move',
             'mixing-station-output-move',
         ],
+    };
+}
+
+function employeeMovement() {
+    return {
+        taskOrigin: 'current-npc-position',
+        completionPosition: 'task-endpoint-until-subsequent-behaviour',
+        taskChaining: 'each-selected-task-starts-from-then-current-npc-position',
+        growContainerItemSource: 'employee-inventory-otherwise-assigned-supplies',
+        growContainerTaskKinds: [
+            'grow-container-watering-below-0.2',
+            'mushroom-bed-misting-below-0.2',
+            'grow-container-additive',
+            'grow-container-soil-pour',
+            'pot-sow-seed',
+            'mushroom-bed-apply-spawn',
+            'pot-harvest',
+            'mushroom-bed-harvest',
+            'grow-container-watering-below-0.3',
+            'mushroom-bed-misting-below-0.3',
+        ],
+        growContainerTaskLegs: [
+            'current-to-supplies-if-required-item-missing',
+            'supplies-to-grow-container-if-supplies-visited',
+            'current-to-grow-container-otherwise',
+        ],
+        stationTaskKinds: [
+            'drying-rack-stop',
+            'mushroom-spawn-station-work',
+            'lab-oven-finish',
+            'lab-oven-start',
+            'chemistry-station-start',
+            'cauldron-start',
+            'mixing-station-start',
+        ],
+        stationTaskLegs: ['current-to-station-access-point'],
+        moveItemTaskKinds: [
+            'drying-rack-output-move',
+            'mushroom-spawn-station-output-move',
+            'drying-rack-input-move',
+            'lab-oven-output-move',
+            'chemistry-station-output-move',
+            'cauldron-output-move',
+            'mixing-station-output-move',
+        ],
+        moveItemTaskLegs: [
+            'current-to-source-access-point',
+            'source-to-destination-access-point',
+        ],
+        legFrequency: 'once-per-selected-task-activation-if-not-already-at-endpoint',
     };
 }
 
