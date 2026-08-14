@@ -1,0 +1,627 @@
+import {
+    composeFinishedRecipeProductionReadiness,
+    type FinishedRecipeProductionPlan,
+    type FinishedRecipeProductionReadinessInput,
+    type FinishedRecipePropertyTransferPlan,
+    type FinishedRecipePurchasePlan,
+    type FinishedRecipeShoppingAllocation,
+    type FinishedRecipeShoppingRouteResult,
+    type ProductionPlanDataset,
+} from '@neonschedule1/core';
+import { describe, expect, it } from 'vitest';
+
+const dataset: ProductionPlanDataset = {
+    gameVersion: 'test',
+    datasetSha256: 'a'.repeat(64),
+};
+
+describe('finished recipe production readiness', () => {
+    it('makes purchased inputs ready when a physical trip returns to the production property', () => {
+        const result = composeFinishedRecipeProductionReadiness(input({
+            route: physicalRoute(2, 12),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'ready',
+            readinessProof: 'exact',
+            routeStartMinute: 0,
+            shoppingCompletionMinute: 12,
+            productionInputsReadyMinute: 12,
+            gaps: [],
+        });
+        expect(result.inputs).toEqual([{
+            itemId: 'soil',
+            requiredMaterialQuantity: 2,
+            requiredEquipmentQuantity: 0,
+            currentAppliedQuantity: 0,
+            transferredQuantity: 0,
+            purchasedQuantity: 2,
+            purchaseArrivalMinute: 12,
+            readyMinute: 12,
+            readinessProof: 'exact',
+        }]);
+    });
+
+    it('uses the selected remote delivery completion for production-property arrival', () => {
+        const result = composeFinishedRecipeProductionReadiness(input({
+            route: remoteRoute(2, 20),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'ready',
+            shoppingRouteProof: 'optimal',
+            shoppingCompletionMinute: 20,
+            productionInputsReadyMinute: 20,
+        });
+        expect(result.inputs[0]).toMatchObject({
+            purchasedQuantity: 2,
+            purchaseArrivalMinute: 20,
+            readyMinute: 20,
+        });
+    });
+
+    it('accepts a complete selected route without claiming global seller optimality', () => {
+        const purchase = purchasePlan(2, {
+            fulfillmentProof: 'seller-evidence-incomplete',
+            totalFinalUnallocatedQuantity: null,
+        });
+        const selected = physicalRoute(2, 12);
+        if (selected.kind !== 'planned') throw new Error('Expected a planned route');
+        const route: FinishedRecipeShoppingRouteResult = {
+            kind: 'planned',
+            plan: {
+                ...selected.plan,
+                proof: 'best-known-feasible',
+                evidenceProof: 'incomplete',
+            },
+        };
+
+        expect(composeFinishedRecipeProductionReadiness(input({ purchase, route })))
+            .toMatchObject({
+                status: 'ready',
+                readinessProof: 'exact',
+                shoppingRouteProof: 'best-known-feasible',
+                productionInputsReadyMinute: 12,
+            });
+    });
+
+    it('keeps incomplete fulfillment unavailable instead of treating known purchases as ready', () => {
+        const purchase = purchasePlan(2, {
+            fulfillmentProof: 'seller-evidence-incomplete',
+            totalFinalUnallocatedQuantity: null,
+        });
+        const route: FinishedRecipeShoppingRouteResult = {
+            kind: 'not-planned',
+            reason: 'purchase-demand-incomplete',
+            proof: 'incomplete',
+            evidenceGaps: [],
+            visitedStates: 0,
+            maximumStates: 100,
+        };
+        const result = composeFinishedRecipeProductionReadiness(input({ purchase, route }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            readinessProof: 'incomplete',
+            productionInputsReadyMinute: null,
+        });
+        expect(result.gaps.map((gap) => gap.code)).toEqual([
+            'shopping-route-not-planned',
+            'purchase-fulfillment-incomplete',
+        ]);
+        expect(result.inputs[0]).toMatchObject({
+            purchasedQuantity: 2,
+            purchaseArrivalMinute: null,
+            readyMinute: null,
+            readinessProof: 'purchase-not-fulfilled',
+        });
+    });
+
+    it('reports exact non-readiness when complete evidence has no feasible shopping route', () => {
+        const route: FinishedRecipeShoppingRouteResult = {
+            kind: 'not-planned',
+            reason: 'no-known-feasible-route',
+            proof: 'exact',
+            evidenceGaps: [],
+            visitedStates: 4,
+            maximumStates: 100,
+        };
+
+        const result = composeFinishedRecipeProductionReadiness(input({ route }));
+
+        expect(result).toMatchObject({
+            status: 'not-ready',
+            readinessProof: 'exact',
+            shoppingRouteProof: 'exact-not-planned',
+            productionInputsReadyMinute: null,
+        });
+    });
+
+    it('keeps a search-limited missing route unavailable', () => {
+        const route: FinishedRecipeShoppingRouteResult = {
+            kind: 'not-planned',
+            reason: 'search-limit-before-feasible-plan',
+            proof: 'incomplete',
+            evidenceGaps: [],
+            visitedStates: 100,
+            maximumStates: 100,
+        };
+
+        expect(composeFinishedRecipeProductionReadiness(input({ route }))).toMatchObject({
+            status: 'unavailable',
+            readinessProof: 'incomplete',
+            shoppingRouteProof: 'incomplete-not-planned',
+        });
+    });
+
+    it('rejects shopping evidence from another normalized dataset', () => {
+        expect(() => composeFinishedRecipeProductionReadiness(input({
+            shoppingDataset: {
+                gameVersion: 'test',
+                datasetSha256: 'b'.repeat(64),
+            },
+        }))).toThrow('Shopping evidence belongs to a different production dataset');
+    });
+
+    it('keeps readiness unavailable when incoming property transfers have no arrival time', () => {
+        const result = composeFinishedRecipeProductionReadiness(input({
+            transfer: transferPlan(1),
+            purchase: purchasePlan(1),
+            route: physicalRoute(1, 5),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            readinessProof: 'incomplete',
+            productionInputsReadyMinute: null,
+        });
+        expect(result.inputs[0]).toMatchObject({
+            transferredQuantity: 1,
+            purchasedQuantity: 1,
+            purchaseArrivalMinute: 5,
+            readyMinute: null,
+            readinessProof: 'property-transfer-arrival-unavailable',
+        });
+        expect(result.gaps).toContainEqual({
+            code: 'property-transfer-arrival-not-evaluated',
+            itemId: 'soil',
+            propertyId: 'lab',
+            shoppingReason: null,
+        });
+    });
+
+    it('does not treat a route endpoint with no property mapping as production readiness', () => {
+        const result = composeFinishedRecipeProductionReadiness(input({
+            arrivalDestination: { kind: 'not-established' },
+        }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            shoppingCompletionMinute: 12,
+            productionInputsReadyMinute: null,
+        });
+        expect(result.inputs[0]).toMatchObject({
+            purchaseArrivalMinute: 12,
+            readyMinute: null,
+            readinessProof: 'shopping-arrival-unavailable',
+        });
+        expect(result.gaps.map((gap) => gap.code)).toContain(
+            'shopping-arrival-destination-not-established'
+        );
+    });
+
+    it('keeps aggregate shopping quantities unavailable for multiple destination properties', () => {
+        const base = purchasePlan(2);
+        const purchase: FinishedRecipePurchasePlan = {
+            ...base,
+            requirements: [
+                ...base.requirements,
+                {
+                    propertyId: 'barn',
+                    itemId: 'soil',
+                    materialQuantity: 1,
+                    equipmentQuantity: 0,
+                    requestedQuantity: 1,
+                },
+            ],
+            items: base.items.map((item) => ({
+                ...item,
+                materialQuantity: 3,
+                requestedQuantity: 3,
+            })),
+            totalRequestedQuantity: 3,
+            knownAllocatedQuantity: 3,
+        };
+        const result = composeFinishedRecipeProductionReadiness(input({
+            purchase,
+            route: physicalRoute(3, 12),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            productionInputsReadyMinute: null,
+        });
+        expect(result.inputs[0]).toMatchObject({
+            purchasedQuantity: 2,
+            readyMinute: null,
+            readinessProof: 'shopping-arrival-unavailable',
+        });
+        expect(result.gaps).toContainEqual({
+            code: 'purchase-allocation-by-property-unavailable',
+            itemId: 'soil',
+            propertyId: 'barn',
+            shoppingReason: null,
+        });
+    });
+
+    it('rejects a physical allocation that was not picked up by the route', () => {
+        const route = physicalRoute(2, 12);
+        if (route.kind !== 'planned') throw new Error('Expected a planned route');
+
+        expect(() => composeFinishedRecipeProductionReadiness(input({
+            route: { kind: 'planned', plan: { ...route.plan, trips: [] } },
+        }))).toThrow('Physical shopping completion minute is inconsistent');
+    });
+});
+
+interface InputOverrides {
+    readonly transfer?: FinishedRecipePropertyTransferPlan;
+    readonly purchase?: FinishedRecipePurchasePlan;
+    readonly route?: FinishedRecipeShoppingRouteResult;
+    readonly shoppingDataset?: ProductionPlanDataset;
+    readonly arrivalDestination?: FinishedRecipeProductionReadinessInput['shopping']['arrivalDestination'];
+}
+
+function input(overrides: InputOverrides = {}): FinishedRecipeProductionReadinessInput {
+    return {
+        propertyId: 'lab',
+        productionPlan: productionPlan(),
+        transferPlan: overrides.transfer ?? transferPlan(0),
+        purchasePlan: overrides.purchase ?? purchasePlan(2),
+        shopping: {
+            dataset: overrides.shoppingDataset ?? dataset,
+            arrivalDestination: overrides.arrivalDestination ?? {
+                kind: 'production-property',
+                propertyId: 'lab',
+                evidence: 'caller-supplied-depot-and-remote-delivery-destination',
+            },
+            route: overrides.route ?? physicalRoute(2, 12),
+        },
+    };
+}
+
+function productionPlan(): FinishedRecipeProductionPlan {
+    return {
+        dataset,
+        recipe: {
+            ruleProfile: { kind: 'standard' },
+            productId: 'product',
+            ingredientIds: [],
+            effectIds: [],
+            productValue: 20,
+            baseProductCost: 10,
+            baseProductCostBasis: 'base-purchase-price',
+            ingredientCost: 0,
+            totalCost: 10,
+            netValue: 10,
+            ingredientCount: 0,
+        },
+        finishedQuantity: 1,
+        baseProductPlan: {
+            dataset,
+            targetItemId: 'product',
+            targetQuantity: 1,
+            productionSteps: [],
+            purchases: [],
+            totalProcessMinutes: 0,
+            requiredMaterialCost: 0,
+            purchaseCost: 0,
+        },
+        growAdditiveSteps: [],
+        ingredientDemands: [],
+        purchases: [],
+        mixingSteps: [],
+        dryingStep: null,
+        packagingStep: null,
+        brickPressingStep: null,
+        equipment: {
+            quantityBasis: 'minimum-one-per-selected-item-for-serial-plan',
+            selectionProof: 'exact',
+            unresolvedProductionRouteIds: [],
+            purchaseCostProof: 'exact',
+            requirements: [],
+            totalRequiredPurchaseCost: 0,
+        },
+        inventory: {
+            allocationOrder: 'reserve-equipment-before-recurring-materials',
+            demandProof: 'exact',
+            inventoryProof: 'supplied',
+            quantityProof: 'exact',
+            costProof: 'exact',
+            requirements: [{
+                itemId: 'soil',
+                unitPurchasePrice: 10,
+                currentQuantity: 0,
+                material: {
+                    requiredQuantity: 2,
+                    purchaseQuantityBeforeInventory: 2,
+                    stockAppliedQuantity: 0,
+                    shortageQuantity: 2,
+                    reorderQuantity: 2,
+                    reorderCost: 20,
+                },
+                equipment: {
+                    requiredQuantity: 0,
+                    stockAppliedQuantity: 0,
+                    shortageQuantity: 0,
+                    reorderQuantity: 0,
+                    reorderCost: 0,
+                },
+                shortageQuantity: 2,
+                reorderQuantity: 2,
+                reorderCost: 20,
+                postReorderSurplusQuantity: 0,
+                stacks: {
+                    itemStackLimit: 20,
+                    requiredStackCount: 1,
+                    currentStackCount: 0,
+                    reorderStackCount: 1,
+                    postReorderStackCount: 1,
+                    additionalStackCount: 1,
+                    postReorderCapacity: 20,
+                    unusedPostReorderCapacity: 18,
+                },
+            }],
+            totalMaterialReorderCost: 20,
+            totalEquipmentReorderCost: 0,
+            totalReorderCost: 20,
+            requiredStackCount: 1,
+            currentStackCount: 0,
+            reorderStackCount: 1,
+            postReorderStackCount: 1,
+            additionalStackCount: 1,
+        },
+        duration: {
+            baseProductProcessMinutes: 0,
+            mixingProcessMinutes: 0,
+            dryingProcessMinutes: null,
+            packagingEmployeeRealSeconds: null,
+            brickPressingEmployeeRealSeconds: null,
+            knownProcessMinutes: 0,
+            modeledTotalProcessMinutes: 0,
+        },
+        cost: {
+            recipeEstimatedUnitMaterialCost: 10,
+            recipeEstimatedMaterialCost: 10,
+            requiredMaterialCost: 0,
+            materialReorderCost: 20,
+            equipmentReorderCost: 0,
+            combinedReorderCost: 20,
+        },
+        evidence: {
+            modeledScope: 'base-product-and-ordered-mixing',
+            modeledQuantityProof: 'exact',
+            materialCostCoverage: 'modeled-materials-only',
+            modeledDurationProof: 'complete',
+            finishedLifecycleProof: 'partial',
+            missingFacts: [],
+            dryingApplicability: 'not-applicable',
+            packagingApplicability: 'not-applicable',
+            brickPressingApplicability: 'not-applicable',
+            unmodeledOperations: [],
+        },
+    };
+}
+
+function transferPlan(allocatedQuantity: number): FinishedRecipePropertyTransferPlan {
+    const residual = 2 - allocatedQuantity;
+    return {
+        objective: 'maximize-transferred-reorder-quantity-per-item',
+        tieBreak: 'canonical-item-source-destination-candidate-identity-order',
+        routeOptimization: 'not-evaluated',
+        demandProof: 'exact',
+        transferEvidenceProof: 'exact',
+        allocationProof: 'maximum',
+        residualProof: 'exact',
+        residualCostProof: 'exact',
+        requirements: [{
+            propertyId: 'lab',
+            itemId: 'soil',
+            unitPurchasePrice: 10,
+            materialReorderQuantity: 2,
+            equipmentReorderQuantity: 0,
+            requestedReorderQuantity: 2,
+            allocatedQuantity,
+            allocatedEquipmentQuantity: 0,
+            allocatedMaterialQuantity: allocatedQuantity,
+            unallocatedEquipmentQuantity: 0,
+            unallocatedMaterialQuantity: residual,
+            unallocatedReorderQuantity: residual,
+            residualEquipmentReorderQuantity: 0,
+            residualMaterialReorderQuantity: residual,
+            residualReorderQuantity: residual,
+            residualEquipmentReorderCost: 0,
+            residualMaterialReorderCost: residual * 10,
+            residualReorderCost: residual * 10,
+        }],
+        sources: [],
+        allocations: allocatedQuantity === 0 ? [] : [{
+            candidateId: 'warehouse-lab',
+            itemId: 'soil',
+            sourcePropertyId: 'warehouse',
+            destinationPropertyId: 'lab',
+            quantity: allocatedQuantity,
+            itemStackLimit: 20,
+            stackCount: 1,
+        }],
+        totalRequestedReorderQuantity: 2,
+        knownAllocatedQuantity: allocatedQuantity,
+        unallocatedAfterKnownTransfersQuantity: residual,
+        totalResidualReorderQuantity: residual,
+        totalResidualMaterialReorderCost: residual * 10,
+        totalResidualEquipmentReorderCost: 0,
+        totalResidualReorderCost: residual * 10,
+    };
+}
+
+interface PurchaseOverrides {
+    readonly fulfillmentProof?: FinishedRecipePurchasePlan['fulfillmentProof'];
+    readonly totalFinalUnallocatedQuantity?: number | null;
+}
+
+function purchasePlan(
+    quantity: number,
+    overrides: PurchaseOverrides = {}
+): FinishedRecipePurchasePlan {
+    const finalUnallocated = overrides.totalFinalUnallocatedQuantity === undefined
+        ? 0
+        : overrides.totalFinalUnallocatedQuantity;
+    return {
+        objective: 'maximize-supported-fulfillment-then-minimize-cost-per-item',
+        tieBreak: 'unit-price-then-shop-code',
+        routeOptimization: 'not-evaluated',
+        timingProof: 'not-evaluated',
+        demandProof: 'exact',
+        sellerEvidenceProof: overrides.fulfillmentProof === 'seller-evidence-incomplete'
+            ? 'incomplete'
+            : 'exact',
+        allocationProof: overrides.fulfillmentProof === 'seller-evidence-incomplete'
+            ? 'minimum-cost-among-supported-sellers'
+            : 'minimum-cost',
+        fulfillmentProof: overrides.fulfillmentProof ?? 'exact',
+        requirements: [{
+            propertyId: 'lab',
+            itemId: 'soil',
+            materialQuantity: quantity,
+            equipmentQuantity: 0,
+            requestedQuantity: quantity,
+        }],
+        items: [{
+            itemId: 'soil',
+            requiredRank: null,
+            itemEligibility: 'eligible',
+            materialQuantity: quantity,
+            equipmentQuantity: 0,
+            requestedQuantity: quantity,
+            sellerEvidenceProof: 'exact',
+            allocationProof: 'minimum-cost',
+            sellerOptions: [],
+            allocations: [],
+            knownAllocatedQuantity: finalUnallocated === 0 ? quantity : 0,
+            unallocatedAfterSupportedPurchases: finalUnallocated ?? quantity,
+            finalUnallocatedQuantity: finalUnallocated,
+            knownAllocatedCost: finalUnallocated === 0 ? quantity * 10 : 0,
+            minimumRequiredPurchaseCost: finalUnallocated === 0 ? quantity * 10 : null,
+        }],
+        allocations: [],
+        totalRequestedQuantity: quantity,
+        knownAllocatedQuantity: finalUnallocated === 0 ? quantity : 0,
+        unallocatedAfterSupportedPurchases: finalUnallocated ?? quantity,
+        totalFinalUnallocatedQuantity: finalUnallocated,
+        knownAllocatedCost: finalUnallocated === 0 ? quantity * 10 : 0,
+        minimumRequiredPurchaseCost: finalUnallocated === 0 ? quantity * 10 : null,
+    };
+}
+
+function physicalRoute(quantity: number, completionMinute: number): FinishedRecipeShoppingRouteResult {
+    const allocation = shoppingAllocation('physical', quantity);
+    return plannedRoute({
+        allocation,
+        physicalCompletionMinute: completionMinute,
+        remoteCompletionMinute: 0,
+        completionMinute,
+        trips: [{
+            tripIndex: 0,
+            startMinute: 0,
+            endMinute: completionMinute,
+            elapsedMinutes: completionMinute,
+            travelDistance: 2,
+            peakCarriedLoadUnits: quantity,
+            visits: [{
+                shopCode: 'shop',
+                leg: leg('out', 'depot', 'shop'),
+                arrivalMinute: 1,
+                waitingMinutes: 0,
+                serviceStartMinute: 1,
+                departureMinute: 1,
+                pickedUp: [{ itemId: 'soil', quantity, loadUnits: quantity }],
+                carriedLoadUnitsAfterVisit: quantity,
+            }],
+            returnLeg: leg('back', 'shop', 'depot'),
+        }],
+        remoteDeliveries: [],
+    });
+}
+
+function remoteRoute(quantity: number, completionMinute: number): FinishedRecipeShoppingRouteResult {
+    const allocation = shoppingAllocation('remote-delivery', quantity);
+    return plannedRoute({
+        allocation,
+        physicalCompletionMinute: 0,
+        remoteCompletionMinute: completionMinute,
+        completionMinute,
+        trips: [],
+        remoteDeliveries: [{
+            shopCode: 'shop',
+            completionMinute,
+            allocations: [allocation],
+        }],
+    });
+}
+
+interface PlannedRouteParts {
+    readonly allocation: FinishedRecipeShoppingAllocation;
+    readonly physicalCompletionMinute: number;
+    readonly remoteCompletionMinute: number;
+    readonly completionMinute: number;
+    readonly trips: Extract<FinishedRecipeShoppingRouteResult, { kind: 'planned' }>['plan']['trips'];
+    readonly remoteDeliveries: Extract<FinishedRecipeShoppingRouteResult, { kind: 'planned' }>['plan']['remoteDeliveries'];
+}
+
+function plannedRoute(parts: PlannedRouteParts): FinishedRecipeShoppingRouteResult {
+    return {
+        kind: 'planned',
+        plan: {
+            objective: 'minimum-elapsed-minutes',
+            tieBreak: 'remaining-metrics-then-trip-count-then-canonical-shop-item-identity-order',
+            movementModelId: 'test',
+            carryingModel: 'caller-supplied-load-units',
+            tripModel: 'each-trip-starts-and-returns-to-depot',
+            scheduleModel: 'service-start-must-be-within-recurring-shop-window',
+            remoteDeliveryModel: 'caller-supplied-concurrent-duration-from-route-start',
+            proof: 'optimal',
+            evidenceProof: 'complete',
+            searchProof: 'exhaustive',
+            evidenceGaps: [],
+            visitedStates: 1,
+            maximumStates: 100,
+            allocations: [parts.allocation],
+            trips: parts.trips,
+            remoteDeliveries: parts.remoteDeliveries,
+            totalPurchaseCost: parts.allocation.totalPrice,
+            totalTravelDistance: parts.trips.reduce((total, trip) => total + trip.travelDistance, 0),
+            physicalCompletionMinute: parts.physicalCompletionMinute,
+            remoteCompletionMinute: parts.remoteCompletionMinute,
+            completionMinute: parts.completionMinute,
+            elapsedMinutes: parts.completionMinute,
+        },
+    };
+}
+
+function shoppingAllocation(
+    access: FinishedRecipeShoppingAllocation['access'],
+    quantity: number
+): FinishedRecipeShoppingAllocation {
+    return {
+        shopCode: 'shop',
+        itemId: 'soil',
+        access,
+        quantity,
+        unitPrice: 10,
+        totalPrice: quantity * 10,
+    };
+}
+
+function leg(legId: string, fromLocationId: string, toLocationId: string) {
+    return { legId, fromLocationId, toLocationId, distance: 1, durationMinutes: 1 };
+}
