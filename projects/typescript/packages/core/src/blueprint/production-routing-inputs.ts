@@ -83,17 +83,30 @@ export class BlueprintProductionRoutingInputsAnalyzer {
         const projectedById = new Map(
             capacity.temperature.projection.placements.map((placement) => [placement.id, placement])
         );
-        const placements = capacity.equipment
-            .flatMap((equipment) => equipment.placements.map(({ placementId }) => {
+        const equipmentItemByPlacementId = new Map(capacity.equipment.flatMap((equipment) =>
+            equipment.placements.map(({ placementId }) => [placementId, equipment.itemId] as const)
+        ));
+        const placementIds = new Set(equipmentItemByPlacementId.keys());
+        for (const employee of blueprint.productionLogistics.employees) {
+            if (employee.employeeType === 'Botanist' && employee.supplyPlacementId !== null) {
+                placementIds.add(employee.supplyPlacementId);
+            }
+        }
+        const placements = [...placementIds]
+            .flatMap((placementId) => {
                 const projected = projectedById.get(placementId);
+                const equipmentItemId = equipmentItemByPlacementId.get(placementId);
                 if (projected === undefined) {
-                    throw new Error('Production capacity references an unavailable projected placement');
+                    if (equipmentItemId !== undefined) {
+                        throw new Error('Production capacity references an unavailable projected placement');
+                    }
+                    return [];
                 }
-                if (projected.itemId !== equipment.itemId) {
+                if (equipmentItemId !== undefined && projected.itemId !== equipmentItemId) {
                     throw new Error('Production capacity and projection disagree on placed equipment');
                 }
-                return routingInputs(projected);
-            }))
+                return [routingInputs(projected)];
+            })
             .sort((left, right) => left.placementId.localeCompare(right.placementId));
 
         return {

@@ -3,12 +3,16 @@ import type {
     BlueprintEmployeeAssignment,
 } from '#core/data/blueprint';
 import type { ProductionLogisticsCatalog } from '#core/data/production-logistics';
+import type { NavigationGraph } from '#core/data/world';
 import type { ProductionBatchPlan, ProductionBatchStep } from '#core/production/plan';
-import type {
-    BlueprintProductionEndpointAccessResult,
-    BlueprintProductionPlacementEndpointAccess,
-} from '#core/blueprint/production-endpoint-access';
+import type { BlueprintProductionPlacementEndpointAccess } from '#core/blueprint/production-endpoint-access';
 import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
+import {
+    analyzeProductionEmployeeTaskRoutes,
+    productionEmployeeOwners,
+    type BlueprintProductionEmployeeOwner,
+} from '#core/blueprint/production-employee-routes';
+import type { BlueprintProductionTransferResult } from '#core/blueprint/production-transfers';
 import type {
     BlueprintProductionEmployeeExecution,
     BlueprintProductionEmployeeServiceAssignment,
@@ -17,12 +21,6 @@ import type {
     BlueprintProductionEmployeeReachabilityAssignment,
     BlueprintProductionEmployeeReachabilityCandidate,
 } from '#core/blueprint/production-logistics-types';
-
-interface EmployeeOwner {
-    readonly employee: BlueprintEmployeeAssignment;
-    readonly baseWorkSpeed: number | null;
-    readonly walkSpeed: number | null;
-}
 
 interface ScheduledAssignment {
     readonly scheduledStep: BlueprintProductionScheduledStep;
@@ -43,11 +41,13 @@ interface ServiceRule {
 export function analyzeProductionEmployeeExecution(
     blueprint: BlueprintDocument,
     plan: ProductionBatchPlan,
-    schedule: readonly BlueprintProductionScheduledStep[],
     catalog: ProductionLogisticsCatalog,
-    endpointAccess: Extract<BlueprintProductionEndpointAccessResult, { readonly kind: 'analyzed' }>
+    transfers: Extract<BlueprintProductionTransferResult, { readonly kind: 'analyzed' }>,
+    navigation: NavigationGraph
 ): BlueprintProductionEmployeeExecution {
-    const ownerByPlacementId = employeeOwners(blueprint, catalog);
+    const schedule = transfers.schedule.schedule;
+    const endpointAccess = transfers.endpointAccess;
+    const ownerByPlacementId = productionEmployeeOwners(blueprint, catalog);
     const accessByPlacementId = new Map(
         endpointAccess.placements.map((placement) => [placement.placementId, placement])
     );
@@ -78,6 +78,14 @@ export function analyzeProductionEmployeeExecution(
         ownerByPlacementId.get(assignment.placementId),
         accessByPlacementId.get(assignment.placementId)
     ));
+    const movement = employeeMovement(catalog);
+    const taskRouteAssignments = analyzeProductionEmployeeTaskRoutes(
+        blueprint,
+        plan,
+        catalog,
+        transfers,
+        navigation
+    );
     return {
         timingScope:
             'assigned-production-placement-service-and-property-spawn-network-reachability-candidates',
@@ -91,8 +99,20 @@ export function analyzeProductionEmployeeExecution(
             purpose: 'endpoint-reachability-baseline-not-native-task-travel',
         },
         taskTravelTiming: {
-            status: 'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence',
-            movement: employeeMovement(catalog),
+            status: movement === null
+                ? 'unavailable-movement-contract-not-recorded'
+                : 'partial-static-internal-route-candidates',
+            evaluatedLegs: movement === null ? [] : [
+                'move-item-source-to-destination',
+                'supplies-to-grow-container-if-supplies-visited',
+            ],
+            pathSelection: 'all-network-reachable-candidates-unselected',
+            distanceScope: 'navigation-graph-edges-only',
+            endpointSnapTraversal: 'not-included-not-proven-walkable',
+            dynamicInitialLeg: 'not-evaluated-current-position-to-first-endpoint',
+            routeFrequency: 'not-evaluated-dynamic-task-selection-and-readiness',
+            movement,
+            assignments: taskRouteAssignments,
         },
         taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded',
         scheduling: employeeScheduling(catalog),
@@ -135,34 +155,12 @@ function employeeMovement(
     };
 }
 
-function employeeOwners(
-    blueprint: BlueprintDocument,
-    catalog: ProductionLogisticsCatalog
-): ReadonlyMap<string, EmployeeOwner> {
-    const roleByType = new Map(catalog.employeeRoles.map((role) => [role.employeeType, role]));
-    const owners = new Map<string, EmployeeOwner>();
-    for (const employee of blueprint.productionLogistics.employees) {
-        const role = roleByType.get(employee.employeeType);
-        const placementIds = employee.employeeType === 'Botanist'
-            ? employee.assignedPotPlacementIds
-            : employee.assignedStationPlacementIds;
-        for (const placementId of placementIds) {
-            owners.set(placementId, {
-                employee,
-                baseWorkSpeed: role?.baseWorkSpeed ?? null,
-                walkSpeed: role?.walkSpeed ?? null,
-            });
-        }
-    }
-    return owners;
-}
-
 function serviceAssignment(
     scheduledStep: BlueprintProductionScheduledStep,
     step: ProductionBatchStep,
     placementId: string,
     batchCount: number,
-    owner: EmployeeOwner | undefined
+    owner: BlueprintProductionEmployeeOwner | undefined
 ): BlueprintProductionEmployeeServiceAssignment {
     const rule = serviceRule(step);
     const base = {
@@ -230,7 +228,7 @@ function reachabilityAssignment(
     scheduledStep: BlueprintProductionScheduledStep,
     step: ProductionBatchStep,
     placementId: string,
-    owner: EmployeeOwner | undefined,
+    owner: BlueprintProductionEmployeeOwner | undefined,
     access: BlueprintProductionPlacementEndpointAccess | undefined
 ): BlueprintProductionEmployeeReachabilityAssignment {
     const requiredEmployeeType = serviceRule(step).requiredEmployeeType;

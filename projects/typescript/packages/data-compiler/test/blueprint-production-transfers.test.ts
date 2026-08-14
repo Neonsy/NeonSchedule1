@@ -317,7 +317,14 @@ describe('blueprint production logistics', () => {
                 },
                 taskTravelTiming: {
                     status:
-                        'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence',
+                        'partial-static-internal-route-candidates',
+                    evaluatedLegs: [
+                        'move-item-source-to-destination',
+                        'supplies-to-grow-container-if-supplies-visited',
+                    ],
+                    pathSelection: 'all-network-reachable-candidates-unselected',
+                    dynamicInitialLeg: 'not-evaluated-current-position-to-first-endpoint',
+                    routeFrequency: 'not-evaluated-dynamic-task-selection-and-readiness',
                     movement: {
                         taskOrigin: 'current-npc-position',
                         completionPosition: 'task-endpoint-until-subsequent-behaviour',
@@ -653,6 +660,15 @@ describe('blueprint production logistics', () => {
     });
 
     it('keeps assigned travel unavailable without normalized walk speed', () => {
+        const input = logisticsBlueprint();
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        const chemist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Chemist'
+        )!;
+        botanist.assignedPotPlacementIds = [];
+        chemist.assignedStationPlacementIds = ['source-a', 'destination-b'];
         const inputDataset = dataset({ employeeCapacity: 3 });
         const catalog = {
             ...inputDataset.productionLogistics,
@@ -664,7 +680,7 @@ describe('blueprint production logistics', () => {
         const result = new BlueprintProductionLogisticsAnalyzer({
             ...inputDataset,
             productionLogistics: catalog,
-        }).analyze(logisticsBlueprint(), plan());
+        }).analyze(input, plan());
 
         expect(result.kind).toBe('analyzed');
         if (result.kind !== 'analyzed') return;
@@ -675,6 +691,54 @@ describe('blueprint production logistics', () => {
                 employeeId: 'chemist-1',
             })
         );
+        expect(result.employeeExecution.taskTravelTiming.assignments).toContainEqual(
+            expect.objectContaining({
+                routeKind: 'move-item-source-to-destination',
+                sourcePlacementId: 'source-a',
+                kind: 'walk-speed-unavailable',
+                employeeId: 'chemist-1',
+            })
+        );
+    });
+
+    it('enumerates every internal move endpoint pair without selecting one', () => {
+        const input = logisticsBlueprint();
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        const chemist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Chemist'
+        )!;
+        botanist.assignedPotPlacementIds = [];
+        chemist.assignedStationPlacementIds = [
+            'source-a',
+            'source-b',
+            'destination-a',
+            'destination-b',
+        ];
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3, multipleTransitPoints: true })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        const route = result.employeeExecution.taskTravelTiming.assignments.find(
+            (assignment) => assignment.sourcePlacementId === 'source-a' &&
+                assignment.destinationPlacementId === 'destination-a'
+        );
+        expect(route).toMatchObject({
+            routeKind: 'move-item-source-to-destination',
+            condition: 'if-native-move-item-task-selected',
+            kind: 'candidates',
+            employeeId: 'chemist-1',
+            walkSpeed: 2,
+            candidates: [
+                { sourceAccessPointIndex: 0, destinationAccessPointIndex: 0 },
+                { sourceAccessPointIndex: 0, destinationAccessPointIndex: 1 },
+                { sourceAccessPointIndex: 1, destinationAccessPointIndex: 0 },
+                { sourceAccessPointIndex: 1, destinationAccessPointIndex: 1 },
+            ],
+        });
     });
 
     it('enumerates every reachable assigned transit point without selecting one', () => {
@@ -721,6 +785,78 @@ describe('blueprint production logistics', () => {
                 walkSpeed: 2,
             })
         );
+        expect(result.employeeExecution.taskTravelTiming.assignments).toContainEqual(
+            expect.objectContaining({
+                routeKind: 'move-item-source-to-destination',
+                sourcePlacementId: 'source-a',
+                kind: 'route-endpoints-unavailable',
+                unavailableReasons: ['source-has-no-network-reachable-transit-point'],
+            })
+        );
+    });
+
+    it('times the conditional supplies-to-grow-container leg', () => {
+        const inputDataset = seedDataset();
+        const input = blueprint([
+            placement('pot-1', 'pot', 0),
+            placement('supply-1', 'storage', 4),
+        ]);
+        input.productionLogistics.employees = [{
+            id: 'botanist-1',
+            employeeType: 'Botanist',
+            assignedPotPlacementIds: ['pot-1'],
+            supplyPlacementId: 'supply-1',
+        }];
+
+        const result = new BlueprintProductionLogisticsAnalyzer(inputDataset)
+            .analyze(input, seedPlan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution.taskTravelTiming.assignments).toEqual([{
+            routeKind: 'supplies-to-grow-container-if-supplies-visited',
+            condition:
+                'if-required-item-missing-from-inventory-and-present-in-assigned-supplies',
+            itemId: 'leaf',
+            sourceStepIndex: null,
+            destinationStepIndex: 0,
+            sourcePlacementId: 'supply-1',
+            destinationPlacementId: 'pot-1',
+            requiredEmployeeType: 'Botanist',
+            kind: 'candidates',
+            employeeId: 'botanist-1',
+            employeeType: 'Botanist',
+            walkSpeed: 2,
+            candidates: [{
+                sourceAccessPointIndex: 0,
+                sourceAccessPointPath: 'TransitAccess',
+                destinationAccessPointIndex: 0,
+                destinationAccessPointPath: 'TransitAccess',
+                networkDistance: 16,
+                networkTraversalSeconds: 8,
+            }],
+        }]);
+    });
+
+    it('keeps task-internal routes unavailable without movement facts', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const scheduling = inputDataset.productionLogistics.employeeScheduling!;
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            productionLogistics: {
+                ...inputDataset.productionLogistics,
+                employeeScheduling: { ...scheduling, movement: null },
+            },
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.employeeExecution.taskTravelTiming).toMatchObject({
+            status: 'unavailable-movement-contract-not-recorded',
+            evaluatedLegs: [],
+            movement: null,
+            assignments: [],
+        });
     });
 
     it('reports grow-container service as a lower bound when moisture actions are unknown', () => {
@@ -1017,7 +1153,10 @@ function seedDataset(): BlueprintProductionLogisticsDataset {
     const base = dataset({ employeeCapacity: 1 });
     return {
         ...base,
-        buildables: [buildable('pot', [transform('TransitAccess', 1)])],
+        buildables: [
+            buildable('pot', [transform('TransitAccess', 1)]),
+            buildable('storage', [transform('TransitAccess', 1)]),
+        ],
         items: [item('leaf', 20)],
         production: {
             ...production(),

@@ -273,6 +273,64 @@ export interface BlueprintProductionEmployeeReachabilityCandidate {
     readonly networkTraversalSeconds: number;
 }
 
+export interface BlueprintProductionEmployeeTaskRouteCandidate {
+    readonly sourceAccessPointIndex: number;
+    readonly sourceAccessPointPath: string;
+    readonly destinationAccessPointIndex: number;
+    readonly destinationAccessPointPath: string;
+    readonly networkDistance: number;
+    readonly networkTraversalSeconds: number;
+}
+
+interface BlueprintProductionEmployeeTaskRouteAssignmentBase {
+    readonly routeKind:
+        'move-item-source-to-destination' |
+        'supplies-to-grow-container-if-supplies-visited';
+    readonly condition:
+        'if-native-move-item-task-selected' |
+        'if-required-item-missing-from-inventory-and-present-in-assigned-supplies';
+    readonly itemId: string;
+    readonly sourceStepIndex: number | null;
+    readonly destinationStepIndex: number;
+    readonly sourcePlacementId: string | null;
+    readonly destinationPlacementId: string;
+    readonly requiredEmployeeType: BlueprintEmployeeAssignment['employeeType'];
+}
+
+export type BlueprintProductionEmployeeTaskRouteAssignment =
+    | BlueprintProductionEmployeeTaskRouteAssignmentBase & {
+        readonly kind: 'source-or-employee-unassigned';
+        readonly employeeId: string | null;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'] | null;
+    }
+    | BlueprintProductionEmployeeTaskRouteAssignmentBase & {
+        readonly kind: 'incompatible-employee';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeTaskRouteAssignmentBase & {
+        readonly kind: 'walk-speed-unavailable';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+    }
+    | BlueprintProductionEmployeeTaskRouteAssignmentBase & {
+        readonly kind: 'route-endpoints-unavailable';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+        readonly walkSpeed: number;
+        readonly unavailableReasons: readonly (
+            'source-has-no-network-reachable-transit-point' |
+            'destination-has-no-network-reachable-transit-point'
+        )[];
+    }
+    | BlueprintProductionEmployeeTaskRouteAssignmentBase & {
+        readonly kind: 'candidates';
+        readonly employeeId: string;
+        readonly employeeType: BlueprintEmployeeAssignment['employeeType'];
+        readonly walkSpeed: number;
+        readonly candidates: readonly BlueprintProductionEmployeeTaskRouteCandidate[];
+    };
+
 interface BlueprintProductionEmployeeReachabilityAssignmentBase {
     readonly stepIndex: number;
     readonly itemId: string;
@@ -325,8 +383,19 @@ export interface BlueprintProductionEmployeeExecution {
     };
     readonly taskTravelTiming: {
         readonly status:
-            'not-evaluated-dynamic-current-position-endpoint-selection-and-task-sequence';
+            'partial-static-internal-route-candidates' |
+            'unavailable-movement-contract-not-recorded';
+        readonly evaluatedLegs: readonly (
+            'move-item-source-to-destination' |
+            'supplies-to-grow-container-if-supplies-visited'
+        )[];
+        readonly pathSelection: 'all-network-reachable-candidates-unselected';
+        readonly distanceScope: 'navigation-graph-edges-only';
+        readonly endpointSnapTraversal: 'not-included-not-proven-walkable';
+        readonly dynamicInitialLeg: 'not-evaluated-current-position-to-first-endpoint';
+        readonly routeFrequency: 'not-evaluated-dynamic-task-selection-and-readiness';
         readonly movement: ProductionLogisticsEmployeeMovement | null;
+        readonly assignments: readonly BlueprintProductionEmployeeTaskRouteAssignment[];
     };
     readonly taskReadinessTiming: 'not-evaluated-runtime-state-not-recorded';
     readonly scheduling: ProductionLogisticsEmployeeScheduling | null;

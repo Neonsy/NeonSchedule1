@@ -13,6 +13,7 @@ import {
     type ProductionLogisticsSlot,
 } from '#core/data/production-logistics';
 import type { ProductionBatchPlan } from '#core/production/plan';
+import type { NavigationGraph } from '#core/data/world';
 import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
 import { BlueprintProductionLogisticsConfigurationAnalyzer } from '#core/blueprint/production-logistics-configuration';
 import { analyzeProductionEmployeeExecution } from '#core/blueprint/production-employee-execution';
@@ -45,12 +46,14 @@ export class BlueprintProductionLogisticsAnalyzer {
     readonly #transfers: BlueprintProductionTransferAnalyzer;
     readonly #configuration: BlueprintProductionLogisticsConfigurationAnalyzer;
     readonly #catalog: ProductionLogisticsCatalog;
+    readonly #navigation: NavigationGraph;
     readonly #itemById: ReadonlyMap<string, Item>;
     readonly #buildableByItemId: ReadonlyMap<string, Buildable>;
 
     constructor(dataset: BlueprintProductionLogisticsDataset) {
         this.#transfers = new BlueprintProductionTransferAnalyzer(dataset);
         this.#catalog = ProductionLogisticsCatalogSchema.assert(dataset.productionLogistics);
+        this.#navigation = dataset.navigation;
         this.#itemById = indexUnique(
             dataset.items.map((input) => {
                 const item = ItemSchema.assert(input);
@@ -119,9 +122,9 @@ export class BlueprintProductionLogisticsAnalyzer {
         const employeeExecution = analyzeProductionEmployeeExecution(
             blueprint,
             plan,
-            transfers.schedule.schedule,
             this.#catalog,
-            transfers.endpointAccess
+            transfers,
+            this.#navigation
         );
         return {
             kind: 'analyzed',
