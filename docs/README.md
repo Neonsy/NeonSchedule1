@@ -4,29 +4,31 @@ NeonSchedule1 is an unofficial open-source project for building an accurate *Sch
 It is intended for players who want to compare recipes by ingredients, effects, cost, value, profit, and customer fit.
 
 > [!IMPORTANT]
-> NeonSchedule1 is in early development and does not have a public calculator.
+> NeonSchedule1 does not have a public website or player-ready application yet.
 
-## Contributor capabilities
+## What exists today
 
-The repository currently supports:
+The repository contains working calculation libraries and local development tools.
+Contributors can:
 
-- Evaluate ordered mixes with deterministic effect transformations
-- Search recipes exactly under explicit constraints
-- Calculate production materials, time, cost, equipment, and quality
-- Evaluate customer preferences, offers, and recommendations
-- Generate and query verified precomputed recipe data
-- Allocate customers and dealers under shared resource limits
-- Normalize world, property, shop, and navigation evidence
-- Validate and plan property blueprints
-- Evaluate standard and explicit seeded mixing profiles
-- Compose finished-product, inventory, transfer, purchase, and shopping plans
+- Evaluate ordered mixes under standard and seeded mixing profiles
+- Search and rank recipes with ingredient, effect, cost, and length constraints
+- Calculate customer, dealer, production, inventory, shopping, and property-planning results
+- Collect, verify, normalize, and validate game data from a local game installation
+- Generate and query exact precomputed recipe data
+
+These capabilities require a source checkout and local development setup.
+The web workspace contains no application code.
+
+The [development overview](/docs/development.md) describes the implemented scope and its proof limits.
 
 ## Planned player features
 
 - Interactive mix building and reverse search
-- Quick, Balanced, and Precise search modes
-- Ingredient, effect, cost, value, profit, and length filters
-- Customer, dealer, production, property, and route planning
+- Quick, Balanced, Precise, and Exhaustive search modes
+- Ingredient, effect, cost, value, profit, and recipe-length filters
+- Customer and dealer planning
+- Production, inventory, shopping, property, and route guidance
 - Versioned share links with game-data and mixing-profile identity
 
 Plans are not release promises.
