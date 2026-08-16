@@ -1,7 +1,10 @@
 import {
+    composeFinishedRecipeElapsedLifecycle,
     composeFinishedRecipeProductionReadiness,
     attributeFinishedRecipeShoppingRouteToProperties,
     planFinishedRecipePropertyTransferArrivals,
+    type FinishedRecipeBrickPressingStep,
+    type FinishedRecipePackagingStep,
     type FinishedRecipeProductionPlan,
     type FinishedRecipeProductionReadinessInput,
     type FinishedRecipePropertyTransferPlan,
@@ -365,7 +368,193 @@ describe('finished recipe production readiness', () => {
     });
 });
 
+describe('finished recipe elapsed lifecycle', () => {
+    it('composes exact no-terminal production through a direct sale', () => {
+        const result = composeFinishedRecipeElapsedLifecycle({
+            readiness: input(),
+            execution: productionExecution(15),
+            sale: directSale(1, 18, 2),
+        });
+
+        expect(result).toMatchObject({
+            status: 'complete',
+            proof: 'exact',
+            production: {
+                startMinute: 15,
+                modeledProcessMinutes: 0,
+                terminalOperation: {
+                    kind: 'none',
+                    processedQuantity: 0,
+                    remainderQuantity: 1,
+                    gameMinutes: 0,
+                },
+                completionMinute: 15,
+            },
+            elapsed: {
+                inputReadyToProductionStartMinutes: 3,
+                productionMinutes: 0,
+                productionCompletionToSaleStartMinutes: 3,
+                saleMinutes: 2,
+                inputReadyToSaleCompletionMinutes: 8,
+            },
+            gaps: [],
+        });
+    });
+
+    it('includes selected drying in the modeled production clock', () => {
+        const plan = withDrying(productionPlan(), 10);
+        const result = composeFinishedRecipeElapsedLifecycle({
+            readiness: input({ production: plan }),
+            execution: productionExecution(12),
+            sale: deliveredSale(1, 25, 3),
+        });
+
+        expect(result).toMatchObject({
+            status: 'complete',
+            production: {
+                modeledProcessMinutes: 10,
+                terminalOperation: { kind: 'none' },
+                completionMinute: 22,
+            },
+            elapsed: {
+                productionMinutes: 10,
+                productionCompletionToSaleStartMinutes: 3,
+                saleMinutes: 3,
+                inputReadyToSaleCompletionMinutes: 16,
+            },
+        });
+    });
+
+    it('converts selected packaging employee seconds to game minutes', () => {
+        const plan = withPackaging(productionPlan(), 5);
+        const result = composeFinishedRecipeElapsedLifecycle({
+            readiness: input({ production: plan }),
+            execution: productionExecution(12),
+            sale: directSale(1, 17, 1),
+        });
+
+        expect(result).toMatchObject({
+            status: 'complete',
+            production: {
+                modeledProcessMinutes: 0,
+                terminalOperation: {
+                    kind: 'packaging',
+                    processedQuantity: 1,
+                    employeeRealSeconds: 5,
+                    gameMinutes: 5,
+                },
+                totalElapsedMinutes: 5,
+                completionMinute: 17,
+            },
+        });
+    });
+
+    it('converts selected brick-pressing employee seconds to game minutes', () => {
+        const plan = withBrickPressing(productionPlan(), 20);
+        const result = composeFinishedRecipeElapsedLifecycle({
+            readiness: input({ production: plan }),
+            execution: productionExecution(12),
+            sale: deliveredSale(1, 32, 4),
+        });
+
+        expect(result).toMatchObject({
+            status: 'complete',
+            production: {
+                terminalOperation: {
+                    kind: 'brick-pressing',
+                    processedQuantity: 1,
+                    employeeRealSeconds: 20,
+                    gameMinutes: 20,
+                },
+                completionMinute: 32,
+            },
+            sale: {
+                kind: 'delivered',
+                completionMinute: 36,
+            },
+        });
+    });
+
+    it('keeps missing execution and sale evidence incomplete', () => {
+        const result = composeFinishedRecipeElapsedLifecycle({ readiness: input() });
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            proof: 'incomplete',
+            production: {
+                executionModel: 'not-established',
+                completionMinute: null,
+            },
+            sale: null,
+            elapsed: null,
+            gaps: [
+                { code: 'production-execution-not-established' },
+                { code: 'sale-completion-not-established' },
+            ],
+        });
+    });
+
+    it('keeps partial production duration from becoming exact elapsed time', () => {
+        const base = productionPlan();
+        const partial: FinishedRecipeProductionPlan = {
+            ...base,
+            duration: {
+                ...base.duration,
+                mixingProcessMinutes: null,
+                modeledTotalProcessMinutes: null,
+            },
+            evidence: { ...base.evidence, modeledDurationProof: 'partial' },
+        };
+        const result = composeFinishedRecipeElapsedLifecycle({
+            readiness: input({ production: partial }),
+            execution: productionExecution(12),
+            sale: directSale(1, 12, 1),
+        });
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            production: {
+                modeledProcessMinutes: null,
+                totalElapsedMinutes: null,
+                completionMinute: null,
+            },
+            elapsed: null,
+            gaps: [{ code: 'modeled-production-duration-incomplete' }],
+        });
+    });
+
+    it('rejects unsupported concurrency, premature stages, and mismatched quantities', () => {
+        expect(() => composeFinishedRecipeElapsedLifecycle({
+            readiness: input(),
+            execution: {
+                startMinute: 12,
+                executionModel: 'parallel' as never,
+            },
+            sale: directSale(1, 12, 1),
+        })).toThrow('Finished recipe production execution model is invalid');
+
+        expect(() => composeFinishedRecipeElapsedLifecycle({
+            readiness: input(),
+            execution: productionExecution(11),
+            sale: directSale(1, 12, 1),
+        })).toThrow('Finished recipe production starts before its inputs are ready');
+
+        expect(() => composeFinishedRecipeElapsedLifecycle({
+            readiness: input({ production: withDrying(productionPlan(), 10) }),
+            execution: productionExecution(12),
+            sale: directSale(1, 21, 1),
+        })).toThrow('Finished recipe sale starts before production completion');
+
+        expect(() => composeFinishedRecipeElapsedLifecycle({
+            readiness: input(),
+            execution: productionExecution(12),
+            sale: directSale(2, 12, 1),
+        })).toThrow('Finished recipe sale quantity does not match planned output');
+    });
+});
+
 interface InputOverrides {
+    readonly production?: FinishedRecipeProductionPlan;
     readonly transfer?: FinishedRecipePropertyTransferPlan;
     readonly propertyTransferArrivals?: FinishedRecipePropertyTransferArrivalResult;
     readonly purchase?: FinishedRecipePurchasePlan;
@@ -378,7 +567,7 @@ interface InputOverrides {
 function input(overrides: InputOverrides = {}): FinishedRecipeProductionReadinessInput {
     return {
         propertyId: 'lab',
-        productionPlan: productionPlan(),
+        productionPlan: overrides.production ?? productionPlan(),
         transferPlan: overrides.transfer ?? transferPlan(0),
         ...(overrides.propertyTransferArrivals === undefined
             ? {}
@@ -600,6 +789,162 @@ function productionPlan(): FinishedRecipeProductionPlan {
             packagingApplicability: 'not-applicable',
             brickPressingApplicability: 'not-applicable',
             unmodeledOperations: [],
+        },
+    };
+}
+
+function productionExecution(startMinute: number) {
+    return {
+        startMinute,
+        executionModel: 'caller-supplied-exclusive-sequential-execution' as const,
+    };
+}
+
+function directSale(quantity: number, startMinute: number, travelDurationMinutes: number) {
+    return {
+        kind: 'direct' as const,
+        sellerId: 'player',
+        destinationId: 'customer',
+        quantity,
+        startMinute,
+        travelDurationMinutes,
+        completionMinute: startMinute + travelDurationMinutes,
+        completionRule: 'caller-supplied-sale-confirmed-at-destination' as const,
+    };
+}
+
+function deliveredSale(quantity: number, startMinute: number, deliveryDurationMinutes: number) {
+    return {
+        kind: 'delivered' as const,
+        sellerId: 'dealer',
+        destinationId: 'customer',
+        quantity,
+        startMinute,
+        deliveryDurationMinutes,
+        completionMinute: startMinute + deliveryDurationMinutes,
+        completionRule: 'caller-supplied-delivery-confirmed-at-destination' as const,
+    };
+}
+
+function withDrying(
+    base: FinishedRecipeProductionPlan,
+    totalProcessMinutes: number
+): FinishedRecipeProductionPlan {
+    return {
+        ...base,
+        dryingStep: {
+            position: 'after-ordered-mixing',
+            stationItemId: 'drying-rack',
+            itemId: 'product',
+            startingQuality: 'standard',
+            targetQuality: 'premium',
+            qualityTierCount: 1,
+            capacityPerBatch: 1,
+            batchQuantities: [1],
+            inputQuantity: 1,
+            outputQuantity: 1,
+            averageTemperature: 20,
+            processMultiplier: 1,
+            baseMinutesPerTier: totalProcessMinutes,
+            effectiveMinutesPerTier: totalProcessMinutes,
+            minutesPerBatch: totalProcessMinutes,
+            totalProcessMinutes,
+        },
+        duration: {
+            ...base.duration,
+            dryingProcessMinutes: totalProcessMinutes,
+            knownProcessMinutes: totalProcessMinutes,
+            modeledTotalProcessMinutes: totalProcessMinutes,
+        },
+        evidence: {
+            ...base.evidence,
+            modeledScope: 'base-product-ordered-mixing-and-selected-drying',
+            dryingApplicability: 'selected',
+        },
+    };
+}
+
+function withPackaging(
+    base: FinishedRecipeProductionPlan,
+    totalEmployeeRealSeconds: number
+): FinishedRecipeProductionPlan {
+    const packagingStep: FinishedRecipePackagingStep = {
+        position: 'after-optional-drying',
+        stationItemId: 'packaging-station',
+        stationKind: 'packaging',
+        productItemId: 'product',
+        packagingItemId: 'bag',
+        inputProductState: 'unpackaged',
+        outputProductState: 'packaged',
+        inputProductQuantity: 1,
+        productQuantityPerPackage: 1,
+        packageCount: 1,
+        packagedProductQuantity: 1,
+        unpackagedRemainderQuantity: 0,
+        packagingMaterialQuantity: 1,
+        outputSlotCapacityPackages: 20,
+        outputBatchPackageCounts: [1],
+        employeeBaseSecondsPerPackage: totalEmployeeRealSeconds,
+        employeePackagingSpeedMultiplier: 1,
+        stationEmployeeSpeedMultiplier: 1,
+        employeeCurrentWorkSpeed: 1,
+        employeeSecondsPerPackage: totalEmployeeRealSeconds,
+        totalEmployeeRealSeconds,
+    };
+    return {
+        ...base,
+        packagingStep,
+        duration: {
+            ...base.duration,
+            packagingEmployeeRealSeconds: totalEmployeeRealSeconds,
+        },
+        evidence: {
+            ...base.evidence,
+            modeledScope: 'base-product-ordered-mixing-and-selected-packaging',
+            packagingApplicability: 'selected',
+        },
+    };
+}
+
+function withBrickPressing(
+    base: FinishedRecipeProductionPlan,
+    totalEmployeeRealSeconds: number
+): FinishedRecipeProductionPlan {
+    const brickPressingStep: FinishedRecipeBrickPressingStep = {
+        position: 'after-optional-drying',
+        stationItemId: 'brick-press',
+        stationKind: 'brick-press',
+        productItemId: 'product',
+        outputPackagingItemId: 'brick',
+        inputProductState: 'unpackaged',
+        outputProductState: 'packaged',
+        inputProductQuantity: 1,
+        productQuantityPerBrick: 1,
+        brickCount: 1,
+        pressedProductQuantity: 1,
+        unpackagedRemainderQuantity: 0,
+        packagingMaterialConsumption: 'none',
+        outputSlotCapacityBricks: 20,
+        outputBatchBrickCounts: [1],
+        employeeBaseSecondsPerBrick: totalEmployeeRealSeconds,
+        employeeCompletionOverheadSecondsPerBrick: 0,
+        employeePackagingSpeedMultiplier: 1,
+        employeeCurrentWorkSpeed: 1,
+        employeeSecondsPerBrick: totalEmployeeRealSeconds,
+        totalEmployeeRealSeconds,
+        manualDuration: 'interactive-not-fixed',
+    };
+    return {
+        ...base,
+        brickPressingStep,
+        duration: {
+            ...base.duration,
+            brickPressingEmployeeRealSeconds: totalEmployeeRealSeconds,
+        },
+        evidence: {
+            ...base.evidence,
+            modeledScope: 'base-product-ordered-mixing-and-selected-brick-pressing',
+            brickPressingApplicability: 'selected',
         },
     };
 }
