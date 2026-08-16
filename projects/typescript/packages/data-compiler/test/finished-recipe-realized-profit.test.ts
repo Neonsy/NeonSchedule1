@@ -1,7 +1,9 @@
 import {
+    compareFinishedRecipeGrowAdditives,
     composeFinishedRecipeElapsedLifecycle,
     composeFinishedRecipeRealizedProfit,
     type FinishedRecipeElapsedLifecycleInput,
+    type FinishedRecipeGrowAdditiveScenarioInput,
     type FinishedRecipeProductionPlan,
     type FinishedRecipeProductionReadinessInput,
     type FinishedRecipeRealizedCostEvidence,
@@ -230,6 +232,491 @@ describe('finished recipe realized profit', () => {
     });
 });
 
+describe('finished recipe grow additive comparison', () => {
+    it('compares one and stacked additive selections against an exact no-additive baseline', () => {
+        const baseline = growScenario({ id: 'none' });
+        const yieldSelection = growScenario({
+            id: 'yield',
+            additives: [growAdditive('pgr', { yieldMultiplier: 1.5, qualityChange: -0.2 })],
+            outputQuantityPerBatch: 3,
+            revenue: 110,
+            cost: 35,
+        });
+        const stackedSelection = growScenario({
+            id: 'stacked',
+            additives: [
+                growAdditive('pgr', { yieldMultiplier: 1.5, qualityChange: -0.2 }),
+                growAdditive('speedgrow', {
+                    instantGrowth: 0.5,
+                    qualityChange: -0.2,
+                }),
+            ],
+            outputQuantityPerBatch: 3,
+            durationMinutesPerBatch: 2.5,
+            revenue: 105,
+            cost: 40,
+        });
+
+        const result = compareFinishedRecipeGrowAdditives({
+            baseline,
+            alternatives: [yieldSelection, stackedSelection],
+        });
+
+        expect(result).toMatchObject({
+            status: 'complete',
+            proof: 'exact',
+            objective: 'highest-exact-realized-profit-per-game-minute',
+            baseline: {
+                id: 'none',
+                kind: 'no-additive-baseline',
+                finishedQuantity: 6,
+                productionSteps: [
+                    {
+                        additiveItemIds: [],
+                        outputQuantityPerBatch: 2,
+                        batchCount: 3,
+                        producedQuantity: 6,
+                        applicationCount: 0,
+                        materialQuantity: 0,
+                    },
+                ],
+            },
+            excludedScenarioIds: [],
+            gaps: [],
+        });
+        expect(result.alternatives.map(({ scenario }) => scenario.id)).toEqual([
+            'stacked',
+            'yield',
+        ]);
+        expect(result.alternatives[0]).toMatchObject({
+            status: 'complete',
+            scenario: {
+                productionSteps: [
+                    {
+                        additiveItemIds: ['pgr', 'speedgrow'],
+                        additives: [
+                            {
+                                additiveItemId: 'pgr',
+                                applicationCount: 2,
+                                materialQuantity: 2,
+                                qualityChange: -0.2,
+                                yieldMultiplier: 1.5,
+                                instantGrowth: 0,
+                            },
+                            {
+                                additiveItemId: 'speedgrow',
+                                applicationCount: 2,
+                                materialQuantity: 2,
+                                qualityChange: -0.2,
+                                yieldMultiplier: 1,
+                                instantGrowth: 0.5,
+                            },
+                        ],
+                        batchCount: 2,
+                        applicationCount: 4,
+                        materialQuantity: 4,
+                    },
+                ],
+            },
+            productionStepDeltas: [
+                {
+                    yieldPerBatch: 1,
+                    batchCount: -1,
+                    totalProcessMinutes: -10,
+                    applicationCount: 4,
+                    materialQuantity: 4,
+                    qualityLevel: expect.closeTo(-0.4),
+                },
+            ],
+            economicsDelta: {
+                elapsedGameMinutes: -10,
+                attributedCost: 10,
+                realizedProfit: -5,
+                profitPerGameMinute: 3,
+            },
+        });
+        expect(result.alternatives[1]).toMatchObject({
+            productionStepDeltas: [
+                {
+                    yieldPerBatch: 1,
+                    batchCount: -1,
+                    totalProcessMinutes: -5,
+                },
+            ],
+            economicsDelta: {
+                elapsedGameMinutes: -5,
+                attributedCost: 5,
+                realizedProfit: 5,
+                profitPerGameMinute: 1.5,
+            },
+        });
+        expect(result.ranking.map(({ scenarioId }) => scenarioId)).toEqual([
+            'stacked',
+            'yield',
+            'none',
+        ]);
+    });
+
+    it('reports negative yield and time deltas independently from realized profit', () => {
+        const result = compareFinishedRecipeGrowAdditives({
+            baseline: growScenario({ id: 'none' }),
+            alternatives: [growScenario({
+                id: 'quality',
+                additives: [growAdditive('quality', {
+                    yieldMultiplier: 0.5,
+                    qualityChange: 0.3,
+                })],
+                outputQuantityPerBatch: 1,
+                durationMinutesPerBatch: 4,
+                revenue: 140,
+                cost: 45,
+            })],
+        });
+
+        expect(result.alternatives[0]).toMatchObject({
+            productionStepDeltas: [
+                {
+                    yieldPerBatch: -1,
+                    batchCount: 3,
+                    producedQuantity: 0,
+                    totalProcessMinutes: 9,
+                    qualityLevel: expect.closeTo(0.3),
+                },
+            ],
+            economicsDelta: {
+                elapsedGameMinutes: 9,
+                attributedCost: 15,
+                realizedProfit: 25,
+                profitPerGameMinute: expect.closeTo(-0.224137931),
+            },
+        });
+    });
+
+    it('excludes incomplete evidence from exact ranking', () => {
+        const result = compareFinishedRecipeGrowAdditives({
+            baseline: growScenario({ id: 'none' }),
+            alternatives: [
+                growScenario({
+                    id: 'partial-cost',
+                    additives: [growAdditive('pgr', { yieldMultiplier: 1.5 })],
+                    outputQuantityPerBatch: 3,
+                    costCoverage: 'partial',
+                }),
+                growScenario({
+                    id: 'partial-lifecycle',
+                    additives: [growAdditive('speedgrow', { instantGrowth: 0.5 })],
+                    durationMinutesPerBatch: 2.5,
+                    completeLifecycle: false,
+                }),
+            ],
+        });
+
+        expect(result).toMatchObject({
+            status: 'partial',
+            proof: 'mixed',
+            excludedScenarioIds: ['partial-cost', 'partial-lifecycle'],
+            gaps: [
+                { scenarioId: 'partial-cost', code: 'alternative-economics-incomplete' },
+                { scenarioId: 'partial-lifecycle', code: 'alternative-economics-incomplete' },
+            ],
+            alternatives: [
+                {
+                    status: 'unavailable',
+                    economicsDelta: null,
+                    gaps: [
+                        { scenarioId: 'partial-cost', code: 'alternative-economics-incomplete' },
+                    ],
+                },
+                { status: 'unavailable', economicsDelta: null },
+            ],
+        });
+        expect(result.ranking.map(({ scenarioId }) => scenarioId)).toEqual(['none']);
+
+        const incompleteBaseline = compareFinishedRecipeGrowAdditives({
+            baseline: growScenario({ id: 'none', completeLifecycle: false }),
+            alternatives: [growScenario({
+                id: 'exact-alternative',
+                additives: [growAdditive('pgr', {})],
+            })],
+        });
+        expect(incompleteBaseline).toMatchObject({
+            status: 'unavailable',
+            proof: 'incomplete',
+            ranking: [],
+            excludedScenarioIds: ['exact-alternative', 'none'],
+            gaps: [{ scenarioId: 'none', code: 'baseline-economics-incomplete' }],
+            alternatives: [
+                {
+                    status: 'unavailable',
+                    economicsDelta: null,
+                    gaps: [{ scenarioId: 'none', code: 'baseline-economics-incomplete' }],
+                },
+            ],
+        });
+    });
+
+    it('rejects incompatible scenarios and mismatched evidence', () => {
+        const baseline = growScenario({ id: 'none' });
+        const datasetAlternative = growScenario({
+            id: 'dataset',
+            additives: [growAdditive('pgr', {})],
+        });
+        const datasetPlan = datasetAlternative.profit.lifecycleInput.readiness.productionPlan;
+        const mismatchedDataset = { gameVersion: 'test', datasetSha256: 'b'.repeat(64) };
+        const mismatchedDatasetAlternative: FinishedRecipeGrowAdditiveScenarioInput = {
+            ...datasetAlternative,
+            profit: {
+                ...datasetAlternative.profit,
+                lifecycleInput: {
+                    ...datasetAlternative.profit.lifecycleInput,
+                    readiness: {
+                        ...datasetAlternative.profit.lifecycleInput.readiness,
+                        productionPlan: {
+                            ...datasetPlan,
+                            dataset: mismatchedDataset,
+                            baseProductPlan: {
+                                ...datasetPlan.baseProductPlan,
+                                dataset: mismatchedDataset,
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        expect(() => compareFinishedRecipeGrowAdditives({
+            baseline,
+            alternatives: [mismatchedDatasetAlternative],
+        })).toThrow('Finished recipe grow additive scenarios use different datasets');
+        expect(() => compareFinishedRecipeGrowAdditives({
+            baseline,
+            alternatives: [growScenario({
+                id: 'container',
+                growContainerItemId: 'different-container',
+                additives: [growAdditive('pgr', {})],
+            })],
+        })).toThrow('Finished recipe grow additive scenarios use incompatible production routes');
+        expect(() => compareFinishedRecipeGrowAdditives({
+            baseline,
+            alternatives: [growScenario({
+                id: 'quantity',
+                finishedQuantity: 5,
+                additives: [growAdditive('pgr', {})],
+            })],
+        })).toThrow('Finished recipe grow additive scenarios use different finished quantities');
+        expect(() => compareFinishedRecipeGrowAdditives({
+            baseline,
+            alternatives: [growScenario({
+                id: 'application-count',
+                additives: [growAdditive('pgr', {})],
+                applicationCountAdjustment: 1,
+            })],
+        })).toThrow('does not match whole-batch application evidence');
+    });
+
+    it('uses canonical scenario IDs as the final deterministic tie break', () => {
+        const alternatives = ['zeta', 'alpha'].map((id) => growScenario({
+            id,
+            additives: [growAdditive(`${id}-additive`, {})],
+        }));
+        const result = compareFinishedRecipeGrowAdditives({
+            baseline: growScenario({ id: 'none' }),
+            alternatives,
+        });
+
+        expect(result.ranking.map(({ scenarioId }) => scenarioId)).toEqual([
+            'alpha',
+            'none',
+            'zeta',
+        ]);
+    });
+});
+
+interface GrowAdditiveFixture {
+    readonly itemId: string;
+    readonly qualityChange: number;
+    readonly yieldMultiplier: number;
+    readonly instantGrowth: number;
+}
+
+interface GrowScenarioOptions {
+    readonly id: string;
+    readonly finishedQuantity?: number;
+    readonly growContainerItemId?: string;
+    readonly additives?: readonly GrowAdditiveFixture[];
+    readonly outputQuantityPerBatch?: number;
+    readonly durationMinutesPerBatch?: number;
+    readonly revenue?: number;
+    readonly cost?: number;
+    readonly costCoverage?: FinishedRecipeRealizedCostEvidence['coverage'];
+    readonly completeLifecycle?: boolean;
+    readonly applicationCountAdjustment?: number;
+}
+
+function growAdditive(
+    itemId: string,
+    effects: Partial<Omit<GrowAdditiveFixture, 'itemId'>>
+): GrowAdditiveFixture {
+    return {
+        itemId,
+        qualityChange: effects.qualityChange ?? 0,
+        yieldMultiplier: effects.yieldMultiplier ?? 1,
+        instantGrowth: effects.instantGrowth ?? 0,
+    };
+}
+
+function growScenario(options: GrowScenarioOptions): FinishedRecipeGrowAdditiveScenarioInput {
+    const finishedQuantity = options.finishedQuantity ?? 6;
+    const outputQuantityPerBatch = options.outputQuantityPerBatch ?? 2;
+    const durationMinutesPerBatch = options.durationMinutesPerBatch ?? 5;
+    const additives = [...(options.additives ?? [])].sort((left, right) =>
+        left.itemId.localeCompare(right.itemId)
+    );
+    const growContainerItemId = options.growContainerItemId ?? 'tent';
+    const batchCount = Math.ceil(finishedQuantity / outputQuantityPerBatch);
+    const totalProcessMinutes = batchCount * durationMinutesPerBatch;
+    const production = growProductionPlan({
+        finishedQuantity,
+        outputQuantityPerBatch,
+        durationMinutesPerBatch,
+        additives,
+        growContainerItemId,
+        batchCount,
+        totalProcessMinutes,
+        applicationCountAdjustment: options.applicationCountAdjustment ?? 0,
+    });
+    const completeLifecycleInput = growLifecycleInput(production);
+    const lifecycleInput: FinishedRecipeElapsedLifecycleInput =
+        options.completeLifecycle === false
+            ? {
+                readiness: completeLifecycleInput.readiness,
+                ...(completeLifecycleInput.execution === undefined
+                    ? {}
+                    : { execution: completeLifecycleInput.execution }),
+            }
+            : completeLifecycleInput;
+    const treatments = completeCostTreatments(
+        notIncurredCost('equipment'),
+        options.cost ?? 30
+    );
+    return {
+        id: options.id,
+        profit: {
+            lifecycleInput,
+            lifecycleResult: composeFinishedRecipeElapsedLifecycle(lifecycleInput),
+            revenue: realizedRevenue(finishedQuantity, options.revenue ?? 100),
+            costs: {
+                ...realizedCosts(finishedQuantity, treatments),
+                coverage: options.costCoverage ?? 'complete',
+                treatments: options.costCoverage === 'partial'
+                    ? [includedCost('materials', options.cost ?? 30)]
+                    : treatments,
+            },
+        },
+    };
+}
+
+interface GrowProductionPlanOptions {
+    readonly finishedQuantity: number;
+    readonly outputQuantityPerBatch: number;
+    readonly durationMinutesPerBatch: number;
+    readonly additives: readonly GrowAdditiveFixture[];
+    readonly growContainerItemId: string;
+    readonly batchCount: number;
+    readonly totalProcessMinutes: number;
+    readonly applicationCountAdjustment: number;
+}
+
+function growProductionPlan(options: GrowProductionPlanOptions): FinishedRecipeProductionPlan {
+    const base = productionPlan(options.finishedQuantity, options.totalProcessMinutes);
+    const additiveIds = options.additives.map(({ itemId }) => itemId);
+    const producedQuantity = options.outputQuantityPerBatch * options.batchCount;
+    const productionStep = {
+        itemId: 'product',
+        routeId: ['seed', 'seed', 'product', 'soil', options.growContainerItemId, ...additiveIds]
+            .join(':'),
+        method: 'seed-harvest' as const,
+        requiredQuantity: options.finishedQuantity,
+        batchCount: options.batchCount,
+        outputQuantityPerBatch: options.outputQuantityPerBatch,
+        durationMinutesPerBatch: options.durationMinutesPerBatch,
+        acceptedEquipmentItemIds: ['tent'],
+        equipmentItemId: options.growContainerItemId,
+        growLightItemId: 'light',
+        additiveItemIds: additiveIds,
+        quality: {
+            level: Math.fround(
+                0.5 + options.additives.reduce((total, additive) => total + additive.qualityChange, 0)
+            ),
+            tier: 'fixture-quality',
+            customerScalar: 0.5,
+        },
+        totalProcessMinutes: options.totalProcessMinutes,
+        producedQuantity,
+        leftoverQuantity: producedQuantity - options.finishedQuantity,
+        inputs: [
+            { itemId: 'seed', quantityPerBatch: 1, totalQuantity: options.batchCount },
+            { itemId: 'soil', quantityPerBatch: 1, totalQuantity: options.batchCount },
+            ...additiveIds.map((itemId) => ({
+                itemId,
+                quantityPerBatch: 1,
+                totalQuantity: options.batchCount,
+            })),
+        ],
+    };
+    return {
+        ...base,
+        baseProductPlan: {
+            ...base.baseProductPlan,
+            productionSteps: [productionStep],
+            totalProcessMinutes: options.totalProcessMinutes,
+        },
+        growAdditiveSteps: options.additives.map((additive) => ({
+            position: 'during-base-product-growth',
+            productionItemId: 'product',
+            growContainerItemId: options.growContainerItemId,
+            additiveItemId: additive.itemId,
+            batchCount: options.batchCount,
+            applicationCount: options.batchCount + options.applicationCountAdjustment,
+            materialQuantity: options.batchCount,
+            qualityChange: additive.qualityChange,
+            yieldMultiplier: additive.yieldMultiplier,
+            instantGrowth: additive.instantGrowth,
+            manualApplicationDuration: 'interactive-not-fixed',
+        })),
+        duration: {
+            ...base.duration,
+            baseProductProcessMinutes: options.totalProcessMinutes,
+            knownProcessMinutes: options.totalProcessMinutes,
+            modeledTotalProcessMinutes: options.totalProcessMinutes,
+        },
+    };
+}
+
+function growLifecycleInput(
+    production: FinishedRecipeProductionPlan
+): FinishedRecipeElapsedLifecycleInput {
+    const startMinute = 10;
+    const productionCompletionMinute = startMinute + production.duration.baseProductProcessMinutes;
+    const saleMinutes = 5;
+    return {
+        readiness: readinessInput(production),
+        execution: {
+            startMinute,
+            executionModel: 'caller-supplied-exclusive-sequential-execution',
+        },
+        sale: {
+            kind: 'direct',
+            sellerId: 'player',
+            destinationId: 'customer',
+            quantity: production.finishedQuantity,
+            startMinute: productionCompletionMinute,
+            travelDurationMinutes: saleMinutes,
+            completionMinute: productionCompletionMinute + saleMinutes,
+            completionRule: 'caller-supplied-sale-confirmed-at-destination',
+        },
+    };
+}
+
 interface ProfitInputOptions {
     readonly revenue?: number;
     readonly productionMinutes?: number;
@@ -320,8 +807,19 @@ function realizedCosts(
 }
 
 function completeCostTreatments(
-    equipment: FinishedRecipeRealizedCostTreatment = notIncurredCost('equipment')
+    equipment: FinishedRecipeRealizedCostTreatment = notIncurredCost('equipment'),
+    totalCost?: number
 ): readonly FinishedRecipeRealizedCostTreatment[] {
+    if (totalCost !== undefined) {
+        return [
+            includedCost('sale-fees', 0),
+            notIncurredCost('other'),
+            includedCost('materials', totalCost),
+            includedCost('transport', 0),
+            equipment,
+            includedCost('labor', 0),
+        ];
+    }
     return [
         includedCost('sale-fees', 2),
         notIncurredCost('other'),
