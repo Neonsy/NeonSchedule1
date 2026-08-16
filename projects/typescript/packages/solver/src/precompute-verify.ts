@@ -177,7 +177,11 @@ export async function runRecipeIndexVerification(
                 durationMs,
             };
             recipeCases.push(result);
-            onCaseCompleted(recipeCases.length, definitions.length * 2, result);
+            onCaseCompleted(
+                recipeCases.length,
+                definitions.length * recipeSearchObjectives.length,
+                result
+            );
         }
     }
 

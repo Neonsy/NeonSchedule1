@@ -165,10 +165,16 @@ describe('recipe corpus artifact', () => {
         const reportRoot = path.join(outputRoot, 'reports');
         const source = solverDataset();
         const options = { maxIngredients: 1, maxStates: 100 };
+        const recipeTotals: number[] = [];
         const refreshed = await refreshRecipeCorpusProduction(
             source,
             planExhaustiveCorpus(source, options),
-            { outputRoot, reportRoot, verificationLimit: 2 }
+            {
+                outputRoot,
+                reportRoot,
+                verificationLimit: 2,
+                onRecipeVerification: (_completed, total) => recipeTotals.push(total),
+            }
         );
         const repeated = await refreshRecipeCorpusProduction(
             source,
@@ -201,6 +207,8 @@ describe('recipe corpus artifact', () => {
         expect(before.configuration.mode).toBe('exhaustive');
         expect(before.verification.recipeCaseCount).toBeGreaterThan(0);
         expect(before.verification.customerCaseCount).toBeGreaterThan(0);
+        expect(recipeTotals).toHaveLength(refreshed.selection.verification.recipeCaseCount);
+        expect(recipeTotals.every((total) => total === recipeTotals.length)).toBe(true);
     });
 
     it('loads and routes selected production lookups and rejects a changed report', async () => {
