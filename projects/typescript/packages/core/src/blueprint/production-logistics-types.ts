@@ -26,7 +26,7 @@ export interface BlueprintProductionLogisticsDataset
 export type BlueprintProductionLogisticsIssueCode =
     | 'property-employee-capacity-exceeded'
     | 'employee-role-unavailable'
-    | 'assigned-station-limit-exceeded'
+    | 'assignment-limit-exceeded'
     | 'station-assigned-more-than-once'
     | 'assigned-placement-unavailable'
     | 'assigned-station-topology-unavailable'
@@ -101,9 +101,9 @@ export interface BlueprintProductionEmployeeLogistics {
     readonly walkSpeed: number | null;
     readonly inventorySlotCount: number | null;
     readonly assignmentKind: ProductionLogisticsEmployeeRole['assignmentKind'] | null;
-    readonly assignedStationLimit: number | null;
+    readonly assignmentLimit: number | null;
     readonly configuredRouteLimit: number | null;
-    readonly stationCompatibility: 'not-evaluated';
+    readonly stationCompatibility: 'not-evaluated' | 'not-applicable';
     readonly stationMovements: readonly BlueprintProductionStationMovement[];
     readonly supply: BlueprintProductionSupplyAssignment | null;
     readonly configuredRoutes: readonly BlueprintProductionConfiguredRoute[];

@@ -208,7 +208,7 @@ function analyzer(): BlueprintTemperatureCoverageAnalyzer {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -244,7 +244,7 @@ function property(): Property {
 
 function buildable(itemId: string, temperature: number, range = 2): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: 'Game.GridItem',
         placement: {
@@ -276,6 +276,7 @@ function buildable(itemId: string, temperature: number, range = 2): Buildable {
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

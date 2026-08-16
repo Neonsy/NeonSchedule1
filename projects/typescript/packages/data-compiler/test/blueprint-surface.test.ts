@@ -194,7 +194,7 @@ function dataset(): BlueprintDataset {
 
 function blueprint(): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -224,7 +224,7 @@ function blueprintAtHitPoint(relativeHitPoint: Vector3): BlueprintDocument {
 
 function surfaceBuildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId: 'wall-lamp',
         runtimeType: 'Game.SurfaceItem',
         placement: {
@@ -250,6 +250,7 @@ function surfaceBuildable(): Buildable {
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

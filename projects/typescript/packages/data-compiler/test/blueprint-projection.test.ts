@@ -138,7 +138,7 @@ function dataset(): BlueprintDataset {
 
 function blueprint(): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -156,7 +156,7 @@ function blueprint(): BlueprintDocument {
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId: 'bench',
         runtimeType: 'Game.Buildable',
         placement: {
@@ -194,6 +194,7 @@ function buildable(): Buildable {
         }],
         isTransitEntity: true,
         transitAccessPoints: [transform('TransitAccess', vector(-1, 0, 0))],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

@@ -50,7 +50,7 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 | Search | Implemented | Quick, Balanced, Precise, and Exhaustive routing, bounded live fallback, exact corpora, binary indexes, runtime loading, and proof evidence | Requires normalized data and is not hosted |
 | Customers and dealers | Partial | Demand, enjoyment, offers, recommendations, eligibility, assignment, shared-resource allocation, and conservative travel feasibility | Requires explicit progression, relationship, stock, cash, and timing state |
 | Production and inventory | Partial | Production plans, equipment, additives, packaging, inventory, transfers, purchases, shopping, lifecycle timing, and realized-profit evidence | Exact results require complete movement, sale, revenue, and cost inputs |
-| Property blueprints | Partial | Placement, construction order, cost, collision, access, temperature, lighting, capacity, schedules, employee logistics, route candidates, sprinklers | Mutable runtime state, dynamic obstacles, and unsupported collider proof remain outside the static model |
+| Property blueprints | Partial | Placement, construction order, cost, collision, access, temperature, lighting, capacity, schedules, employee logistics, route candidates, sprinklers, Cleaner planning | Mutable runtime state, dynamic obstacles, and unsupported collider proof remain outside the static model |
 | People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, and employee navigation | Normalized data and calculations exist without a live map or game connection |
 | Data pipeline | Tooling | Hash verification, schema checks, integrity checks, normalization, stable dataset identity, and corruption detection | Requires a private local acquisition |
 | Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
@@ -81,8 +81,8 @@ Use the [complete exporter manual](/projects/game-data-exporter/README.md) for b
 
 ## Compatibility
 
-Exporter `0.0.22` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
-Normalizer `0.0.37` defines the current normalized output contract.
+Exporter `0.0.23` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Normalizer `0.0.38` defines the current normalized output contract.
 A newer game or dependency version requires a new build and acquisition audit.
 
 NeonSchedule1 has no backward-compatibility commitment before version 1.

@@ -566,7 +566,7 @@ describe('blueprint production logistics', () => {
             expect.arrayContaining([
                 'property-employee-capacity-exceeded',
                 'station-assigned-more-than-once',
-                'assigned-station-limit-exceeded',
+                'assignment-limit-exceeded',
                 'assigned-placement-unavailable',
                 'handler-route-limit-exceeded',
                 'route-source-unavailable',
@@ -1105,7 +1105,7 @@ function logisticsBlueprint(): BlueprintDocument {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -1197,7 +1197,7 @@ function seedDataset(): BlueprintProductionLogisticsDataset {
 
 function logisticsCatalog(): BlueprintProductionLogisticsDataset['productionLogistics'] {
     return {
-        schema: 'neonschedule1-production-logistics-1',
+        schema: 'neonschedule1-production-logistics-2',
         routeRules: {
             filterModes: ['whitelist', 'blacklist'],
             selection: 'stored-order-first-ready',
@@ -1302,6 +1302,25 @@ function logisticsCatalog(): BlueprintProductionLogisticsDataset['productionLogi
                 'cauldron-output-move',
                 'mixing-station-output-move',
             ],
+            cleanerTaskPriority: [
+                'dispose-nearby-trash-bag',
+                'pick-up-reachable-loose-trash',
+                'empty-full-trash-grabber',
+                'bag-trash-can-at-or-above-threshold',
+            ],
+            cleanerRules: {
+                assignedBinSelection: 'nearest-current-position-first',
+                trashBagSelection: 'first-in-bin-stored-order',
+                looseTrashSelection: 'first-npc-reachable-in-bin-stored-order',
+                trashGrabberCapacity: 20,
+                looseTrashReachabilityDistance: 1,
+                nonFullBinThreshold: 1,
+                baggingThreshold: 0.75,
+                trashBagDisposalDestination: 'assigned-property-disposal-area-required',
+                binAccessPointSelection: 'npc-reachable',
+                actionMaximumDistance: 2,
+                dynamicTrashState: 'not-recorded',
+            },
         },
         employeeRoles: [
             employeeRole('Botanist', 8, null, ['station-specific']),
@@ -1325,7 +1344,7 @@ function logisticsCatalog(): BlueprintProductionLogisticsDataset['productionLogi
 
 function employeeRole(
     employeeType: 'Botanist' | 'Chemist' | 'Handler',
-    assignedStationLimit: number,
+    assignmentLimit: number,
     configuredRouteLimit: number | null,
     movementKinds: BlueprintProductionLogisticsDataset['productionLogistics']['employeeRoles'][number]['movementKinds']
 ): BlueprintProductionLogisticsDataset['productionLogistics']['employeeRoles'][number] {
@@ -1337,7 +1356,7 @@ function employeeRole(
         walkSpeed: 2,
         inventorySlotCount: 5,
         assignmentKind: employeeType === 'Botanist' ? 'pots' : 'stations',
-        assignedStationLimit,
+        assignmentLimit,
         configuredRouteLimit,
         movementKinds,
     };
@@ -1470,7 +1489,7 @@ function property(employeeCapacity: number): Property {
 
 function buildable(itemId: string, transitAccessPoints: Transform[]): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: 'Game.GridItem',
         placement: {
@@ -1510,6 +1529,7 @@ function buildable(itemId: string, transitAccessPoints: Transform[]): Buildable 
         interactionPoints: [],
         isTransitEntity: true,
         transitAccessPoints,
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

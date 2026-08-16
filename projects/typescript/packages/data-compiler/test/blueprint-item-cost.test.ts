@@ -89,7 +89,7 @@ function validBlueprint(
     placements: readonly ResolvedBlueprintGridPlacement[]
 ): BlueprintValidationResult {
     const document: BlueprintDocument = {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion: '0.4.6f12',
         datasetSha256: 'a'.repeat(64),
         propertyCode: 'warehouse',

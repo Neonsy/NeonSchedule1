@@ -31,7 +31,7 @@ import { normalizeVisuals } from '#data-compiler/normalize/visuals';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.37';
+export const NORMALIZER_VERSION = '0.0.38';
 
 const deferredDomains = [] as const;
 

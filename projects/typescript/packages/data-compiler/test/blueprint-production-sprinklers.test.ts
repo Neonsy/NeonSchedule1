@@ -191,7 +191,7 @@ function growContainer(itemId: string): ProductionCatalog['stations'][number] {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -215,7 +215,7 @@ function buildable(
     footprint: readonly { readonly x: number; readonly y: number }[]
 ): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: 'Game.GridItem',
         placement: {
@@ -246,6 +246,7 @@ function buildable(
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

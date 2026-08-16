@@ -394,6 +394,8 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
         const assignedPlacementIds = uniqueNonBlankStrings(
             employee.employeeType === 'Botanist'
                 ? employee.assignedPotPlacementIds
+                : employee.employeeType === 'Cleaner'
+                    ? employee.assignedBinPlacementIds
                 : employee.assignedStationPlacementIds,
             `Blueprint employee ${JSON.stringify(employee.id)} assigned placement ID`
         );
@@ -404,9 +406,13 @@ function validateDocument(document: BlueprintDocument): BlueprintDocument {
             );
         }
         if (employee.employeeType !== 'Handler') {
-            return employee.employeeType === 'Botanist'
-                ? { ...employee, assignedPotPlacementIds: assignedPlacementIds }
-                : { ...employee, assignedStationPlacementIds: assignedPlacementIds };
+            if (employee.employeeType === 'Botanist') {
+                return { ...employee, assignedPotPlacementIds: assignedPlacementIds };
+            }
+            if (employee.employeeType === 'Cleaner') {
+                return { ...employee, assignedBinPlacementIds: assignedPlacementIds };
+            }
+            return { ...employee, assignedStationPlacementIds: assignedPlacementIds };
         }
         const routeIds = new Set<string>();
         const handlerRoutes = employee.handlerRoutes.map((route, routeIndex) => {

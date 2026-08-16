@@ -94,9 +94,17 @@ export const BlueprintHandlerAssignmentSchema = type({
 });
 export type BlueprintHandlerAssignment = typeof BlueprintHandlerAssignmentSchema.infer;
 
+export const BlueprintCleanerAssignmentSchema = type({
+    id: 'string',
+    employeeType: "'Cleaner'",
+    assignedBinPlacementIds: 'string[]',
+});
+export type BlueprintCleanerAssignment = typeof BlueprintCleanerAssignmentSchema.infer;
+
 export const BlueprintEmployeeAssignmentSchema = BlueprintBotanistAssignmentSchema
     .or(BlueprintChemistAssignmentSchema)
-    .or(BlueprintHandlerAssignmentSchema);
+    .or(BlueprintHandlerAssignmentSchema)
+    .or(BlueprintCleanerAssignmentSchema);
 export type BlueprintEmployeeAssignment = typeof BlueprintEmployeeAssignmentSchema.infer;
 
 export const BlueprintProductionSupplySchema = type({
@@ -114,7 +122,7 @@ export const BlueprintProductionLogisticsSchema = type({
 export type BlueprintProductionLogistics = typeof BlueprintProductionLogisticsSchema.infer;
 
 export const BlueprintDocumentSchema = type({
-    schema: "'neonschedule1-blueprint-3'",
+    schema: "'neonschedule1-blueprint-4'",
     gameVersion: 'string',
     datasetSha256: 'string',
     propertyCode: 'string',

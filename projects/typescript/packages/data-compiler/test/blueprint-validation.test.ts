@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     BlueprintValidator,
+    BlueprintCleanerTrashAnalyzer,
     planBlueprintConstructionOrder,
     type BlueprintDataset,
     type BlueprintDocument,
@@ -9,6 +10,7 @@ import {
     type Collider,
     type PropertyGrid,
     type PropertyLayout,
+    type ProductionLogisticsCatalog,
     type Transform,
     type Vector3,
 } from '@neonschedule1/core';
@@ -17,6 +19,83 @@ const gameVersion = '0.4.6f11';
 const datasetSha256 = 'a'.repeat(64);
 
 describe('blueprint validation', () => {
+    it('reports Cleaner rules and configured bin coverage at the native assignment limit', () => {
+        const input = cleanerDataset();
+        const placements = cleanerPlacements(6, 'trash-can');
+        const result = new BlueprintCleanerTrashAnalyzer(input).analyze({
+            ...blueprint(placements),
+            productionLogistics: {
+                employees: [{
+                    id: 'cleaner-1',
+                    employeeType: 'Cleaner',
+                    assignedBinPlacementIds: placements.map(({ id }) => id),
+                }],
+                supplies: [],
+            },
+        });
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.valid).toBe(true);
+        expect(result.issues).toEqual([]);
+        expect(result.taskPriority).toEqual([
+            'dispose-nearby-trash-bag',
+            'pick-up-reachable-loose-trash',
+            'empty-full-trash-grabber',
+            'bag-trash-can-at-or-above-threshold',
+        ]);
+        expect(result.rules).toEqual(cleanerRules());
+        expect(result.currentTrashState).toBe('not-evaluated');
+        expect(result.employees).toEqual([expect.objectContaining({
+            employeeId: 'cleaner-1',
+            assignmentLimit: 6,
+            assignedBinCount: 6,
+            configuredBinCount: 6,
+        })]);
+        expect(result.employees[0]?.bins).toEqual(placements.map(({ id }) => ({
+            placementId: id,
+            itemId: 'trash-can',
+            usableByCleaners: true,
+            transitAccessPointCount: 1,
+            collectionCoverage: 'configured',
+            endpointReachability: 'not-evaluated',
+            dynamicCollectionCompletion: 'not-evaluated',
+        })));
+    });
+
+    it('reports one-past Cleaner bin limits and bins that native assignment rejects', () => {
+        const input = cleanerDataset();
+        const placements = cleanerPlacements(7, 'trash-can').map((entry, index) => {
+            if (index === 5) return { ...entry, itemId: 'no-access-trash-can' };
+            if (index === 6) return { ...entry, itemId: 'blocked-trash-can' };
+            return entry;
+        });
+        const result = new BlueprintCleanerTrashAnalyzer(input).analyze({
+            ...blueprint(placements),
+            productionLogistics: {
+                employees: [{
+                    id: 'cleaner-1',
+                    employeeType: 'Cleaner',
+                    assignedBinPlacementIds: placements.map(({ id }) => id),
+                }],
+                supplies: [],
+            },
+        });
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.valid).toBe(false);
+        expect(result.issues.map(({ code, placementId }) => [code, placementId])).toEqual([
+            ['cleaner-assignment-limit-exceeded', null],
+            ['assigned-bin-has-no-transit-access-point', 'bin-6'],
+            ['assigned-bin-not-usable-by-cleaners', 'bin-7'],
+        ]);
+        expect(result.employees[0]).toEqual(expect.objectContaining({
+            assignedBinCount: 7,
+            configuredBinCount: 5,
+        }));
+    });
+
     it('resolves rotated grid footprints to exact property tiles', () => {
         const validator = new BlueprintValidator(dataset());
         const result = validator.validate(blueprint([
@@ -331,6 +410,123 @@ function dataset(): BlueprintDataset {
     };
 }
 
+function cleanerDataset(): BlueprintDataset & {
+    readonly productionLogistics: ProductionLogisticsCatalog;
+} {
+    return {
+        ...dataset(),
+        buildables: [
+            ...dataset().buildables,
+            trashBuildable('trash-can', true),
+            trashBuildable('no-access-trash-can', true, false),
+            trashBuildable('blocked-trash-can', false),
+        ],
+        productionLogistics: {
+            schema: 'neonschedule1-production-logistics-2',
+            routeRules: {
+                filterModes: ['whitelist', 'blacklist'],
+                selection: 'stored-order-first-ready',
+                movedQuantityLimits: [
+                    'source-quantity',
+                    'requested-maximum',
+                    'destination-input-capacity',
+                ],
+                accessPointSelection: 'npc-reachable',
+            },
+            handlerTaskPriority: [
+                'packaging-station-work',
+                'brick-press-work',
+                'packaging-station-supply-move',
+                'brick-press-supply-move',
+                'configured-transit-route',
+            ],
+            employeeScheduling: {
+                dispatchAuthority: 'server',
+                dispatchPrerequisite: 'can-work-and-no-active-behaviour',
+                taskSelection: 'first-ready-in-native-priority-order',
+                taskReadiness: 'native-mutable-runtime-state-not-recorded',
+                workAvailability: {
+                    employeeHome: 'required',
+                    dailyPayment: 'paid-for-today-required-auto-from-employee-home-cash',
+                    shiftSchedule: 'no-fixed-shift',
+                    endOfDayTime: 400,
+                    consumeProduct: 'blocks-work',
+                },
+                movement: null,
+                botanistTaskPriority: [],
+                chemistTaskPriority: [],
+                cleanerTaskPriority: [
+                    'dispose-nearby-trash-bag',
+                    'pick-up-reachable-loose-trash',
+                    'empty-full-trash-grabber',
+                    'bag-trash-can-at-or-above-threshold',
+                ],
+                cleanerRules: cleanerRules(),
+            },
+            employeeRoles: [{
+                employeeType: 'Cleaner',
+                runtimeType: 'ScheduleOne.Employees.Cleaner',
+                dailyWage: 100,
+                baseWorkSpeed: 1,
+                walkSpeed: 1.2,
+                inventorySlotCount: 5,
+                assignmentKind: 'bins',
+                assignmentLimit: 6,
+                configuredRouteLimit: null,
+                movementKinds: ['trash-collection'],
+            }],
+            stations: [],
+        },
+    };
+}
+
+function cleanerPlacements(
+    count: number,
+    itemId: string
+): BlueprintDocument['placements'] {
+    const coordinates = [
+        [0, 0],
+        [1, 0],
+        [2, 0],
+        [3, 0],
+        [0, 1],
+        [1, 1],
+        [3, 1],
+    ] as const;
+    return coordinates.slice(0, count).map(([x, y], index) =>
+        placement(`bin-${index + 1}`, itemId, 'main', x, y, 0)
+    );
+}
+
+function trashBuildable(
+    itemId: string,
+    usableByCleaners: boolean,
+    hasAccessPoint = true
+): Buildable {
+    return {
+        ...buildable(itemId, 'grid', 1, 1, [footprintTile(0, 0)]),
+        isTransitEntity: true,
+        transitAccessPoints: hasAccessPoint ? [transform('AccessPoints/0')] : [],
+        trash: { usableByCleaners },
+    };
+}
+
+function cleanerRules() {
+    return {
+        assignedBinSelection: 'nearest-current-position-first' as const,
+        trashBagSelection: 'first-in-bin-stored-order' as const,
+        looseTrashSelection: 'first-npc-reachable-in-bin-stored-order' as const,
+        trashGrabberCapacity: 20 as const,
+        looseTrashReachabilityDistance: 1 as const,
+        nonFullBinThreshold: 1 as const,
+        baggingThreshold: 0.75 as const,
+        trashBagDisposalDestination: 'assigned-property-disposal-area-required' as const,
+        binAccessPointSelection: 'npc-reachable' as const,
+        actionMaximumDistance: 2 as const,
+        dynamicTrashState: 'not-recorded' as const,
+    };
+}
+
 function datasetWithCompleteGrid(): BlueprintDataset {
     const input = dataset();
     const layout = input.propertyLayouts[0]!;
@@ -358,7 +554,7 @@ function datasetWithCompleteGrid(): BlueprintDataset {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -446,7 +642,7 @@ function buildable(
     tileSharingRule: Buildable['placement']['tileSharingRule'] = kind === 'grid' ? 'standard' : null
 ): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: 'Game.Buildable',
         placement: {
@@ -473,6 +669,7 @@ function buildable(
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

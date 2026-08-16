@@ -35,7 +35,9 @@ export function productionEmployeeOwners(
         const role = roleByType.get(employee.employeeType);
         const placementIds = employee.employeeType === 'Botanist'
             ? employee.assignedPotPlacementIds
-            : employee.assignedStationPlacementIds;
+            : employee.employeeType === 'Cleaner'
+                ? []
+                : employee.assignedStationPlacementIds;
         for (const placementId of placementIds) {
             owners.set(placementId, {
                 employee,

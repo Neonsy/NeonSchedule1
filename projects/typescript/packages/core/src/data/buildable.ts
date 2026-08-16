@@ -70,8 +70,13 @@ export const InteractionPointSchema = type({
 });
 export type InteractionPoint = typeof InteractionPointSchema.infer;
 
+export const BuildableTrashSchema = type({
+    usableByCleaners: 'boolean',
+});
+export type BuildableTrash = typeof BuildableTrashSchema.infer;
+
 export const BuildableSchema = type({
-    schema: "'neonschedule1-buildable-4'",
+    schema: "'neonschedule1-buildable-5'",
     itemId: 'string',
     runtimeType: 'string',
     placement: BuildablePlacementSchema,
@@ -82,6 +87,7 @@ export const BuildableSchema = type({
     interactionPoints: InteractionPointSchema.array(),
     isTransitEntity: 'boolean',
     transitAccessPoints: TransformSchema.array(),
+    trash: BuildableTrashSchema.or('null'),
     proceduralTiles: ProceduralTileSchema.array(),
     visuals: SceneVisualsSchema,
 });

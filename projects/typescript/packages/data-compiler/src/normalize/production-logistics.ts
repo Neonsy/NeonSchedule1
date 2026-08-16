@@ -22,18 +22,20 @@ import {
     type JsonObject,
 } from '#data-compiler/json';
 
-const employeeTypes = ['Botanist', 'Chemist', 'Handler'] as const;
+const employeeTypes = ['Botanist', 'Chemist', 'Cleaner', 'Handler'] as const;
 type ProductionEmployeeType = (typeof employeeTypes)[number];
 
 const assignmentMechanics = {
     Botanist: { key: 'MaxAssignedPots', kind: 'pots' },
     Chemist: { key: 'MaximumAssignedStations', kind: 'stations' },
+    Cleaner: { key: 'MaximumAssignedBins', kind: 'bins' },
     Handler: { key: 'MaxAssignedStations', kind: 'stations' },
 } as const;
 
 const movementKinds = {
     Botanist: ['station-specific'],
     Chemist: ['station-specific'],
+    Cleaner: ['trash-collection'],
     Handler: ['assigned-station-supply', 'configured-route'],
 } as const;
 
@@ -65,6 +67,13 @@ const chemistTaskPriority = [
     'chemistry-station-output-move',
     'cauldron-output-move',
     'mixing-station-output-move',
+] as const;
+
+const cleanerTaskPriority = [
+    'dispose-nearby-trash-bag',
+    'pick-up-reachable-loose-trash',
+    'empty-full-trash-grabber',
+    'bag-trash-can-at-or-above-threshold',
 ] as const;
 
 const growContainerTaskLegs = [
@@ -155,7 +164,7 @@ export function normalizeProductionLogistics(
     );
 
     const catalog: ProductionLogisticsCatalog = {
-        schema: 'neonschedule1-production-logistics-1',
+        schema: 'neonschedule1-production-logistics-2',
         routeRules: {
             filterModes: literals(
                 stringArrayField(raw, 'routeFilterModes', 'report.productionLogistics'),
@@ -282,6 +291,71 @@ function normalizeEmployeeScheduling(
             `${path}.chemistTaskPriority`,
             integrity
         ),
+        cleanerTaskPriority: literals(
+            stringArrayField(raw, 'cleanerTaskPriority', path),
+            cleanerTaskPriority,
+            `${path}.cleanerTaskPriority`,
+            integrity
+        ),
+        cleanerRules: normalizeCleanerRules(raw, path, integrity),
+    };
+}
+
+function normalizeCleanerRules(
+    scheduling: JsonObject,
+    schedulingPath: string,
+    integrity: Integrity
+): ProductionLogisticsEmployeeScheduling['cleanerRules'] {
+    const path = `${schedulingPath}.cleanerRules`;
+    const raw = asObject(scheduling.cleanerRules, path);
+    return {
+        assignedBinSelection: literal(
+            stringField(raw, 'assignedBinSelection', path),
+            'nearest-current-position-first',
+            `${path}.assignedBinSelection`,
+            integrity
+        ),
+        trashBagSelection: literal(
+            stringField(raw, 'trashBagSelection', path),
+            'first-in-bin-stored-order',
+            `${path}.trashBagSelection`,
+            integrity
+        ),
+        looseTrashSelection: literal(
+            stringField(raw, 'looseTrashSelection', path),
+            'first-npc-reachable-in-bin-stored-order',
+            `${path}.looseTrashSelection`,
+            integrity
+        ),
+        trashGrabberCapacity: exactNumber(raw, 'trashGrabberCapacity', 20, path, integrity),
+        looseTrashReachabilityDistance: exactNumber(
+            raw,
+            'looseTrashReachabilityDistance',
+            1,
+            path,
+            integrity
+        ),
+        nonFullBinThreshold: exactNumber(raw, 'nonFullBinThreshold', 1, path, integrity),
+        baggingThreshold: exactNumber(raw, 'baggingThreshold', 0.75, path, integrity),
+        trashBagDisposalDestination: literal(
+            stringField(raw, 'trashBagDisposalDestination', path),
+            'assigned-property-disposal-area-required',
+            `${path}.trashBagDisposalDestination`,
+            integrity
+        ),
+        binAccessPointSelection: literal(
+            stringField(raw, 'binAccessPointSelection', path),
+            'npc-reachable',
+            `${path}.binAccessPointSelection`,
+            integrity
+        ),
+        actionMaximumDistance: exactNumber(raw, 'actionMaximumDistance', 2, path, integrity),
+        dynamicTrashState: literal(
+            stringField(raw, 'dynamicTrashState', path),
+            'not-recorded',
+            `${path}.dynamicTrashState`,
+            integrity
+        ),
     };
 }
 
@@ -384,7 +458,7 @@ function normalizeEmployeeRoles(
 
         const mechanics = asObject(raw.mechanics, `${path}.mechanics`);
         const assignment = assignmentMechanics[employeeType];
-        const assignedStationLimit = positiveIntegerString(
+        const assignmentLimit = positiveIntegerString(
             mechanics,
             assignment.key,
             `${path}.mechanics`,
@@ -415,7 +489,7 @@ function normalizeEmployeeRoles(
                 : positiveNumber(raw, 'walkSpeed', path, integrity),
             inventorySlotCount: positiveInteger(raw, 'inventorySlotCount', path, integrity),
             assignmentKind: assignment.kind,
-            assignedStationLimit,
+            assignmentLimit,
             configuredRouteLimit,
             movementKinds: [...movementKinds[employeeType]],
         };
@@ -431,7 +505,7 @@ function missingEmployeeRole(employeeType: ProductionEmployeeType): ProductionLo
         walkSpeed: null,
         inventorySlotCount: 0,
         assignmentKind: assignmentMechanics[employeeType].kind,
-        assignedStationLimit: 0,
+        assignmentLimit: 0,
         configuredRouteLimit: employeeType === 'Handler' ? 0 : null,
         movementKinds: [...movementKinds[employeeType]],
     };
@@ -645,6 +719,22 @@ function literal<const Value extends string>(
         `${path} matches the native contract`,
         actual === expected,
         `${path} must be ${JSON.stringify(expected)}`
+    );
+    return expected;
+}
+
+function exactNumber<const Value extends number>(
+    raw: JsonObject,
+    key: string,
+    expected: Value,
+    path: string,
+    integrity: Integrity
+): Value {
+    const actual = numberField(raw, key, path);
+    integrity.check(
+        `${path}.${key} matches the native contract`,
+        actual === expected,
+        `${path}.${key} must be ${expected}`
     );
     return expected;
 }

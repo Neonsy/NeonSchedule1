@@ -87,8 +87,9 @@ function normalizeBuildable(
     const footprintTiles = normalizeFootprintCoordinates(itemId, rawFootprintTiles, width, height, integrity);
     validateFootprint(itemId, width, height, footprintTiles, integrity);
     const storageRaw = raw.storage;
+    const trashRaw = raw.trash;
     const buildable: Buildable = {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: stringField(raw, 'runtimeType', path),
         placement: {
@@ -129,6 +130,15 @@ function normalizeBuildable(
             .map((point, index) =>
                 normalizeTransform(point, `${path}.transitAccessPoints[${index}]`)
             ),
+        trash: trashRaw === null
+            ? null
+            : {
+                usableByCleaners: booleanField(
+                    asObject(trashRaw, `${path}.trash`),
+                    'usableByCleaners',
+                    `${path}.trash`
+                ),
+            },
         proceduralTiles: objectArray(raw.proceduralTiles, `${path}.proceduralTiles`)
             .map((tile, index) => {
                 const tilePath = `${path}.proceduralTiles[${index}]`;

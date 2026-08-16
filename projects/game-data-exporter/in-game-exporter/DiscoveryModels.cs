@@ -117,8 +117,14 @@ internal sealed class DiscoveryBuildableSnapshot
     public List<DiscoveryInteractionPointSnapshot> InteractionPoints { get; set; } = new();
     public bool IsTransitEntity { get; set; }
     public List<TransformSnapshot?> TransitAccessPoints { get; set; } = new();
+    public DiscoveryTrashSnapshot? Trash { get; set; }
     public List<DiscoveryProceduralTileSnapshot> ProceduralTiles { get; set; } = new();
     public DiscoveryVisualCollectionSnapshot Visuals { get; set; } = new();
+}
+
+internal sealed class DiscoveryTrashSnapshot
+{
+    public bool UsableByCleaners { get; init; }
 }
 
 internal sealed class DiscoveryInteractionPointSnapshot

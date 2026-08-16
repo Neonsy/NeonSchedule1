@@ -67,6 +67,8 @@ describe('production logistics normalization', () => {
                 'cauldron-output-move',
                 'mixing-station-output-move',
             ],
+            cleanerTaskPriority: cleanerTaskPriority(),
+            cleanerRules: cleanerRules(),
         });
         expect(logistics.employeeRoles).toEqual([
             {
@@ -77,7 +79,7 @@ describe('production logistics normalization', () => {
                 walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'pots',
-                assignedStationLimit: 8,
+                assignmentLimit: 8,
                 configuredRouteLimit: null,
                 movementKinds: ['station-specific'],
             },
@@ -89,9 +91,21 @@ describe('production logistics normalization', () => {
                 walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'stations',
-                assignedStationLimit: 4,
+                assignmentLimit: 4,
                 configuredRouteLimit: null,
                 movementKinds: ['station-specific'],
+            },
+            {
+                employeeType: 'Cleaner',
+                runtimeType: 'ScheduleOne.Employees.Cleaner',
+                dailyWage: 100,
+                baseWorkSpeed: 1,
+                walkSpeed: 1.2,
+                inventorySlotCount: 5,
+                assignmentKind: 'bins',
+                assignmentLimit: 6,
+                configuredRouteLimit: null,
+                movementKinds: ['trash-collection'],
             },
             {
                 employeeType: 'Handler',
@@ -101,7 +115,7 @@ describe('production logistics normalization', () => {
                 walkSpeed: 1.2,
                 inventorySlotCount: 5,
                 assignmentKind: 'stations',
-                assignedStationLimit: 3,
+                assignmentLimit: 3,
                 configuredRouteLimit: 5,
                 movementKinds: ['assigned-station-supply', 'configured-route'],
             },
@@ -154,7 +168,7 @@ describe('production logistics normalization', () => {
 
     it('reports contradictory limits and invalid slot-filter references', () => {
         const report = logisticsReport();
-        const handler = report.world.employeeTypes[2];
+        const handler = report.world.employeeTypes[3];
         if (handler !== undefined) {
             handler.inventorySlotCount = 0;
             handler.walkSpeed = 0;
@@ -173,6 +187,7 @@ describe('production logistics normalization', () => {
                 stationTaskLegs: ['source-to-destination-access-point'],
             },
             chemistTaskPriority: [...scheduling.chemistTaskPriority].reverse(),
+            cleanerRules: { ...scheduling.cleanerRules, baggingThreshold: 0.8 },
         };
         const integrity = new Integrity();
 
@@ -201,6 +216,9 @@ describe('production logistics normalization', () => {
             'report.productionLogistics.employeeScheduling.movement.stationTaskLegs must equal ["current-to-station-access-point"]'
         );
         expect(integrity.errors).toContain(
+            'report.productionLogistics.employeeScheduling.cleanerRules.baggingThreshold must be 0.75'
+        );
+        expect(integrity.errors).toContain(
             'report.productionStations["packagingstation"].inputFilters[0].slotIndex 2 is outside 2 slots'
         );
         expect(integrity.errors).toContain(
@@ -222,6 +240,7 @@ describe('production logistics normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(logistics.employeeRoles.map(({ walkSpeed }) => walkSpeed)).toEqual([
+            null,
             null,
             null,
             null,
@@ -306,6 +325,9 @@ function logisticsReport(): RawReport {
                 employee('Chemist', 'ScheduleOne.Employees.Chemist', 300, 5, {
                     MaximumAssignedStations: '4',
                 }),
+                employee('Cleaner', 'ScheduleOne.Employees.Cleaner', 100, 5, {
+                    MaximumAssignedBins: '6',
+                }),
                 employee('Handler', 'ScheduleOne.Employees.Packager', 200, 5, {
                     MaxAssignedStations: '3',
                     MaxAssignedRoutes: '5',
@@ -357,6 +379,33 @@ function employeeScheduling() {
             'cauldron-output-move',
             'mixing-station-output-move',
         ],
+        cleanerTaskPriority: cleanerTaskPriority(),
+        cleanerRules: cleanerRules(),
+    };
+}
+
+function cleanerTaskPriority() {
+    return [
+        'dispose-nearby-trash-bag',
+        'pick-up-reachable-loose-trash',
+        'empty-full-trash-grabber',
+        'bag-trash-can-at-or-above-threshold',
+    ];
+}
+
+function cleanerRules() {
+    return {
+        assignedBinSelection: 'nearest-current-position-first',
+        trashBagSelection: 'first-in-bin-stored-order',
+        looseTrashSelection: 'first-npc-reachable-in-bin-stored-order',
+        trashGrabberCapacity: 20,
+        looseTrashReachabilityDistance: 1,
+        nonFullBinThreshold: 1,
+        baggingThreshold: 0.75,
+        trashBagDisposalDestination: 'assigned-property-disposal-area-required',
+        binAccessPointSelection: 'npc-reachable',
+        actionMaximumDistance: 2,
+        dynamicTrashState: 'not-recorded',
     };
 }
 

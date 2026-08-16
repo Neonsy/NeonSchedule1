@@ -522,6 +522,23 @@ internal sealed class EmployeeSchedulingSnapshot
     public EmployeeMovementSnapshot Movement { get; init; } = new();
     public List<string> BotanistTaskPriority { get; init; } = new();
     public List<string> ChemistTaskPriority { get; init; } = new();
+    public List<string> CleanerTaskPriority { get; init; } = new();
+    public CleanerRulesSnapshot CleanerRules { get; init; } = new();
+}
+
+internal sealed class CleanerRulesSnapshot
+{
+    public string AssignedBinSelection { get; init; } = string.Empty;
+    public string TrashBagSelection { get; init; } = string.Empty;
+    public string LooseTrashSelection { get; init; } = string.Empty;
+    public int TrashGrabberCapacity { get; init; }
+    public float LooseTrashReachabilityDistance { get; init; }
+    public float NonFullBinThreshold { get; init; }
+    public float BaggingThreshold { get; init; }
+    public string TrashBagDisposalDestination { get; init; } = string.Empty;
+    public string BinAccessPointSelection { get; init; } = string.Empty;
+    public float ActionMaximumDistance { get; init; }
+    public string DynamicTrashState { get; init; } = string.Empty;
 }
 
 internal sealed class EmployeeMovementSnapshot

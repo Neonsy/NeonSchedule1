@@ -175,7 +175,7 @@ function datasetWithScaledPropertyTile(): BlueprintDataset {
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -244,7 +244,7 @@ function lightBuildable(): Buildable {
 
 function baseBuildable(itemId: string, kind: string): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId,
         runtimeType: 'Game.Buildable',
         placement: basePlacement(kind),
@@ -255,6 +255,7 @@ function baseBuildable(itemId: string, kind: string): Buildable {
         interactionPoints: [],
         isTransitEntity: false,
         transitAccessPoints: [],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

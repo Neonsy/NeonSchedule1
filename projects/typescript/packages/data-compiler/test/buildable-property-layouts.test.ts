@@ -85,6 +85,7 @@ describe('buildable and property-layout normalization', () => {
                             ],
                             transitAccessPoints: [transform('AccessPoint')],
                             isTransitEntity: true,
+                            trash: { usableByCleaners: true },
                             proceduralTiles: [{
                                 id: 'RackTile',
                                 tileType: 'Rack',
@@ -119,7 +120,7 @@ describe('buildable and property-layout normalization', () => {
 
         expect(integrity.errors).toEqual([]);
         expect(buildables[0]).toMatchObject({
-            schema: 'neonschedule1-buildable-4',
+            schema: 'neonschedule1-buildable-5',
             itemId: 'workstation',
             placement: {
                 kind: 'grid',
@@ -146,6 +147,7 @@ describe('buildable and property-layout normalization', () => {
             storage: { slotCount: 4 },
             transitAccessPoints: [{ path: 'AccessPoint' }],
             isTransitEntity: true,
+            trash: { usableByCleaners: true },
             proceduralTiles: [{ id: 'RackTile', type: 'Rack' }],
             visuals: {
                 renderers: [

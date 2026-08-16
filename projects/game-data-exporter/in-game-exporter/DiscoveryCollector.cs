@@ -283,6 +283,10 @@ internal static partial class DiscoveryCollector
         var transitEntity = builtItem.TryCast<Il2CppScheduleOne.Management.ITransitEntity>();
         snapshot.IsTransitEntity = transitEntity is not null;
         snapshot.TransitAccessPoints = CollectTransitAccessPoints(transitEntity);
+        var trash = builtItem.TryCast<Il2CppScheduleOne.ObjectScripts.TrashContainerItem>();
+        snapshot.Trash = trash is null
+            ? null
+            : new DiscoveryTrashSnapshot { UsableByCleaners = trash.UsableByCleaners };
         snapshot.ProceduralTiles = CollectProceduralTiles(builtItem.gameObject);
         if (builtItem.BuildHandler is not null)
         {

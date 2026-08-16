@@ -102,7 +102,7 @@ function analyzer(input: { readonly fixedShape?: ColliderShape } = {}): Blueprin
 
 function blueprint(placements: BlueprintDocument['placements']): BlueprintDocument {
     return {
-        schema: 'neonschedule1-blueprint-3',
+        schema: 'neonschedule1-blueprint-4',
         gameVersion,
         datasetSha256,
         propertyCode: 'warehouse',
@@ -117,7 +117,7 @@ function placement(id: string, x: number): BlueprintDocument['placements'][numbe
 
 function buildable(): Buildable {
     return {
-        schema: 'neonschedule1-buildable-4',
+        schema: 'neonschedule1-buildable-5',
         itemId: 'station',
         runtimeType: 'Game.GridItem',
         placement: {
@@ -149,6 +149,7 @@ function buildable(): Buildable {
         interactionPoints: [],
         isTransitEntity: true,
         transitAccessPoints: [transform('AccessPoint', vector(2, 0, 0))],
+        trash: null,
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
     };

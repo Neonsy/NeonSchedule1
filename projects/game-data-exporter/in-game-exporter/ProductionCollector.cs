@@ -634,6 +634,27 @@ internal static partial class GameDataCollector
                 "cauldron-output-move",
                 "mixing-station-output-move",
             },
+            CleanerTaskPriority = new List<string>
+            {
+                "dispose-nearby-trash-bag",
+                "pick-up-reachable-loose-trash",
+                "empty-full-trash-grabber",
+                "bag-trash-can-at-or-above-threshold",
+            },
+            CleanerRules = new CleanerRulesSnapshot
+            {
+                AssignedBinSelection = "nearest-current-position-first",
+                TrashBagSelection = "first-in-bin-stored-order",
+                LooseTrashSelection = "first-npc-reachable-in-bin-stored-order",
+                TrashGrabberCapacity = 20,
+                LooseTrashReachabilityDistance = 1f,
+                NonFullBinThreshold = 1f,
+                BaggingThreshold = 0.75f,
+                TrashBagDisposalDestination = "assigned-property-disposal-area-required",
+                BinAccessPointSelection = "npc-reachable",
+                ActionMaximumDistance = 2f,
+                DynamicTrashState = "not-recorded",
+            },
         },
         StationMovementEmployeeTypes = new List<string> { "Botanist", "Chemist" },
     };

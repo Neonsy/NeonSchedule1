@@ -23,16 +23,17 @@ export const ProductionLogisticsStationSchema = type({
 export type ProductionLogisticsStation = typeof ProductionLogisticsStationSchema.infer;
 
 export const ProductionLogisticsEmployeeRoleSchema = type({
-    employeeType: "'Botanist' | 'Chemist' | 'Handler'",
+    employeeType: "'Botanist' | 'Chemist' | 'Cleaner' | 'Handler'",
     runtimeType: 'string',
     dailyWage: 'number',
     baseWorkSpeed: 'number',
     'walkSpeed?': 'number | null',
     inventorySlotCount: 'number',
-    assignmentKind: "'pots' | 'stations'",
-    assignedStationLimit: 'number',
+    assignmentKind: "'pots' | 'stations' | 'bins'",
+    assignmentLimit: 'number',
     configuredRouteLimit: 'number | null',
-    movementKinds: "('station-specific' | 'assigned-station-supply' | 'configured-route')[]",
+    movementKinds:
+        "('station-specific' | 'assigned-station-supply' | 'configured-route' | 'trash-collection')[]",
 });
 export type ProductionLogisticsEmployeeRole = typeof ProductionLogisticsEmployeeRoleSchema.infer;
 
@@ -66,6 +67,22 @@ export const ProductionLogisticsEmployeeMovementSchema = type({
 export type ProductionLogisticsEmployeeMovement =
     typeof ProductionLogisticsEmployeeMovementSchema.infer;
 
+export const ProductionLogisticsCleanerRulesSchema = type({
+    assignedBinSelection: "'nearest-current-position-first'",
+    trashBagSelection: "'first-in-bin-stored-order'",
+    looseTrashSelection: "'first-npc-reachable-in-bin-stored-order'",
+    trashGrabberCapacity: '20',
+    looseTrashReachabilityDistance: '1',
+    nonFullBinThreshold: '1',
+    baggingThreshold: '0.75',
+    trashBagDisposalDestination: "'assigned-property-disposal-area-required'",
+    binAccessPointSelection: "'npc-reachable'",
+    actionMaximumDistance: '2',
+    dynamicTrashState: "'not-recorded'",
+});
+export type ProductionLogisticsCleanerRules =
+    typeof ProductionLogisticsCleanerRulesSchema.infer;
+
 export const ProductionLogisticsEmployeeSchedulingSchema = type({
     dispatchAuthority: "'server'",
     dispatchPrerequisite: "'can-work-and-no-active-behaviour'",
@@ -83,12 +100,15 @@ export const ProductionLogisticsEmployeeSchedulingSchema = type({
         "('grow-container-watering-below-0.2' | 'mushroom-bed-misting-below-0.2' | 'grow-container-additive' | 'grow-container-soil-pour' | 'pot-sow-seed' | 'mushroom-bed-apply-spawn' | 'pot-harvest' | 'mushroom-bed-harvest' | 'drying-rack-stop' | 'drying-rack-output-move' | 'mushroom-spawn-station-work' | 'mushroom-spawn-station-output-move' | 'grow-container-watering-below-0.3' | 'mushroom-bed-misting-below-0.3' | 'drying-rack-input-move')[]",
     chemistTaskPriority:
         "('lab-oven-finish' | 'lab-oven-start' | 'chemistry-station-start' | 'cauldron-start' | 'mixing-station-start' | 'lab-oven-output-move' | 'chemistry-station-output-move' | 'cauldron-output-move' | 'mixing-station-output-move')[]",
+    cleanerTaskPriority:
+        "('dispose-nearby-trash-bag' | 'pick-up-reachable-loose-trash' | 'empty-full-trash-grabber' | 'bag-trash-can-at-or-above-threshold')[]",
+    cleanerRules: ProductionLogisticsCleanerRulesSchema,
 });
 export type ProductionLogisticsEmployeeScheduling =
     typeof ProductionLogisticsEmployeeSchedulingSchema.infer;
 
 export const ProductionLogisticsCatalogSchema = type({
-    schema: "'neonschedule1-production-logistics-1'",
+    schema: "'neonschedule1-production-logistics-2'",
     routeRules: ProductionLogisticsRouteRulesSchema,
     handlerTaskPriority:
         "('packaging-station-work' | 'brick-press-work' | 'packaging-station-supply-move' | 'brick-press-supply-move' | 'configured-transit-route')[]",

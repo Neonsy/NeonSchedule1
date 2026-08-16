@@ -52,19 +52,17 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
         }
         const employees = blueprint.productionLogistics.employees.map((employee) => {
             const role = roleByType.get(employee.employeeType);
-            const assignedPlacementIds = employee.employeeType === 'Botanist'
-                ? employee.assignedPotPlacementIds
-                : employee.assignedStationPlacementIds;
+            const assignedPlacementIds = assignmentPlacementIds(employee);
             if (role === undefined) {
                 issues.push(logisticsIssue(
                     'employee-role-unavailable',
                     `Employee ${JSON.stringify(employee.id)} uses unavailable role ${JSON.stringify(employee.employeeType)}`,
                     employee.id
                 ));
-            } else if (assignedPlacementIds.length > role.assignedStationLimit) {
+            } else if (assignedPlacementIds.length > role.assignmentLimit) {
                 issues.push(logisticsIssue(
-                    'assigned-station-limit-exceeded',
-                    `Employee ${JSON.stringify(employee.id)} has ${assignedPlacementIds.length} assignments, but ${employee.employeeType} supports ${role.assignedStationLimit}`,
+                    'assignment-limit-exceeded',
+                    `Employee ${JSON.stringify(employee.id)} has ${assignedPlacementIds.length} assignments, but ${employee.employeeType} supports ${role.assignmentLimit}`,
                     employee.id,
                     assignedPlacementIds
                 ));
@@ -72,7 +70,7 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
             const movementKind = employee.employeeType === 'Handler'
                 ? 'assigned-station-supply' as const
                 : 'station-specific' as const;
-            const stationMovements = assignedPlacementIds.map((placementId) => {
+            const stationMovements = employee.employeeType === 'Cleaner' ? [] : assignedPlacementIds.map((placementId) => {
                 const previousOwner = stationOwner.get(placementId);
                 if (previousOwner !== undefined) {
                     issues.push(logisticsIssue(
@@ -118,9 +116,11 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
                 walkSpeed: role?.walkSpeed ?? null,
                 inventorySlotCount: role?.inventorySlotCount ?? null,
                 assignmentKind: role?.assignmentKind ?? null,
-                assignedStationLimit: role?.assignedStationLimit ?? null,
+                assignmentLimit: role?.assignmentLimit ?? null,
                 configuredRouteLimit: role?.configuredRouteLimit ?? null,
-                stationCompatibility: 'not-evaluated' as const,
+                stationCompatibility: employee.employeeType === 'Cleaner'
+                    ? 'not-applicable' as const
+                    : 'not-evaluated' as const,
                 stationMovements,
                 supply,
                 configuredRoutes,
@@ -361,6 +361,12 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
             ));
         }
     }
+}
+
+function assignmentPlacementIds(employee: BlueprintEmployeeAssignment): readonly string[] {
+    if (employee.employeeType === 'Botanist') return employee.assignedPotPlacementIds;
+    if (employee.employeeType === 'Cleaner') return employee.assignedBinPlacementIds;
+    return employee.assignedStationPlacementIds;
 }
 
 function multiplyCapacity(left: number, right: number, label: string): number {

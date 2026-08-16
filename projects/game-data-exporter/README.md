@@ -16,7 +16,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.22` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.23` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -106,7 +106,7 @@ The exporter records the data required by NeonSchedule1's current calculations:
 - Items, prices, shops, suppliers, unlocks, properties, businesses, employee roles, and logistics rules
 - People, customers, preferences, relationships, schedules, and presentation references
 - Map regions, locations, services, access zones, employee navigation, and shop positions
-- Buildables, footprints, colliders, surfaces, storage, interactions, and placement data
+- Buildables, footprints, colliders, surfaces, storage, interactions, Cleaner eligibility, and placement data
 - Mesh, material, texture, sprite, icon, and other visual references
 
 The report's `discovery` object owns advanced world, layout, navigation, schedule, and visual observations.
