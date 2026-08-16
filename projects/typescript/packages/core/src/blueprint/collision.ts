@@ -139,6 +139,7 @@ function analyzeCollisions(
         const left = placementBoxes[leftIndex]!;
         for (let rightIndex = leftIndex + 1; rightIndex < placementBoxes.length; rightIndex++) {
             const right = placementBoxes[rightIndex]!;
+            if (isExplicitProceduralParentPair(left.placement, right.placement)) continue;
             if (!worldBoxesOverlap(left.box, right.box)) continue;
             const placementIds = [left.placement.id, right.placement.id].sort() as [string, string];
             collisions.push({ code: 'placement-overlap', placementIds, propertyCollider: null });
@@ -183,6 +184,14 @@ function analyzeCollisions(
         collisions: collisions.sort(compareCollisions),
         limitations: limitations.sort(compareLimitations),
     };
+}
+
+function isExplicitProceduralParentPair(
+    left: ProjectedBlueprintPlacement,
+    right: ProjectedBlueprintPlacement
+): boolean {
+    return (left.kind === 'procedural-grid' && left.parentPlacementId === right.id) ||
+        (right.kind === 'procedural-grid' && right.parentPlacementId === left.id);
 }
 
 function tryWorldBox(

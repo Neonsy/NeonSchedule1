@@ -71,6 +71,34 @@ describe('blueprint collision analysis', () => {
         }]);
     });
 
+    it('does not report a procedural placement overlapping its explicit parent', () => {
+        const rack = rackBuildable();
+        const light = proceduralChildBuildable();
+        const dataset: BlueprintDataset = {
+            manifest: { gameVersion, datasetSha256 },
+            buildables: [rack, light],
+            propertyLayouts: [propertyLayout([])],
+        };
+        const input = blueprint([
+            placement('rack-placement', 0),
+            {
+                id: 'light-placement',
+                kind: 'procedural-grid',
+                itemId: 'light',
+                parentPlacementId: 'rack-placement',
+                tiles: [{ x: 0, y: 0, tileId: 'rack/light-tile' }],
+            },
+        ]);
+
+        const result = new BlueprintCollisionAnalyzer(dataset).analyze(input);
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.proofStatus).toBe('exact');
+        expect(result.collisions).toEqual([]);
+        expect(result.limitations).toEqual([]);
+    });
+
     it('preserves projection rejection without claiming collision proof', () => {
         const input = blueprint([placement('bench-1', 9)]);
 
@@ -229,6 +257,37 @@ function buildable(): Buildable {
         transitAccessPoints: [],
         proceduralTiles: [],
         visuals: { renderers: [], meshes: [] },
+    };
+}
+
+function rackBuildable(): Buildable {
+    const rack = buildable();
+    return {
+        ...rack,
+        placement: {
+            ...rack.placement,
+            tileSharingRule: 'floor-rack',
+        },
+        proceduralTiles: [{
+            id: 'rack/light-tile',
+            type: 'Rack',
+            transform: transform('Rack/LightTile'),
+        }],
+    };
+}
+
+function proceduralChildBuildable(): Buildable {
+    const light = buildable();
+    return {
+        ...light,
+        itemId: 'light',
+        placement: {
+            ...light.placement,
+            kind: 'procedural-grid',
+            proceduralTileType: 'Rack',
+            tileSharingRule: null,
+            tileSharingImplementation: null,
+        },
     };
 }
 
