@@ -1172,7 +1172,7 @@ function seedDataset(): BlueprintProductionLogisticsDataset {
             }],
             stationRecipes: [],
             stations: [{
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'pot',
                 kind: 'grow-container',
                 yieldMultiplier: 1,
@@ -1403,7 +1403,7 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function production(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-8',
+        schema: 'neonschedule1-production-catalog-9',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
         brickPressing: { ...BRICK_PRESS_OPERATION_RULES },

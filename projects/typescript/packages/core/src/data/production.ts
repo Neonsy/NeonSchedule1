@@ -159,7 +159,7 @@ export const OvenTransformSchema = type({
 export type OvenTransform = typeof OvenTransformSchema.infer;
 
 const stationBase = {
-    schema: "'neonschedule1-production-station-3'",
+    schema: "'neonschedule1-production-station-4'",
     itemId: 'string',
 } as const;
 
@@ -186,9 +186,12 @@ export const SprinklerStationSchema = type({
     ...stationBase,
     kind: "'sprinkler'",
     applyDelay: 'number',
+    particleStopDelay: 'number | null',
     cooldown: 'number',
     minimumTargetCount: 'number',
+    targetTileCoordinates: type({ x: 'number', y: 'number' }).array().or('null'),
 });
+export type SprinklerStation = typeof SprinklerStationSchema.infer;
 
 export const BrickPressStationSchema = type({
     ...stationBase,
@@ -263,7 +266,7 @@ export const ProductionStationSchema = GrowContainerStationSchema.or(GrowLightSt
 export type ProductionStation = typeof ProductionStationSchema.infer;
 
 export const ProductionCatalogSchema = type({
-    schema: "'neonschedule1-production-catalog-8'",
+    schema: "'neonschedule1-production-catalog-9'",
     quality: ProductionQualityRulesSchema,
     drying: DryingOperationRulesSchema,
     packaging: PackagingOperationRulesSchema,

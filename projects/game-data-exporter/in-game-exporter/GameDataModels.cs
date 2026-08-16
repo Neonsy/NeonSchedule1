@@ -474,13 +474,21 @@ internal sealed class ProductionStationSnapshot
     public string? PrimaryInputItemId { get; set; }
     public string? SecondaryInputItemId { get; set; }
     public float? ApplyDelay { get; set; }
+    public float? ParticleStopDelay { get; set; }
     public float? Cooldown { get; set; }
     public int? MinimumTargetCount { get; set; }
+    public List<TileCoordinateSnapshot> TargetTileCoordinates { get; set; } = new();
     public List<string> AllowedSoilIds { get; set; } = new();
     public List<string> AllowedAdditiveIds { get; set; } = new();
     public List<SlotFilterSnapshot> InputFilters { get; set; } = new();
     public List<SlotFilterSnapshot> OutputFilters { get; set; } = new();
     public List<SporeSyringeSnapshot> SporeSyringes { get; set; } = new();
+}
+
+internal sealed class TileCoordinateSnapshot
+{
+    public int X { get; init; }
+    public int Y { get; init; }
 }
 
 internal sealed class SlotFilterSnapshot

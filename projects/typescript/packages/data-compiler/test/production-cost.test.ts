@@ -294,7 +294,7 @@ describe('production batch plans', () => {
     it('applies the selected grow container to yield and duration', () => {
         const source = catalog();
         const tent = {
-            schema: 'neonschedule1-production-station-3' as const,
+            schema: 'neonschedule1-production-station-4' as const,
             itemId: 'tent',
             kind: 'grow-container' as const,
             yieldMultiplier: 0.6666667,
@@ -345,7 +345,7 @@ describe('production batch plans', () => {
     it('applies a selected external grow light at full exposure', () => {
         const source = catalog();
         const light = {
-            schema: 'neonschedule1-production-station-3' as const,
+            schema: 'neonschedule1-production-station-4' as const,
             itemId: 'light',
             kind: 'grow-light' as const,
             growSpeedMultiplier: 1.3,
@@ -466,7 +466,7 @@ function catalog(): ProductionCatalog {
         ],
         stations: [
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'pot',
                 kind: 'grow-container',
                 yieldMultiplier: 1,
@@ -480,7 +480,7 @@ function catalog(): ProductionCatalog {
             },
             labOvenStation(),
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'cauldron',
                 kind: 'cauldron',
                 cookTimeMinutes: 1,
@@ -492,7 +492,7 @@ function catalog(): ProductionCatalog {
                 outputQuantity: 10,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'spawn-station',
                 kind: 'mushroom-spawn',
                 grainBagItemId: 'grain-bag',
@@ -527,7 +527,7 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-8',
+        schema: 'neonschedule1-production-catalog-9',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
         brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
@@ -557,7 +557,7 @@ function qualityRules(): ProductionCatalog['quality'] {
 
 function labOvenStation(): ProductionCatalog['stations'][number] {
     return {
-        schema: 'neonschedule1-production-station-3',
+        schema: 'neonschedule1-production-station-4',
         itemId: 'oven',
         kind: 'lab-oven',
     };

@@ -591,7 +591,7 @@ describe('finished recipe production plans', () => {
         const catalog: ProductionCatalog = {
             ...emptyCatalog(),
             stations: [{
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'dryer',
                 kind: 'drying-rack',
                 capacity: 20,
@@ -812,7 +812,7 @@ function fixture(selectGrowContainer = true): {
         ],
         stations: [
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'pot',
                 kind: 'grow-container',
                 yieldMultiplier: 1,
@@ -825,7 +825,7 @@ function fixture(selectGrowContainer = true): {
                 allowedAdditiveIds: [],
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'mixer',
                 kind: 'mixing',
                 capacity: 2,
@@ -833,7 +833,7 @@ function fixture(selectGrowContainer = true): {
                 requiresManualIngredientInsertion: true,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'dryer',
                 kind: 'drying-rack',
                 capacity: 2,
@@ -843,13 +843,13 @@ function fixture(selectGrowContainer = true): {
                 maximumTemperatureThreshold: 40,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'packager-mk2',
                 kind: 'packaging-mk2',
                 employeeSpeedMultiplier: 2,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'brick-press',
                 kind: 'brick-press',
                 packagingItemId: 'brick',
@@ -928,7 +928,7 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function emptyCatalog(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-8',
+        schema: 'neonschedule1-production-catalog-9',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
         brickPressing: { ...BRICK_PRESS_OPERATION_RULES },

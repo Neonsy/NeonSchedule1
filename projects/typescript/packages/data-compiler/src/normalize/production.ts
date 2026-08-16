@@ -17,6 +17,7 @@ import { indexUnique, Integrity, requireReferences } from '#data-compiler/integr
 import { normalizeProductionQuality } from '#data-compiler/normalize/quality';
 import {
     booleanField,
+    nullableNumberField,
     numberField,
     objectArray,
     stringArrayField,
@@ -84,7 +85,7 @@ export function normalizeProduction(
     );
 
     const catalog: ProductionCatalog = {
-        schema: 'neonschedule1-production-catalog-8',
+        schema: 'neonschedule1-production-catalog-9',
         quality: normalizeProductionQuality(report, itemIds, integrity),
         drying: {
             schema: 'neonschedule1-drying-operation-rules-1',
@@ -320,7 +321,7 @@ function normalizeStation(
     const path = `report.productionStations[${JSON.stringify(itemId)}]`;
     const kind = stringField(raw, 'kind', path);
     requireItem(itemId, itemIds, `${path}.itemId`, integrity);
-    const base = { schema: 'neonschedule1-production-station-3' as const, itemId };
+    const base = { schema: 'neonschedule1-production-station-4' as const, itemId };
 
     switch (kind) {
         case 'grow-container': {
@@ -357,14 +358,25 @@ function normalizeStation(
                 kind,
                 growSpeedMultiplier: positiveNumber(raw, 'growSpeedMultiplier', path, integrity),
             };
-        case 'sprinkler':
+        case 'sprinkler': {
+            const particleStopDelay = nullableNumberField(raw, 'particleStopDelay', path);
+            if (particleStopDelay !== null) {
+                integrity.check(
+                    `${path}.particleStopDelay is non-negative`,
+                    particleStopDelay >= 0,
+                    `${path}.particleStopDelay must be non-negative`
+                );
+            }
             return {
                 ...base,
                 kind,
                 applyDelay: nonNegativeNumber(raw, 'applyDelay', path, integrity),
+                particleStopDelay,
                 cooldown: nonNegativeNumber(raw, 'cooldown', path, integrity),
                 minimumTargetCount: positiveNumber(raw, 'minimumTargetCount', path, integrity),
+                targetTileCoordinates: normalizeSprinklerCoordinates(raw, path, integrity),
             };
+        }
         case 'brick-press': {
             const packagingItemId = referencedId(raw, 'packagingItemId', path, itemIds, integrity);
             return {
@@ -459,6 +471,38 @@ function normalizeStation(
             integrity.addError(`${path} has unsupported kind ${JSON.stringify(kind)}`);
             return null;
     }
+}
+
+function normalizeSprinklerCoordinates(
+    raw: JsonObject,
+    path: string,
+    integrity: Integrity
+): { readonly x: number; readonly y: number }[] | null {
+    if (raw.targetTileCoordinates === null || raw.targetTileCoordinates === undefined) return null;
+    const coordinates = objectArray(
+        raw.targetTileCoordinates,
+        `${path}.targetTileCoordinates`
+    ).map((coordinate, index) => {
+        const coordinatePath = `${path}.targetTileCoordinates[${index}]`;
+        const x = numberField(coordinate, 'x', coordinatePath);
+        const y = numberField(coordinate, 'y', coordinatePath);
+        integrity.check(
+            `${coordinatePath} contains integer coordinates`,
+            Number.isSafeInteger(x) && Number.isSafeInteger(y),
+            `${coordinatePath} must contain safe integer coordinates`
+        );
+        return { x, y };
+    });
+    const unique = new Map(coordinates.map((coordinate) => [
+        `${coordinate.x},${coordinate.y}`,
+        coordinate,
+    ]));
+    integrity.check(
+        `${path}.targetTileCoordinates contains unique coordinates`,
+        unique.size === coordinates.length,
+        `${path}.targetTileCoordinates contains duplicate coordinates`
+    );
+    return [...unique.values()].sort((left, right) => left.x - right.x || left.y - right.y);
 }
 
 function referencedId(

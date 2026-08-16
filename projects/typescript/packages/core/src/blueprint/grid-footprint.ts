@@ -13,6 +13,16 @@ export interface RotatedFootprintTile {
     readonly cornerDirections: readonly RotatedCornerDirection[];
 }
 
+export function rotateGridOffset(
+    coordinate: { readonly x: number; readonly y: number },
+    rotation: BlueprintGridRotation
+): { readonly x: number; readonly y: number } {
+    if (rotation === 0) return coordinate;
+    if (rotation === 90) return { x: coordinate.y, y: -coordinate.x };
+    if (rotation === 180) return { x: -coordinate.x, y: -coordinate.y };
+    return { x: -coordinate.y, y: coordinate.x };
+}
+
 export function rotateFootprint(
     footprint: readonly Buildable['placement']['footprintTiles'][number][],
     rotation: BlueprintGridRotation

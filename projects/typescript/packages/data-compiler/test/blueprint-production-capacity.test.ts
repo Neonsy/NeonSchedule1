@@ -1174,7 +1174,7 @@ function dryingRules(): ProductionCatalog['drying'] {
 
 function production(): ProductionCatalog {
     return {
-        schema: 'neonschedule1-production-catalog-8',
+        schema: 'neonschedule1-production-catalog-9',
         drying: dryingRules(),
         packaging: { ...PACKAGING_OPERATION_RULES },
         brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
@@ -1221,7 +1221,7 @@ function production(): ProductionCatalog {
         ovenTransforms: [],
         stations: [
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'pot',
                 kind: 'grow-container',
                 yieldMultiplier: 1,
@@ -1234,13 +1234,13 @@ function production(): ProductionCatalog {
                 allowedAdditiveIds: [],
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'light',
                 kind: 'grow-light',
                 growSpeedMultiplier: 1,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'dryer',
                 kind: 'drying-rack',
                 capacity: 20,
@@ -1250,7 +1250,7 @@ function production(): ProductionCatalog {
                 maximumTemperatureThreshold: 40,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'mixer',
                 kind: 'mixing',
                 capacity: 10,
@@ -1258,7 +1258,7 @@ function production(): ProductionCatalog {
                 requiresManualIngredientInsertion: true,
             },
             {
-                schema: 'neonschedule1-production-station-3',
+                schema: 'neonschedule1-production-station-4',
                 itemId: 'brick-press',
                 kind: 'brick-press',
                 packagingItemId: 'brick',

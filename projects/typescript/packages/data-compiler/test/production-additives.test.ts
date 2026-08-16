@@ -219,7 +219,7 @@ function fixture(): {
     return {
         itemsById: new Map(items.map((entry) => [entry.id, entry])),
         catalog: {
-            schema: 'neonschedule1-production-catalog-8',
+            schema: 'neonschedule1-production-catalog-9',
             drying: dryingRules(),
             packaging: { ...PACKAGING_OPERATION_RULES },
             brickPressing: { ...BRICK_PRESS_OPERATION_RULES },
@@ -252,7 +252,7 @@ function fixture(): {
             ovenTransforms: [],
             stations: [
                 {
-                    schema: 'neonschedule1-production-station-3',
+                    schema: 'neonschedule1-production-station-4',
                     itemId: 'tent',
                     kind: 'grow-container',
                     yieldMultiplier: 1,

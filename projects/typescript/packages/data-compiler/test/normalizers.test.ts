@@ -304,6 +304,15 @@ describe('domain normalization', () => {
                 kind: 'mushroom-spawn',
                 grainBagItemId: 'grain-bag',
                 sporeSyringes: [{ itemId: 'syringe', outputSpawnItemId: 'spawn' }],
+            },
+            {
+                itemId: 'sprinkler',
+                kind: 'sprinkler',
+                applyDelay: 6,
+                particleStopDelay: 2,
+                cooldown: 1.5,
+                minimumTargetCount: 2,
+                targetTileCoordinates: [{ x: 1, y: 0 }, { x: -1, y: 0 }],
             }
         );
         const integrity = new Integrity();
@@ -329,6 +338,7 @@ describe('domain normalization', () => {
             'spawn',
             'chemistrystation',
             'mushroombed',
+            'sprinkler',
         ]);
         const production = normalizeProduction(report, itemIds, new Set(), integrity);
 
@@ -423,6 +433,28 @@ describe('domain normalization', () => {
             grainBagQuantity: 1,
             workTimeMinutes: 6,
             sporeSyringes: [{ syringeQuantity: 1, outputSpawnQuantity: 1 }],
+        });
+        expect(production.stations.find((station) => station.itemId === 'sprinkler')).toEqual({
+            schema: 'neonschedule1-production-station-4',
+            itemId: 'sprinkler',
+            kind: 'sprinkler',
+            applyDelay: 6,
+            particleStopDelay: 2,
+            cooldown: 1.5,
+            minimumTargetCount: 2,
+            targetTileCoordinates: [{ x: -1, y: 0 }, { x: 1, y: 0 }],
+        });
+
+        const rawSprinkler = report.productionStations.find(
+            (station) => station.itemId === 'sprinkler'
+        );
+        if (rawSprinkler === undefined) throw new Error('Missing sprinkler fixture');
+        delete rawSprinkler.particleStopDelay;
+        delete rawSprinkler.targetTileCoordinates;
+        const olderAcquisition = normalizeProduction(report, itemIds, new Set(), new Integrity());
+        expect(olderAcquisition.stations.find((station) => station.itemId === 'sprinkler')).toMatchObject({
+            particleStopDelay: null,
+            targetTileCoordinates: null,
         });
 
         const pot = report.productionStations.find((station) => station.itemId === 'pot');

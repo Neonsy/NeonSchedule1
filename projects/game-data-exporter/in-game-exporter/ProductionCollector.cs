@@ -382,8 +382,25 @@ internal static partial class GameDataCollector
             {
                 station.Kind = "sprinkler";
                 station.ApplyDelay = sprinkler.ApplyWaterDelay;
+                station.ParticleStopDelay = sprinkler.ParticleStopDelay;
                 station.Cooldown = sprinkler.Cooldown;
                 station.MinimumTargetCount = sprinkler.MinTilesToWater;
+                if (sprinkler.TilesToWater is not null)
+                {
+                    for (var index = 0; index < sprinkler.TilesToWater.Count; index++)
+                    {
+                        var coordinate = sprinkler.TilesToWater[index];
+                        if (coordinate is null)
+                        {
+                            continue;
+                        }
+                        station.TargetTileCoordinates.Add(new TileCoordinateSnapshot
+                        {
+                            X = coordinate.x,
+                            Y = coordinate.y,
+                        });
+                    }
+                }
                 result.Add(station);
                 continue;
             }
