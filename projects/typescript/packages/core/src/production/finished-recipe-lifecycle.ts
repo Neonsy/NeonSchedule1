@@ -1,3 +1,4 @@
+import { canonicalJson } from '#core/data/canonical-json';
 import type { FinishedRecipeProductionPlan } from '#core/production/finished-recipe';
 import { composeFinishedRecipeProductionReadiness } from '#core/production/finished-recipe-readiness';
 import { REAL_SECONDS_PER_GAME_MINUTE } from '#core/production/time';
@@ -81,6 +82,16 @@ export function composeFinishedRecipeElapsedLifecycle(
     return elapsed === null || gaps.length > 0
         ? { status: 'unavailable', proof: 'incomplete', ...details }
         : { status: 'complete', proof: 'exact', ...details };
+}
+
+export function validateFinishedRecipeElapsedLifecycleResult(
+    input: FinishedRecipeElapsedLifecycleInput,
+    result: FinishedRecipeElapsedLifecycleResult
+): void {
+    const expected = composeFinishedRecipeElapsedLifecycle(input);
+    if (canonicalJson(result) !== canonicalJson(expected)) {
+        throw new Error('Finished recipe elapsed lifecycle result is inconsistent');
+    }
 }
 
 function validateModeledProcessDuration(plan: FinishedRecipeProductionPlan): number | null {

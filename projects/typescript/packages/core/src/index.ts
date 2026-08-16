@@ -46,6 +46,7 @@ export * from '#core/production/brick-pressing';
 export * from '#core/production/equipment';
 export * from '#core/production/finished-recipe';
 export * from '#core/production/finished-recipe-lifecycle';
+export * from '#core/production/finished-recipe-profit';
 export * from '#core/production/finished-recipe-readiness';
 export * from '#core/production/growing';
 export * from '#core/production/finished-recipe-purchases';
