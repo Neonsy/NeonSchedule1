@@ -1,8 +1,10 @@
 import {
     composeFinishedRecipeProductionReadiness,
+    planFinishedRecipePropertyTransferArrivals,
     type FinishedRecipeProductionPlan,
     type FinishedRecipeProductionReadinessInput,
     type FinishedRecipePropertyTransferPlan,
+    type FinishedRecipePropertyTransferArrivalResult,
     type FinishedRecipePurchasePlan,
     type FinishedRecipeShoppingAllocation,
     type FinishedRecipeShoppingRouteResult,
@@ -35,6 +37,7 @@ describe('finished recipe production readiness', () => {
             requiredEquipmentQuantity: 0,
             currentAppliedQuantity: 0,
             transferredQuantity: 0,
+            transferArrivalMinute: null,
             purchasedQuantity: 2,
             purchaseArrivalMinute: 12,
             readyMinute: 12,
@@ -177,6 +180,7 @@ describe('finished recipe production readiness', () => {
         });
         expect(result.inputs[0]).toMatchObject({
             transferredQuantity: 1,
+            transferArrivalMinute: null,
             purchasedQuantity: 1,
             purchaseArrivalMinute: 5,
             readyMinute: null,
@@ -184,6 +188,53 @@ describe('finished recipe production readiness', () => {
         });
         expect(result.gaps).toContainEqual({
             code: 'property-transfer-arrival-not-evaluated',
+            itemId: 'soil',
+            propertyId: 'lab',
+            shoppingReason: null,
+        });
+    });
+
+    it('makes transferred and purchased inputs ready at their later property arrival', () => {
+        const transfer = transferPlan(1);
+        const result = composeFinishedRecipeProductionReadiness(input({
+            transfer,
+            propertyTransferArrivals: transferArrivals(transfer, 9),
+            purchase: purchasePlan(1),
+            route: physicalRoute(1, 5),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'ready',
+            readinessProof: 'exact',
+            productionInputsReadyMinute: 9,
+            gaps: [],
+        });
+        expect(result.inputs[0]).toMatchObject({
+            transferredQuantity: 1,
+            transferArrivalMinute: 9,
+            purchasedQuantity: 1,
+            purchaseArrivalMinute: 5,
+            readyMinute: 9,
+            readinessProof: 'exact',
+        });
+    });
+
+    it('keeps readiness unavailable when selected transfer movement is not planned', () => {
+        const transfer = transferPlan(1);
+        const result = composeFinishedRecipeProductionReadiness(input({
+            transfer,
+            propertyTransferArrivals: unavailableTransferArrivals(transfer),
+            purchase: purchasePlan(1),
+            route: physicalRoute(1, 5),
+        }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            readinessProof: 'incomplete',
+            productionInputsReadyMinute: null,
+        });
+        expect(result.gaps).toContainEqual({
+            code: 'property-transfer-arrival-not-planned',
             itemId: 'soil',
             propertyId: 'lab',
             shoppingReason: null,
@@ -266,6 +317,7 @@ describe('finished recipe production readiness', () => {
 
 interface InputOverrides {
     readonly transfer?: FinishedRecipePropertyTransferPlan;
+    readonly propertyTransferArrivals?: FinishedRecipePropertyTransferArrivalResult;
     readonly purchase?: FinishedRecipePurchasePlan;
     readonly route?: FinishedRecipeShoppingRouteResult;
     readonly shoppingDataset?: ProductionPlanDataset;
@@ -277,6 +329,9 @@ function input(overrides: InputOverrides = {}): FinishedRecipeProductionReadines
         propertyId: 'lab',
         productionPlan: productionPlan(),
         transferPlan: overrides.transfer ?? transferPlan(0),
+        ...(overrides.propertyTransferArrivals === undefined
+            ? {}
+            : { propertyTransferArrivals: overrides.propertyTransferArrivals }),
         purchasePlan: overrides.purchase ?? purchasePlan(2),
         shopping: {
             dataset: overrides.shoppingDataset ?? dataset,
@@ -288,6 +343,69 @@ function input(overrides: InputOverrides = {}): FinishedRecipeProductionReadines
             route: overrides.route ?? physicalRoute(2, 12),
         },
     };
+}
+
+function transferArrivals(
+    transfer: FinishedRecipePropertyTransferPlan,
+    completionMinute: number
+): FinishedRecipePropertyTransferArrivalResult {
+    const allocation = transfer.allocations[0];
+    if (allocation === undefined) throw new Error('Expected one transfer allocation');
+    return planFinishedRecipePropertyTransferArrivals({
+        transferPlan: transfer,
+        movementEvidence: {
+            coverage: 'complete',
+            maximumTripsPerAllocation: 100,
+            assignments: [{
+                candidateId: allocation.candidateId,
+                itemId: allocation.itemId,
+                sourcePropertyId: allocation.sourcePropertyId,
+                destinationPropertyId: allocation.destinationPropertyId,
+                movementModelId: 'test-player-carry',
+                carryingCapacity: 10,
+                itemLoadUnits: 1,
+                startMinute: 0,
+                loadMinutesPerTrip: 0,
+                unloadMinutesPerTrip: 0,
+                outboundLeg: {
+                    legId: 'warehouse-lab',
+                    sourcePropertyId: allocation.sourcePropertyId,
+                    destinationPropertyId: allocation.destinationPropertyId,
+                    distance: 1,
+                    durationMinutes: completionMinute,
+                },
+                returnLeg: null,
+            }],
+        },
+    });
+}
+
+function unavailableTransferArrivals(
+    transfer: FinishedRecipePropertyTransferPlan
+): FinishedRecipePropertyTransferArrivalResult {
+    const allocation = transfer.allocations[0];
+    if (allocation === undefined) throw new Error('Expected one transfer allocation');
+    return planFinishedRecipePropertyTransferArrivals({
+        transferPlan: transfer,
+        movementEvidence: {
+            coverage: 'partial',
+            maximumTripsPerAllocation: 100,
+            assignments: [{
+                candidateId: allocation.candidateId,
+                itemId: allocation.itemId,
+                sourcePropertyId: allocation.sourcePropertyId,
+                destinationPropertyId: allocation.destinationPropertyId,
+                movementModelId: 'test-player-carry',
+                carryingCapacity: 10,
+                itemLoadUnits: 1,
+                startMinute: 0,
+                loadMinutesPerTrip: 0,
+                unloadMinutesPerTrip: 0,
+                outboundLeg: null,
+                returnLeg: null,
+            }],
+        },
+    });
 }
 
 function productionPlan(): FinishedRecipeProductionPlan {

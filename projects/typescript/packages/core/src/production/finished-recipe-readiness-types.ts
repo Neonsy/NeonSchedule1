@@ -1,6 +1,7 @@
 import type { FinishedRecipeProductionPlan } from '#core/production/finished-recipe';
 import type { FinishedRecipePurchasePlan } from '#core/production/finished-recipe-purchase-types';
 import type { FinishedRecipePropertyTransferPlan } from '#core/production/property-transfer-types';
+import type { FinishedRecipePropertyTransferArrivalResult } from '#core/production/property-transfer-arrival-types';
 import type { ProductionPlanDataset } from '#core/production/plan';
 import type { FinishedRecipeShoppingRouteResult } from '#core/production/shopping-route-types';
 
@@ -21,6 +22,7 @@ export interface FinishedRecipeProductionReadinessInput {
     readonly propertyId: string;
     readonly productionPlan: FinishedRecipeProductionPlan;
     readonly transferPlan: FinishedRecipePropertyTransferPlan;
+    readonly propertyTransferArrivals?: FinishedRecipePropertyTransferArrivalResult;
     readonly purchasePlan: FinishedRecipePurchasePlan;
     readonly shopping: {
         /** Identifies the normalized dataset used to build the shopping evidence. */
@@ -39,7 +41,8 @@ export interface FinishedRecipeProductionReadinessGap {
         | 'shopping-route-not-planned'
         | 'shopping-arrival-destination-not-established'
         | 'shopping-arrival-at-other-property'
-        | 'property-transfer-arrival-not-evaluated';
+        | 'property-transfer-arrival-not-evaluated'
+        | 'property-transfer-arrival-not-planned';
     readonly itemId: string | null;
     readonly propertyId: string | null;
     readonly shoppingReason: FinishedRecipeShoppingNotPlannedReason | null;
@@ -51,6 +54,7 @@ export interface FinishedRecipeProductionInputReadiness {
     readonly requiredEquipmentQuantity: number;
     readonly currentAppliedQuantity: number;
     readonly transferredQuantity: number;
+    readonly transferArrivalMinute: number | null;
     readonly purchasedQuantity: number;
     readonly purchaseArrivalMinute: number | null;
     readonly readyMinute: number | null;

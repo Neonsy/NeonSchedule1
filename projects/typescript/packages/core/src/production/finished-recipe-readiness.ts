@@ -1,6 +1,13 @@
 import type { FinishedRecipeInventoryRequirement } from '#core/production/inventory';
 import type { FinishedRecipePurchaseRequirement } from '#core/production/finished-recipe-purchase-types';
-import type { FinishedRecipePropertyTransferRequirement } from '#core/production/property-transfer-types';
+import type {
+    FinishedRecipePropertyTransferAllocation,
+    FinishedRecipePropertyTransferRequirement,
+} from '#core/production/property-transfer-types';
+import {
+    validateFinishedRecipePropertyTransferArrivalResult,
+    type FinishedRecipePropertyTransferAllocationArrival,
+} from '#core/production/property-transfer-arrivals';
 import type {
     FinishedRecipeProductionInputReadiness,
     FinishedRecipeProductionReadinessGap,
@@ -45,6 +52,7 @@ export function composeFinishedRecipeProductionReadiness(
     }
 
     const transferRequirements = indexTransferRequirements(input, productionRequirements);
+    const transferArrivals = summarizeTransferArrivals(input);
     const purchaseRequirements = indexPurchaseRequirements(
         input,
         transferRequirements,
@@ -70,6 +78,7 @@ export function composeFinishedRecipeProductionReadiness(
         shopping,
         purchaseComplete,
         arrivalAtProperty,
+        transferArrivals,
         gaps,
         input.propertyId
     ));
@@ -349,6 +358,7 @@ function inputReadiness(
     shopping: ProductionReadinessShoppingSummary,
     purchaseComplete: boolean,
     arrivalAtProperty: boolean,
+    transferArrivals: ProductionReadinessTransferArrivalSummary,
     gaps: FinishedRecipeProductionReadinessGap[],
     propertyId: string
 ): FinishedRecipeProductionInputReadiness {
@@ -366,24 +376,34 @@ function inputReadiness(
     const purchaseArrivalMinute = purchasedQuantity === 0
         ? shopping.routeStartMinute
         : (shopping.arrivalByItemId.get(requirement.itemId) ?? null);
+    const transferArrivalMinute = transferredQuantity === 0
+        ? null
+        : (transferArrivals.arrivalByItemId.get(requirement.itemId) ?? null);
 
     let readinessProof: FinishedRecipeProductionInputReadiness['readinessProof'] = 'exact';
-    let readyMinute = purchaseArrivalMinute;
+    let readyMinute = transferredQuantity === 0
+        ? purchaseArrivalMinute
+        : transferArrivalMinute;
+    const transferUnavailable = transferredQuantity > 0 && transferArrivalMinute === null;
+    if (transferUnavailable) {
+        addGap(
+            gaps,
+            transferArrivals.unavailableGapCode,
+            requirement.itemId,
+            propertyId
+        );
+    }
     if (purchasedQuantity > 0 && (!purchaseComplete || purchaseArrivalMinute === null)) {
         readinessProof = 'purchase-not-fulfilled';
         readyMinute = null;
     } else if (purchasedQuantity > 0 && !arrivalAtProperty) {
         readinessProof = 'shopping-arrival-unavailable';
         readyMinute = null;
-    } else if (transferredQuantity > 0) {
+    } else if (transferUnavailable) {
         readinessProof = 'property-transfer-arrival-unavailable';
         readyMinute = null;
-        addGap(
-            gaps,
-            'property-transfer-arrival-not-evaluated',
-            requirement.itemId,
-            propertyId
-        );
+    } else if (transferredQuantity > 0 && purchasedQuantity > 0) {
+        readyMinute = Math.max(transferArrivalMinute ?? 0, purchaseArrivalMinute ?? 0);
     }
 
     return {
@@ -392,10 +412,60 @@ function inputReadiness(
         requiredEquipmentQuantity: requirement.equipment.requiredQuantity,
         currentAppliedQuantity,
         transferredQuantity,
+        transferArrivalMinute,
         purchasedQuantity,
         purchaseArrivalMinute,
         readyMinute,
         readinessProof,
+    };
+}
+
+interface ProductionReadinessTransferArrivalSummary {
+    readonly arrivalByItemId: ReadonlyMap<string, number>;
+    readonly unavailableGapCode:
+        | 'property-transfer-arrival-not-evaluated'
+        | 'property-transfer-arrival-not-planned';
+}
+
+function summarizeTransferArrivals(
+    input: FinishedRecipeProductionReadinessInput
+): ProductionReadinessTransferArrivalSummary {
+    if (input.propertyTransferArrivals === undefined) {
+        return {
+            arrivalByItemId: new Map(),
+            unavailableGapCode: 'property-transfer-arrival-not-evaluated',
+        };
+    }
+    validateFinishedRecipePropertyTransferArrivalResult(
+        input.transferPlan,
+        input.propertyTransferArrivals
+    );
+    const arrivals = input.propertyTransferArrivals.kind === 'planned'
+        ? input.propertyTransferArrivals.plan.arrivals
+        : input.propertyTransferArrivals.arrivals;
+    const arrivalByCandidateId = new Map<string, FinishedRecipePropertyTransferAllocationArrival>();
+    for (const arrival of arrivals) arrivalByCandidateId.set(arrival.candidateId, arrival);
+
+    const allocationsByItemId = new Map<string, FinishedRecipePropertyTransferAllocation[]>();
+    for (const allocation of input.transferPlan.allocations) {
+        if (allocation.destinationPropertyId !== input.propertyId) continue;
+        const current = allocationsByItemId.get(allocation.itemId) ?? [];
+        allocationsByItemId.set(allocation.itemId, [...current, allocation]);
+    }
+    const arrivalByItemId = new Map<string, number>();
+    for (const [itemId, allocations] of allocationsByItemId) {
+        const itemArrivals = allocations.map((allocation) =>
+            arrivalByCandidateId.get(allocation.candidateId)
+        );
+        if (itemArrivals.some((arrival) => arrival === undefined)) continue;
+        arrivalByItemId.set(
+            itemId,
+            Math.max(...itemArrivals.map((arrival) => arrival?.completionMinute ?? 0))
+        );
+    }
+    return {
+        arrivalByItemId,
+        unavailableGapCode: 'property-transfer-arrival-not-planned',
     };
 }
 
