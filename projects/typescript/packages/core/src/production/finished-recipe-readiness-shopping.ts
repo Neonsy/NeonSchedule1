@@ -4,15 +4,17 @@ import type {
     FinishedRecipeProductionReadinessResult,
 } from '#core/production/finished-recipe-readiness-types';
 import type {
-    FinishedRecipeShoppingAllocation,
     FinishedRecipeShoppingRoutePlan,
 } from '#core/production/shopping-route-types';
+import { validateFinishedRecipeShoppingPropertyAttributionResult } from '#core/production/shopping-property-attribution';
+import { indexFinishedRecipeShoppingAllocationArrivals } from '#core/production/shopping-route-validation';
 
 export interface ProductionReadinessShoppingSummary {
     readonly routeProof: FinishedRecipeProductionReadinessResult['shoppingRouteProof'];
     readonly routeStartMinute: number | null;
     readonly completionMinute: number | null;
     readonly arrivalByItemId: ReadonlyMap<string, number>;
+    readonly propertyAttributionSupplied: boolean;
 }
 
 export function summarizeProductionReadinessShopping(
@@ -21,21 +23,67 @@ export function summarizeProductionReadinessShopping(
 ): ProductionReadinessShoppingSummary {
     const route = input.shopping.route;
     if (route.kind === 'not-planned') {
+        if (input.shopping.propertyAttribution !== undefined) {
+            throw new Error('Shopping property attribution requires a planned shopping route');
+        }
         addGap(gaps, 'shopping-route-not-planned', route.reason);
         return {
             routeProof: route.proof === 'exact' ? 'exact-not-planned' : 'incomplete-not-planned',
             routeStartMinute: null,
             completionMinute: null,
             arrivalByItemId: new Map(),
+            propertyAttributionSupplied: input.shopping.propertyAttribution !== undefined,
         };
     }
-    validateRouteMinutes(route.plan);
+    const propertyArrivalByItem = propertyArrivalByItemId(input, route.plan, gaps);
     return {
         routeProof: route.plan.proof,
         routeStartMinute: route.plan.completionMinute - route.plan.elapsedMinutes,
         completionMinute: route.plan.completionMinute,
-        arrivalByItemId: shoppingArrivalByItem(route.plan),
+        arrivalByItemId: propertyArrivalByItem ?? shoppingArrivalByItem(route.plan),
+        propertyAttributionSupplied: propertyArrivalByItem !== null,
     };
+}
+
+function propertyArrivalByItemId(
+    input: FinishedRecipeProductionReadinessInput,
+    routePlan: FinishedRecipeShoppingRoutePlan,
+    gaps: FinishedRecipeProductionReadinessGap[]
+): ReadonlyMap<string, number> | null {
+    const attribution = input.shopping.propertyAttribution;
+    if (attribution === undefined) return null;
+    validateFinishedRecipeShoppingPropertyAttributionResult(
+        input.purchasePlan,
+        routePlan,
+        attribution
+    );
+    const quantityByItem = new Map<string, number>();
+    const arrivalByItem = new Map<string, number>();
+    for (const allocation of attribution.allocations) {
+        if (allocation.propertyId !== input.propertyId) continue;
+        const quantity = (quantityByItem.get(allocation.itemId) ?? 0) + allocation.quantity;
+        if (!Number.isSafeInteger(quantity)) {
+            throw new Error('Shopping property attribution quantity must be a safe integer');
+        }
+        quantityByItem.set(allocation.itemId, quantity);
+        arrivalByItem.set(
+            allocation.itemId,
+            Math.max(arrivalByItem.get(allocation.itemId) ?? 0, allocation.arrivalMinute)
+        );
+    }
+    for (const requirement of input.purchasePlan.requirements) {
+        if (requirement.propertyId !== input.propertyId) continue;
+        const requestedQuantity = requirePurchaseValue(
+            requirement.requestedQuantity,
+            requirement.itemId,
+            'requested quantity'
+        );
+        if ((quantityByItem.get(requirement.itemId) ?? 0) !== requestedQuantity) {
+            addPropertyGap(gaps, requirement.itemId, input.propertyId);
+            arrivalByItem.delete(requirement.itemId);
+        }
+    }
+    return arrivalByItem;
 }
 
 export function validateProductionReadinessShoppingAllocations(
@@ -73,118 +121,15 @@ export function validateProductionReadinessShoppingAllocations(
 function shoppingArrivalByItem(
     plan: FinishedRecipeShoppingRoutePlan
 ): ReadonlyMap<string, number> {
-    const remoteCompletionByAllocation = new Map<string, number>();
-    for (const delivery of plan.remoteDeliveries) {
-        requireNonNegativeFinite(
-            delivery.completionMinute,
-            `Remote delivery ${JSON.stringify(delivery.shopCode)} completion minute`
-        );
-        for (const allocation of delivery.allocations) {
-            if (allocation.access !== 'remote-delivery' || allocation.shopCode !== delivery.shopCode) {
-                throw new Error('Remote delivery allocation does not match its shopping delivery');
-            }
-            const key = allocationKey(allocation);
-            if (remoteCompletionByAllocation.has(key)) {
-                throw new Error(`Duplicate remote shopping allocation ${JSON.stringify(key)}`);
-            }
-            remoteCompletionByAllocation.set(key, delivery.completionMinute);
-        }
-    }
-    const routeStartMinute = plan.completionMinute - plan.elapsedMinutes;
-    const latestRemoteCompletion = plan.remoteDeliveries.reduce(
-        (latest, delivery) => Math.max(latest, delivery.completionMinute),
-        routeStartMinute
-    );
-    if (latestRemoteCompletion !== plan.remoteCompletionMinute) {
-        throw new Error('Remote shopping completion minute is inconsistent');
-    }
+    const arrivals = indexFinishedRecipeShoppingAllocationArrivals(plan);
     const arrivalByItem = new Map<string, number>();
-    const allocationKeys = new Set<string>();
-    const physicalAllocations = new Map<string, number>();
-    for (const allocation of plan.allocations) {
-        requireNonBlank(allocation.itemId, 'Shopping allocation item ID');
-        requireNonBlank(allocation.shopCode, 'Shopping allocation shop code');
-        requirePositiveSafeInteger(
-            allocation.quantity,
-            `Shopping allocation ${JSON.stringify(allocation.itemId)} quantity`
-        );
-        const key = allocationKey(allocation);
-        if (allocationKeys.has(key)) {
-            throw new Error(`Duplicate shopping allocation ${JSON.stringify(key)}`);
-        }
-        allocationKeys.add(key);
-        const arrival = allocation.access === 'physical'
-            ? plan.physicalCompletionMinute
-            : remoteCompletionByAllocation.get(key);
-        if (allocation.access === 'physical') physicalAllocations.set(key, allocation.quantity);
-        if (arrival === undefined) {
-            throw new Error(`Missing remote completion for shopping allocation ${JSON.stringify(key)}`);
-        }
+    for (const { allocation, completionMinute } of arrivals.values()) {
         arrivalByItem.set(
             allocation.itemId,
-            Math.max(arrivalByItem.get(allocation.itemId) ?? 0, arrival)
+            Math.max(arrivalByItem.get(allocation.itemId) ?? 0, completionMinute)
         );
     }
-    for (const key of remoteCompletionByAllocation.keys()) {
-        if (!allocationKeys.has(key)) {
-            throw new Error(`Remote delivery contains unknown shopping allocation ${JSON.stringify(key)}`);
-        }
-    }
-    validatePhysicalPickups(plan, physicalAllocations);
     return arrivalByItem;
-}
-
-function validatePhysicalPickups(
-    plan: FinishedRecipeShoppingRoutePlan,
-    expected: ReadonlyMap<string, number>
-): void {
-    const actual = new Map<string, number>();
-    const routeStartMinute = plan.completionMinute - plan.elapsedMinutes;
-    let latestTripEndMinute = routeStartMinute;
-    for (const trip of plan.trips) {
-        requireNonNegativeFinite(trip.endMinute, `Shopping trip ${trip.tripIndex} end minute`);
-        if (trip.endMinute > plan.physicalCompletionMinute) {
-            throw new Error(`Shopping trip ${trip.tripIndex} ends after physical completion`);
-        }
-        latestTripEndMinute = Math.max(latestTripEndMinute, trip.endMinute);
-        for (const visit of trip.visits) {
-            for (const pickup of visit.pickedUp) {
-                requirePositiveSafeInteger(
-                    pickup.quantity,
-                    `Shopping pickup ${JSON.stringify(pickup.itemId)} quantity`
-                );
-                const key = `${visit.shopCode}\u0000${pickup.itemId}`;
-                const next = (actual.get(key) ?? 0) + pickup.quantity;
-                if (!Number.isSafeInteger(next)) {
-                    throw new Error('Shopping pickup quantity must be a safe integer');
-                }
-                actual.set(key, next);
-            }
-        }
-    }
-    if (latestTripEndMinute !== plan.physicalCompletionMinute) {
-        throw new Error('Physical shopping completion minute is inconsistent');
-    }
-    assertSameQuantities(expected, actual, 'Physical shopping pickups');
-}
-
-function validateRouteMinutes(plan: FinishedRecipeShoppingRoutePlan): void {
-    requireNonNegativeFinite(plan.physicalCompletionMinute, 'Physical shopping completion minute');
-    requireNonNegativeFinite(plan.remoteCompletionMinute, 'Remote shopping completion minute');
-    requireNonNegativeFinite(plan.completionMinute, 'Shopping completion minute');
-    requireNonNegativeFinite(plan.elapsedMinutes, 'Shopping elapsed minutes');
-    const start = plan.completionMinute - plan.elapsedMinutes;
-    if (!Number.isFinite(start) || start < 0) {
-        throw new Error('Shopping route start minute must be non-negative');
-    }
-    if (
-        plan.completionMinute !== Math.max(
-            plan.physicalCompletionMinute,
-            plan.remoteCompletionMinute
-        )
-    ) {
-        throw new Error('Shopping completion minute is inconsistent');
-    }
 }
 
 function sumByItem(
@@ -215,10 +160,6 @@ function assertSameQuantities(
     }
 }
 
-function allocationKey(allocation: FinishedRecipeShoppingAllocation): string {
-    return `${allocation.shopCode}\u0000${allocation.itemId}`;
-}
-
 function addGap(
     gaps: FinishedRecipeProductionReadinessGap[],
     code: FinishedRecipeProductionReadinessGap['code'],
@@ -226,6 +167,24 @@ function addGap(
 ): void {
     if (gaps.some((gap) => gap.code === code && gap.shoppingReason === shoppingReason)) return;
     gaps.push({ code, itemId: null, propertyId: null, shoppingReason });
+}
+
+function addPropertyGap(
+    gaps: FinishedRecipeProductionReadinessGap[],
+    itemId: string,
+    propertyId: string
+): void {
+    if (gaps.some((gap) =>
+        gap.code === 'shopping-property-attribution-incomplete' &&
+        gap.itemId === itemId &&
+        gap.propertyId === propertyId
+    )) return;
+    gaps.push({
+        code: 'shopping-property-attribution-incomplete',
+        itemId,
+        propertyId,
+        shoppingReason: null,
+    });
 }
 
 function requirePurchaseValue(value: number | null, itemId: string, label: string): number {
@@ -240,18 +199,8 @@ function requireNonBlank(value: string, label: string): void {
     if (value.trim().length === 0) throw new Error(`${label} must not be blank`);
 }
 
-function requireNonNegativeFinite(value: number, label: string): void {
-    if (!Number.isFinite(value) || value < 0) throw new Error(`${label} must be non-negative`);
-}
-
 function requireNonNegativeSafeInteger(value: number, label: string): void {
     if (!Number.isSafeInteger(value) || value < 0) {
         throw new Error(`${label} must be a non-negative safe integer`);
-    }
-}
-
-function requirePositiveSafeInteger(value: number, label: string): void {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-        throw new Error(`${label} must be a positive safe integer`);
     }
 }

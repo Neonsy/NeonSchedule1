@@ -1,5 +1,6 @@
 import {
     composeFinishedRecipeProductionReadiness,
+    attributeFinishedRecipeShoppingRouteToProperties,
     planFinishedRecipePropertyTransferArrivals,
     type FinishedRecipeProductionPlan,
     type FinishedRecipeProductionReadinessInput,
@@ -7,6 +8,7 @@ import {
     type FinishedRecipePropertyTransferArrivalResult,
     type FinishedRecipePurchasePlan,
     type FinishedRecipeShoppingAllocation,
+    type FinishedRecipeShoppingPropertyAttributionResult,
     type FinishedRecipeShoppingRouteResult,
     type ProductionPlanDataset,
 } from '@neonschedule1/core';
@@ -262,27 +264,7 @@ describe('finished recipe production readiness', () => {
     });
 
     it('keeps aggregate shopping quantities unavailable for multiple destination properties', () => {
-        const base = purchasePlan(2);
-        const purchase: FinishedRecipePurchasePlan = {
-            ...base,
-            requirements: [
-                ...base.requirements,
-                {
-                    propertyId: 'barn',
-                    itemId: 'soil',
-                    materialQuantity: 1,
-                    equipmentQuantity: 0,
-                    requestedQuantity: 1,
-                },
-            ],
-            items: base.items.map((item) => ({
-                ...item,
-                materialQuantity: 3,
-                requestedQuantity: 3,
-            })),
-            totalRequestedQuantity: 3,
-            knownAllocatedQuantity: 3,
-        };
+        const purchase = multiPropertyPurchasePlan();
         const result = composeFinishedRecipeProductionReadiness(input({
             purchase,
             route: physicalRoute(3, 12),
@@ -305,6 +287,74 @@ describe('finished recipe production readiness', () => {
         });
     });
 
+    it('uses explicit property attribution for a multi-property shopping result', () => {
+        const purchase = multiPropertyPurchasePlan();
+        const route = physicalRoute(3, 12);
+        if (route.kind !== 'planned') throw new Error('Expected a planned route');
+        const propertyAttribution = attributeFinishedRecipeShoppingRouteToProperties({
+            purchasePlan: purchase,
+            routePlan: route.plan,
+            evidence: {
+                coverage: 'complete',
+                assignments: [
+                    shoppingPropertyAssignment('lab', 2, 12),
+                    shoppingPropertyAssignment('barn', 1, 18),
+                ],
+            },
+        });
+        const result = composeFinishedRecipeProductionReadiness(input({
+            purchase,
+            route,
+            propertyAttribution,
+        }));
+
+        expect(result).toMatchObject({
+            status: 'ready',
+            readinessProof: 'exact',
+            productionInputsReadyMinute: 12,
+            gaps: [],
+        });
+        expect(result.inputs[0]).toMatchObject({
+            purchasedQuantity: 2,
+            purchaseArrivalMinute: 12,
+            readyMinute: 12,
+        });
+    });
+
+    it('keeps one property unavailable when its shopping attribution is incomplete', () => {
+        const purchase = multiPropertyPurchasePlan();
+        const route = physicalRoute(3, 12);
+        if (route.kind !== 'planned') throw new Error('Expected a planned route');
+        const propertyAttribution = attributeFinishedRecipeShoppingRouteToProperties({
+            purchasePlan: purchase,
+            routePlan: route.plan,
+            evidence: {
+                coverage: 'partial',
+                assignments: [
+                    shoppingPropertyAssignment('lab', 1, 12),
+                    shoppingPropertyAssignment('barn', 1, 18),
+                ],
+            },
+        });
+        const result = composeFinishedRecipeProductionReadiness(input({
+            purchase,
+            route,
+            propertyAttribution,
+        }));
+
+        expect(result).toMatchObject({
+            status: 'unavailable',
+            readinessProof: 'incomplete',
+            productionInputsReadyMinute: null,
+        });
+        expect(result.gaps).toContainEqual({
+            code: 'shopping-property-attribution-incomplete',
+            itemId: 'soil',
+            propertyId: 'lab',
+            shoppingReason: null,
+        });
+    });
+
     it('rejects a physical allocation that was not picked up by the route', () => {
         const route = physicalRoute(2, 12);
         if (route.kind !== 'planned') throw new Error('Expected a planned route');
@@ -320,6 +370,7 @@ interface InputOverrides {
     readonly propertyTransferArrivals?: FinishedRecipePropertyTransferArrivalResult;
     readonly purchase?: FinishedRecipePurchasePlan;
     readonly route?: FinishedRecipeShoppingRouteResult;
+    readonly propertyAttribution?: FinishedRecipeShoppingPropertyAttributionResult;
     readonly shoppingDataset?: ProductionPlanDataset;
     readonly arrivalDestination?: FinishedRecipeProductionReadinessInput['shopping']['arrivalDestination'];
 }
@@ -341,6 +392,28 @@ function input(overrides: InputOverrides = {}): FinishedRecipeProductionReadines
                 evidence: 'caller-supplied-depot-and-remote-delivery-destination',
             },
             route: overrides.route ?? physicalRoute(2, 12),
+            ...(overrides.propertyAttribution === undefined
+                ? {}
+                : { propertyAttribution: overrides.propertyAttribution }),
+        },
+    };
+}
+
+function shoppingPropertyAssignment(
+    propertyId: string,
+    quantity: number,
+    arrivalMinute: number
+) {
+    return {
+        shopCode: 'shop',
+        itemId: 'soil',
+        access: 'physical' as const,
+        quantity,
+        destination: {
+            kind: 'property' as const,
+            propertyId,
+            arrivalMinute,
+            evidence: 'caller-supplied-physical-property-arrival' as const,
         },
     };
 }
@@ -638,6 +711,30 @@ function purchasePlan(
         totalFinalUnallocatedQuantity: finalUnallocated,
         knownAllocatedCost: finalUnallocated === 0 ? quantity * 10 : 0,
         minimumRequiredPurchaseCost: finalUnallocated === 0 ? quantity * 10 : null,
+    };
+}
+
+function multiPropertyPurchasePlan(): FinishedRecipePurchasePlan {
+    const base = purchasePlan(2);
+    return {
+        ...base,
+        requirements: [
+            ...base.requirements,
+            {
+                propertyId: 'barn',
+                itemId: 'soil',
+                materialQuantity: 1,
+                equipmentQuantity: 0,
+                requestedQuantity: 1,
+            },
+        ],
+        items: base.items.map((item) => ({
+            ...item,
+            materialQuantity: 3,
+            requestedQuantity: 3,
+        })),
+        totalRequestedQuantity: 3,
+        knownAllocatedQuantity: 3,
     };
 }
 

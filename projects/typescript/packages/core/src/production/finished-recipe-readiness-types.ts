@@ -4,6 +4,7 @@ import type { FinishedRecipePropertyTransferPlan } from '#core/production/proper
 import type { FinishedRecipePropertyTransferArrivalResult } from '#core/production/property-transfer-arrival-types';
 import type { ProductionPlanDataset } from '#core/production/plan';
 import type { FinishedRecipeShoppingRouteResult } from '#core/production/shopping-route-types';
+import type { FinishedRecipeShoppingPropertyAttributionResult } from '#core/production/shopping-property-attribution-types';
 
 export type FinishedRecipeShoppingNotPlannedReason = Extract<
     FinishedRecipeShoppingRouteResult,
@@ -29,6 +30,7 @@ export interface FinishedRecipeProductionReadinessInput {
         readonly dataset: ProductionPlanDataset;
         readonly arrivalDestination: FinishedRecipeShoppingArrivalDestination;
         readonly route: FinishedRecipeShoppingRouteResult;
+        readonly propertyAttribution?: FinishedRecipeShoppingPropertyAttributionResult;
     };
 }
 
@@ -38,6 +40,7 @@ export interface FinishedRecipeProductionReadinessGap {
         | 'property-transfer-residual-incomplete'
         | 'purchase-fulfillment-incomplete'
         | 'purchase-allocation-by-property-unavailable'
+        | 'shopping-property-attribution-incomplete'
         | 'shopping-route-not-planned'
         | 'shopping-arrival-destination-not-established'
         | 'shopping-arrival-at-other-property'

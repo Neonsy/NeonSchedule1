@@ -54,6 +54,7 @@ export * from '#core/production/plan';
 export * from '#core/production/property-transfer-arrivals';
 export * from '#core/production/property-transfers';
 export * from '#core/production/shopping-routes';
+export * from '#core/production/shopping-property-attribution';
 export * from '#core/production/time';
 export * from '#core/progression/availability';
 export * from '#core/relationship/eligibility';

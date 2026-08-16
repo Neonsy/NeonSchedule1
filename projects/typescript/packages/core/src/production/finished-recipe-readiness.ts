@@ -56,14 +56,16 @@ export function composeFinishedRecipeProductionReadiness(
     const purchaseRequirements = indexPurchaseRequirements(
         input,
         transferRequirements,
-        gaps
+        gaps,
+        shopping.propertyAttributionSupplied
     );
     validateProductionReadinessShoppingAllocations(input);
     const purchaseComplete = purchaseFulfillmentComplete(input);
     if (!purchaseComplete) addGap(gaps, 'purchase-fulfillment-incomplete');
 
     const propertyAllocationKnown = !gaps.some(
-        (gap) => gap.code === 'purchase-allocation-by-property-unavailable'
+        (gap) => gap.code === 'purchase-allocation-by-property-unavailable' ||
+            gap.code === 'shopping-property-attribution-incomplete'
     );
     const hasPurchases = [...purchaseRequirements.values()].some(
         (requirement) => (requirement.requestedQuantity ?? 0) > 0
@@ -268,11 +270,13 @@ function validateTransferRequirement(requirement: FinishedRecipePropertyTransfer
 function indexPurchaseRequirements(
     input: FinishedRecipeProductionReadinessInput,
     transfers: ReadonlyMap<string, FinishedRecipePropertyTransferRequirement>,
-    gaps: FinishedRecipeProductionReadinessGap[]
+    gaps: FinishedRecipeProductionReadinessGap[],
+    propertyAttributionSupplied: boolean
 ): ReadonlyMap<string, FinishedRecipePurchaseRequirement> {
     const result = new Map<string, FinishedRecipePurchaseRequirement>();
     for (const requirement of input.purchasePlan.requirements) {
         if (requirement.propertyId !== input.propertyId) {
+            if (propertyAttributionSupplied) continue;
             if (requirement.requestedQuantity === null || requirement.requestedQuantity > 0) {
                 addGap(
                     gaps,
@@ -338,6 +342,7 @@ function shoppingArrivesAtProperty(
     input: FinishedRecipeProductionReadinessInput,
     gaps: FinishedRecipeProductionReadinessGap[]
 ): boolean {
+    if (input.shopping.propertyAttribution !== undefined) return true;
     const destination = input.shopping.arrivalDestination;
     if (destination.kind === 'not-established') {
         addGap(gaps, 'shopping-arrival-destination-not-established');
@@ -393,10 +398,10 @@ function inputReadiness(
             propertyId
         );
     }
-    if (purchasedQuantity > 0 && (!purchaseComplete || purchaseArrivalMinute === null)) {
+    if (purchasedQuantity > 0 && !purchaseComplete) {
         readinessProof = 'purchase-not-fulfilled';
         readyMinute = null;
-    } else if (purchasedQuantity > 0 && !arrivalAtProperty) {
+    } else if (purchasedQuantity > 0 && (purchaseArrivalMinute === null || !arrivalAtProperty)) {
         readinessProof = 'shopping-arrival-unavailable';
         readyMinute = null;
     } else if (transferUnavailable) {
