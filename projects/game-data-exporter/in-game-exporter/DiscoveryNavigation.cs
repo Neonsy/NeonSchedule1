@@ -16,10 +16,11 @@ internal static partial class DiscoveryCollector
         DiscoverySnapshot result,
         Action<string>? progress)
     {
-        result.Navigation.Method = "sampled-navmesh-grid";
-        result.Navigation.SampleSpacing = 2f;
-        result.Navigation.QueryHeight = 0f;
-        result.Navigation.MaxSampleDistance = 12f;
+        ConfigureNavigationGraph(result.Navigation);
+        ConfigureNavigationGraph(result.PlayerNavigation);
+        result.PlayerNavigation.Applicability =
+            "candidate-humanoid-navmesh-not-native-player-path-contract";
+        CollectPlayerMovement(result.PlayerMovement);
 
         var surfaces = Resources.FindObjectsOfTypeAll<NavMeshSurface>();
         for (var index = 0; index < surfaces.Length; index++)
@@ -69,11 +70,6 @@ internal static partial class DiscoveryCollector
             result.Navigation.Surfaces.Add(snapshot);
         }
 
-        if (EmployeeNavigationAgentTypeId(result.Navigation) is not int employeeAgentTypeId)
-        {
-            return;
-        }
-
         var horizontalPoints = new List<Vector3>();
         for (var regionIndex = 0; regionIndex < result.Map.Regions.Count; regionIndex++)
         {
@@ -95,6 +91,8 @@ internal static partial class DiscoveryCollector
         if (horizontalPoints.Count == 0)
         {
             result.Navigation.Error = "No map bounds were available for navigation sampling.";
+            result.PlayerNavigation.Error =
+                "No map bounds were available for navigation sampling.";
             return;
         }
 
@@ -106,10 +104,63 @@ internal static partial class DiscoveryCollector
         var spacing = result.Navigation.SampleSpacing;
         var width = (int)MathF.Floor((maxX - minX) / spacing) + 1;
         var height = (int)MathF.Floor((maxZ - minZ) / spacing) + 1;
-        result.Navigation.BoundsMinimum = new VectorSnapshot3 { X = minX, Y = 0f, Z = minZ };
-        result.Navigation.BoundsMaximum = new VectorSnapshot3 { X = maxX, Y = 0f, Z = maxZ };
-        result.Navigation.GridWidth = width;
-        result.Navigation.GridHeight = height;
+        SetNavigationBounds(result.Navigation, minX, maxX, minZ, maxZ, width, height);
+        SetNavigationBounds(result.PlayerNavigation, minX, maxX, minZ, maxZ, width, height);
+
+        if (EmployeeNavigationAgentTypeId(result.Navigation) is int employeeAgentTypeId)
+        {
+            SampleNavigationGraph(
+                result.Navigation,
+                employeeAgentTypeId,
+                "employee",
+                progress);
+        }
+        if (PlayerNavigationAgentTypeId(
+                result.PlayerNavigation,
+                result.Navigation.Surfaces) is int playerAgentTypeId)
+        {
+            SampleNavigationGraph(
+                result.PlayerNavigation,
+                playerAgentTypeId,
+                "candidate player",
+                progress);
+        }
+    }
+
+    private static void ConfigureNavigationGraph(DiscoveryNavigationGraphSnapshot navigation)
+    {
+        navigation.Method = "sampled-navmesh-grid";
+        navigation.SampleSpacing = 2f;
+        navigation.QueryHeight = 0f;
+        navigation.MaxSampleDistance = 12f;
+    }
+
+    private static void SetNavigationBounds(
+        DiscoveryNavigationGraphSnapshot navigation,
+        float minX,
+        float maxX,
+        float minZ,
+        float maxZ,
+        int width,
+        int height)
+    {
+        navigation.BoundsMinimum = new VectorSnapshot3 { X = minX, Y = 0f, Z = minZ };
+        navigation.BoundsMaximum = new VectorSnapshot3 { X = maxX, Y = 0f, Z = maxZ };
+        navigation.GridWidth = width;
+        navigation.GridHeight = height;
+    }
+
+    private static void SampleNavigationGraph(
+        DiscoveryNavigationGraphSnapshot navigation,
+        int agentTypeId,
+        string progressSubject,
+        Action<string>? progress)
+    {
+        var spacing = navigation.SampleSpacing;
+        var minX = navigation.BoundsMinimum!.X;
+        var minZ = navigation.BoundsMinimum!.Z;
+        var width = navigation.GridWidth;
+        var height = navigation.GridHeight;
 
         var sampleIndices = new Dictionary<long, int>();
         try
@@ -120,12 +171,12 @@ internal static partial class DiscoveryCollector
                 for (var xIndex = 0; xIndex < width; xIndex++)
                 {
                     var x = minX + (xIndex * spacing);
-                    var query = new Vector3(x, result.Navigation.QueryHeight, z);
+                    var query = new Vector3(x, navigation.QueryHeight, z);
                     if (!NavMesh.SamplePositionFilter(
                             query,
                             out var hit,
-                            result.Navigation.MaxSampleDistance,
-                            employeeAgentTypeId,
+                            navigation.MaxSampleDistance,
+                            agentTypeId,
                             NavMesh.AllAreas) ||
                         MathF.Abs(hit.position.x - x) > spacing * 0.5f ||
                         MathF.Abs(hit.position.z - z) > spacing * 0.5f)
@@ -133,8 +184,8 @@ internal static partial class DiscoveryCollector
                         continue;
                     }
 
-                    var sampleIndex = result.Navigation.Samples.Count;
-                    result.Navigation.Samples.Add(new DiscoveryNavigationSampleSnapshot
+                    var sampleIndex = navigation.Samples.Count;
+                    navigation.Samples.Add(new DiscoveryNavigationSampleSnapshot
                     {
                         GridX = xIndex,
                         GridZ = zIndex,
@@ -147,41 +198,93 @@ internal static partial class DiscoveryCollector
                 if ((zIndex + 1) % 25 == 0 || zIndex + 1 == height)
                 {
                     progress?.Invoke(
-                        $"Discovery 4/9 progress: sampled {zIndex + 1}/{height} navigation rows.");
+                        $"Discovery 4/9 progress: sampled {zIndex + 1}/{height} " +
+                        $"{progressSubject} navigation rows.");
                 }
             }
         }
         catch (Exception exception)
         {
-            result.Navigation.Error = $"Sampling failed: {exception.GetType().Name}: {exception.Message}";
+            navigation.Error =
+                $"Sampling failed: {exception.GetType().Name}: {exception.Message}";
             return;
         }
 
         try
         {
-            for (var index = 0; index < result.Navigation.Samples.Count; index++)
+            for (var index = 0; index < navigation.Samples.Count; index++)
             {
-                var sample = result.Navigation.Samples[index];
+                var sample = navigation.Samples[index];
                 AddNavigationEdge(
-                    result.Navigation,
+                    navigation,
                     sampleIndices,
                     index,
                     sample.GridX + 1,
                     sample.GridZ,
-                    result.Navigation.Agent);
+                    navigation.Agent);
                 AddNavigationEdge(
-                    result.Navigation,
+                    navigation,
                     sampleIndices,
                     index,
                     sample.GridX,
                     sample.GridZ + 1,
-                    result.Navigation.Agent);
+                    navigation.Agent);
             }
         }
         catch (Exception exception)
         {
-            result.Navigation.EdgeError =
+            navigation.EdgeError =
                 $"Edge validation failed: {exception.GetType().Name}: {exception.Message}";
+        }
+    }
+
+    private static void CollectPlayerMovement(DiscoveryPlayerMovementSnapshot movement)
+    {
+        movement.Source =
+            "ScheduleOne.PlayerScripts.PlayerMovement-and-PlayerInventory-native-constants";
+        movement.SpeedApplicability = "base-speeds-runtime-multipliers-not-applied";
+        movement.InventoryCapacityApplicability =
+            "slot-count-only-current-contents-and-stack-allocation-not-applied";
+        movement.InventorySlotCount =
+            Il2CppScheduleOne.PlayerScripts.PlayerInventory.InventorySlotCount;
+        movement.WalkSpeed = Il2CppScheduleOne.PlayerScripts.PlayerMovement.WalkSpeed;
+        movement.SprintMultiplier =
+            Il2CppScheduleOne.PlayerScripts.PlayerMovement.SprintMultiplier;
+        movement.SprintSpeed = movement.WalkSpeed * movement.SprintMultiplier;
+        movement.CrouchSpeedMultiplier =
+            Il2CppScheduleOne.PlayerScripts.PlayerMovement.CrouchSpeedMultipler;
+        movement.CrouchSpeed = movement.WalkSpeed * movement.CrouchSpeedMultiplier;
+        movement.DefaultControllerRadius =
+            Il2CppScheduleOne.PlayerScripts.PlayerMovement.ControllerRadius;
+        movement.DefaultStandingControllerHeight =
+            Il2CppScheduleOne.PlayerScripts.PlayerMovement.DefaultCharacterControllerHeight;
+
+        try
+        {
+            var loaded = Il2CppScheduleOne.PlayerScripts.PlayerMovement.Instance;
+            var controller = loaded?.Controller;
+            if (loaded is null || controller is null)
+            {
+                movement.Error = "No loaded player character controller was available.";
+                return;
+            }
+            movement.LoadedController = new DiscoveryPlayerControllerSnapshot
+            {
+                Enabled = controller.enabled,
+                Radius = controller.radius,
+                Height = controller.height,
+                Center = VectorSnapshot3.FromVector(controller.center),
+                SlopeLimit = controller.slopeLimit,
+                StepOffset = controller.stepOffset,
+                SkinWidth = controller.skinWidth,
+                MinimumMoveDistance = controller.minMoveDistance,
+            };
+        }
+        catch (Exception exception)
+        {
+            movement.Error =
+                $"Player controller collection failed: {exception.GetType().Name}: " +
+                exception.Message;
         }
     }
 
@@ -251,6 +354,7 @@ internal static partial class DiscoveryCollector
 
         navigation.Agent = new DiscoveryNavigationAgentSnapshot
         {
+            Subject = "employees",
             Source = "employee-prefabs",
             TypeId = agentTypeId,
             Name = name,
@@ -263,10 +367,74 @@ internal static partial class DiscoveryCollector
         return agentTypeId;
     }
 
+    private static int? PlayerNavigationAgentTypeId(
+        DiscoveryPlayerNavigationSnapshot navigation,
+        IReadOnlyList<DiscoveryNavMeshSurfaceSnapshot> surfaces)
+    {
+        const string expectedName = "Humanoid";
+        var candidateAgentTypeIds = new HashSet<int>();
+        try
+        {
+            for (var index = 0; index < surfaces.Count; index++)
+            {
+                var surfaceAgentTypeId = surfaces[index].AgentTypeId;
+                if (string.Equals(
+                        NavMesh.GetSettingsNameFromID(surfaceAgentTypeId),
+                        expectedName,
+                        StringComparison.Ordinal))
+                {
+                    candidateAgentTypeIds.Add(surfaceAgentTypeId);
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            navigation.Error =
+                $"Player navigation agent discovery failed: {exception.GetType().Name}: " +
+                exception.Message;
+            return null;
+        }
+
+        if (candidateAgentTypeIds.Count != 1)
+        {
+            navigation.Error =
+                $"Loaded navigation surfaces expose {candidateAgentTypeIds.Count} distinct " +
+                $"agent types named {expectedName}.";
+            return null;
+        }
+
+        var agentTypeId = candidateAgentTypeIds.Single();
+        var settings = NavMesh.GetSettingsByID(agentTypeId);
+        var name = NavMesh.GetSettingsNameFromID(agentTypeId);
+        if (!float.IsFinite(settings.agentRadius) || settings.agentRadius <= 0f ||
+            !float.IsFinite(settings.agentHeight) || settings.agentHeight <= 0f ||
+            !float.IsFinite(settings.agentSlope) || settings.agentSlope < 0f ||
+            settings.agentSlope >= 90f ||
+            !float.IsFinite(settings.agentClimb) || settings.agentClimb < 0f)
+        {
+            navigation.Error =
+                $"Player navigation agent type {agentTypeId} has invalid movement settings.";
+            return null;
+        }
+
+        navigation.Agent = new DiscoveryNavigationAgentSnapshot
+        {
+            Subject = "player",
+            Source = "loaded-navmesh-surface-named-humanoid",
+            TypeId = agentTypeId,
+            Name = name,
+            Radius = settings.agentRadius,
+            Height = settings.agentHeight,
+            MaximumSlope = settings.agentSlope,
+            StepHeight = settings.agentClimb,
+        };
+        return agentTypeId;
+    }
+
     private static long NavigationGridKey(int x, int z) => ((long)z << 32) | (uint)x;
 
     private static void AddNavigationEdge(
-        DiscoveryNavigationSnapshot navigation,
+        DiscoveryNavigationGraphSnapshot navigation,
         IReadOnlyDictionary<long, int> sampleIndices,
         int fromIndex,
         int toX,

@@ -31,6 +31,8 @@ internal sealed class DiscoverySnapshot
     public int VisualTextureExportErrorCount { get; set; }
     public DiscoveryMapSnapshot Map { get; init; } = new();
     public DiscoveryNavigationSnapshot Navigation { get; init; } = new();
+    public DiscoveryPlayerMovementSnapshot PlayerMovement { get; init; } = new();
+    public DiscoveryPlayerNavigationSnapshot PlayerNavigation { get; init; } = new();
     public DiscoveryVisualAssetManifestSnapshot VisualAssets { get; set; } = new();
     public List<DiscoveryItemPresentationSnapshot> ItemPresentations { get; set; } = new();
     public List<DiscoveryEffectVisualSnapshot> EffectVisuals { get; set; } = new();
@@ -179,7 +181,7 @@ internal sealed class DiscoveryMapSnapshot
     public List<DiscoveryMapRegionSnapshot> Regions { get; set; } = new();
 }
 
-internal sealed class DiscoveryNavigationSnapshot
+internal class DiscoveryNavigationGraphSnapshot
 {
     public string Method { get; set; } = string.Empty;
     public DiscoveryNavigationAgentSnapshot Agent { get; set; } = new();
@@ -195,15 +197,54 @@ internal sealed class DiscoveryNavigationSnapshot
     public List<VectorSnapshot3> Vertices { get; set; } = new();
     public List<int> Indices { get; set; } = new();
     public List<int> Areas { get; set; } = new();
-    public List<DiscoveryNavMeshSurfaceSnapshot> Surfaces { get; set; } = new();
     public List<DiscoveryNavigationSampleSnapshot> Samples { get; set; } = new();
     public List<int> Edges { get; set; } = new();
     public string Error { get; set; } = string.Empty;
     public string EdgeError { get; set; } = string.Empty;
 }
 
+internal sealed class DiscoveryNavigationSnapshot : DiscoveryNavigationGraphSnapshot
+{
+    public List<DiscoveryNavMeshSurfaceSnapshot> Surfaces { get; set; } = new();
+}
+
+internal sealed class DiscoveryPlayerNavigationSnapshot : DiscoveryNavigationGraphSnapshot
+{
+    public string Applicability { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerMovementSnapshot
+{
+    public string Source { get; set; } = string.Empty;
+    public string SpeedApplicability { get; set; } = string.Empty;
+    public string InventoryCapacityApplicability { get; set; } = string.Empty;
+    public int InventorySlotCount { get; set; }
+    public float WalkSpeed { get; set; }
+    public float SprintMultiplier { get; set; }
+    public float SprintSpeed { get; set; }
+    public float CrouchSpeedMultiplier { get; set; }
+    public float CrouchSpeed { get; set; }
+    public float DefaultControllerRadius { get; set; }
+    public float DefaultStandingControllerHeight { get; set; }
+    public DiscoveryPlayerControllerSnapshot? LoadedController { get; set; }
+    public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerControllerSnapshot
+{
+    public bool Enabled { get; init; }
+    public float Radius { get; init; }
+    public float Height { get; init; }
+    public VectorSnapshot3 Center { get; init; } = new();
+    public float SlopeLimit { get; init; }
+    public float StepOffset { get; init; }
+    public float SkinWidth { get; init; }
+    public float MinimumMoveDistance { get; init; }
+}
+
 internal sealed class DiscoveryNavigationAgentSnapshot
 {
+    public string Subject { get; init; } = string.Empty;
     public string Source { get; init; } = string.Empty;
     public int TypeId { get; init; }
     public string Name { get; init; } = string.Empty;

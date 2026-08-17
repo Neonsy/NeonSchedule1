@@ -38,11 +38,14 @@ internal static partial class DiscoveryCollector
         progress?.Invoke(
             $"Discovery 3/9 complete: {result.Map.Regions.Count} regions and " +
             $"{result.MapServices.Count} typed map services.");
-        progress?.Invoke("Discovery 4/9: active navigation surfaces and sampled walkability graph.");
+        progress?.Invoke(
+            "Discovery 4/9: active navigation surfaces plus employee and candidate player graphs.");
         CollectNavigation(result, progress);
         progress?.Invoke(
-            $"Discovery 4/9 complete: {result.Navigation.Samples.Count} samples, " +
-            $"{result.Navigation.Edges.Count / 2} verified edges.");
+            $"Discovery 4/9 complete: employee {result.Navigation.Samples.Count} samples and " +
+            $"{result.Navigation.Edges.Count / 2} verified edges, player " +
+            $"{result.PlayerNavigation.Samples.Count} samples and " +
+            $"{result.PlayerNavigation.Edges.Count / 2} verified edges.");
         progress?.Invoke("Discovery 5/9: timed access zones.");
         CollectTimedAccessZones(result);
         progress?.Invoke($"Discovery 5/9 complete: {result.TimedAccessZones.Count} zones.");
