@@ -14,12 +14,20 @@ import {
 } from '#core/data/production-logistics';
 import type { ProductionBatchPlan } from '#core/production/plan';
 import type { NavigationGraph } from '#core/data/world';
+import { NavigationNetwork } from '#core/world/navigation';
 import type { BlueprintProductionScheduledStep } from '#core/blueprint/production-schedule';
+import type {
+    BlueprintProductionPlacementEndpointAccess,
+    BlueprintProductionTransitEndpointAccess,
+} from '#core/blueprint/production-endpoint-access';
 import { BlueprintProductionLogisticsConfigurationAnalyzer } from '#core/blueprint/production-logistics-configuration';
 import { analyzeProductionEmployeeExecution } from '#core/blueprint/production-employee-execution';
+import { planBlueprintProductionMovement } from '#core/blueprint/production-movement-plan';
 import {
     BlueprintProductionTransferAnalyzer,
+    type BlueprintProductionNetworkRouteCandidate,
     type BlueprintProductionTransferAssignmentPair,
+    type BlueprintProductionTransferRouteUnavailableReason,
 } from '#core/blueprint/production-transfers';
 
 export * from '#core/blueprint/production-logistics-types';
@@ -47,6 +55,7 @@ export class BlueprintProductionLogisticsAnalyzer {
     readonly #configuration: BlueprintProductionLogisticsConfigurationAnalyzer;
     readonly #catalog: ProductionLogisticsCatalog;
     readonly #navigation: NavigationGraph;
+    readonly #navigationNetwork: NavigationNetwork;
     readonly #itemById: ReadonlyMap<string, Item>;
     readonly #buildableByItemId: ReadonlyMap<string, Buildable>;
 
@@ -54,6 +63,7 @@ export class BlueprintProductionLogisticsAnalyzer {
         this.#transfers = new BlueprintProductionTransferAnalyzer(dataset);
         this.#catalog = ProductionLogisticsCatalogSchema.assert(dataset.productionLogistics);
         this.#navigation = dataset.navigation;
+        this.#navigationNetwork = new NavigationNetwork(dataset.navigation);
         this.#itemById = indexUnique(
             dataset.items.map((input) => {
                 const item = ItemSchema.assert(input);
@@ -103,6 +113,9 @@ export class BlueprintProductionLogisticsAnalyzer {
         }
         const routes = this.#indexedRoutes(blueprint);
         const placementById = new Map(blueprint.placements.map((placement) => [placement.id, placement]));
+        const accessByPlacementId = new Map(
+            transfers.endpointAccess.placements.map((placement) => [placement.placementId, placement])
+        );
         const requirements = transfers.requirements.map((requirement) => ({
             itemId: requirement.itemId,
             producerStepIndex: requirement.producerStepIndex,
@@ -117,7 +130,14 @@ export class BlueprintProductionLogisticsAnalyzer {
             plan,
             transfers.schedule.schedule,
             routes,
-            placementById
+            placementById,
+            accessByPlacementId
+        );
+        const movementPlan = planBlueprintProductionMovement(
+            blueprint,
+            this.#catalog,
+            requirements,
+            purchasedInputRequirements
         );
         const employeeExecution = analyzeProductionEmployeeExecution(
             blueprint,
@@ -132,8 +152,9 @@ export class BlueprintProductionLogisticsAnalyzer {
             configuration,
             productionRequirementScope: 'internally-produced-plan-dependencies',
             purchasedInputSupplyScope: 'first-production-consumers',
-            routeQuantityAllocation: 'not-evaluated',
-            transferTiming: 'not-evaluated',
+            routeQuantityAllocation: 'evaluated-static-empty-destination-capacity',
+            transferTiming: 'selected-network-traversals-only',
+            movementPlan,
             employeeExecution,
             requirements,
             purchasedInputRequirements,
@@ -145,7 +166,8 @@ export class BlueprintProductionLogisticsAnalyzer {
         plan: ProductionBatchPlan,
         schedule: readonly BlueprintProductionScheduledStep[],
         routes: readonly IndexedRoute[],
-        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>
+        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>,
+        accessByPlacementId: ReadonlyMap<string, BlueprintProductionPlacementEndpointAccess>
     ): BlueprintProductionPurchasedInputRequirement[] {
         const scheduledByStep = new Map(schedule.map((step) => [step.stepIndex, step]));
         return plan.purchases.flatMap((purchase) => {
@@ -212,8 +234,10 @@ export class BlueprintProductionLogisticsAnalyzer {
                     blueprint,
                     supply,
                     destination,
+                    plan.productionSteps[destination.consumerStepIndex]?.method,
                     routes,
-                    placementById
+                    placementById,
+                    accessByPlacementId
                 ))
             );
             return [{
@@ -233,13 +257,20 @@ export class BlueprintProductionLogisticsAnalyzer {
         blueprint: BlueprintDocument,
         supply: BlueprintProductionSupply,
         destination: BlueprintProductionInputDestinationAssignment,
+        consumerMethod: ProductionBatchPlan['productionSteps'][number]['method'] | undefined,
         routes: readonly IndexedRoute[],
-        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>
+        placementById: ReadonlyMap<string, BlueprintDocument['placements'][number]>,
+        accessByPlacementId: ReadonlyMap<string, BlueprintProductionPlacementEndpointAccess>
     ): BlueprintProductionInputSupplyPair {
         const item = this.#itemById.get(supply.itemId);
         if (item === undefined) {
             throw new Error(`Blueprint supply references unavailable item ${JSON.stringify(supply.itemId)}`);
         }
+        const networkRoutes = this.#networkRoutes(
+            supply.sourcePlacementId,
+            destination.placementId,
+            accessByPlacementId
+        );
         const employeeCandidates = blueprint.productionLogistics.employees.flatMap(
             (employee): BlueprintProductionInputMovementCandidate[] => {
                 const role = this.#catalog.employeeRoles.find(
@@ -247,12 +278,19 @@ export class BlueprintProductionLogisticsAnalyzer {
                 );
                 if (role === undefined) return [];
                 if (employee.employeeType === 'Botanist') {
+                    if (consumerMethod !== 'seed-harvest' && consumerMethod !== 'shroom-harvest') {
+                        return [];
+                    }
                     if (employee.supplyPlacementId !== supply.sourcePlacementId ||
                         !employee.assignedPotPlacementIds.includes(destination.placementId)) return [];
                     return [{
                         kind: 'botanist-station-specific',
                         employeeId: employee.id,
-                        networkRouteCandidateStatus: 'not-applicable-same-employee-assignment',
+                        networkRouteCandidateStatus: networkRoutes.candidates.length > 0
+                            ? 'available' as const
+                            : 'unavailable' as const,
+                        unavailableReasons: networkRoutes.unavailableReasons,
+                        networkRouteCandidates: networkRoutes.candidates,
                         capacity: this.#capacity(
                             item,
                             supply.quantity,
@@ -274,7 +312,11 @@ export class BlueprintProductionLogisticsAnalyzer {
                         employeeId: employee.id,
                         routeId: entry.route.id,
                         storedOrderIndex: entry.storedOrderIndex,
-                        networkRouteCandidateStatus: 'not-evaluated' as const,
+                        networkRouteCandidateStatus: networkRoutes.candidates.length > 0
+                            ? 'available' as const
+                            : 'unavailable' as const,
+                        unavailableReasons: networkRoutes.unavailableReasons,
+                        networkRouteCandidates: networkRoutes.candidates,
                         capacity: this.#capacity(
                             item,
                             supply.quantity,
@@ -334,6 +376,8 @@ export class BlueprintProductionLogisticsAnalyzer {
                 routeId: entry.route.id,
                 storedOrderIndex: entry.storedOrderIndex,
                 networkRouteCandidateStatus: pair.networkRouteCandidateStatus,
+                unavailableReasons: pair.unavailableReasons,
+                networkRouteCandidates: pair.networkRouteCandidates,
                 capacity: this.#capacity(
                     item,
                     pair.sourceProducedQuantity,
@@ -346,10 +390,59 @@ export class BlueprintProductionLogisticsAnalyzer {
         });
         return {
             sourcePlacementId: pair.sourcePlacementId,
+            sourceAvailableQuantity: pair.sourceProducedQuantity,
             destinationPlacementId: pair.destinationPlacementId,
+            destinationRequiredQuantity: pair.destinationRequiredQuantity,
             configuredRouteCoverage:
                 configuredRouteCandidates.length > 0 ? 'configured' : 'unconfigured',
             configuredRouteCandidates,
+        };
+    }
+
+    #networkRoutes(
+        sourcePlacementId: string,
+        destinationPlacementId: string,
+        accessByPlacementId: ReadonlyMap<string, BlueprintProductionPlacementEndpointAccess>
+    ): {
+        readonly unavailableReasons: readonly BlueprintProductionTransferRouteUnavailableReason[];
+        readonly candidates: readonly BlueprintProductionNetworkRouteCandidate[];
+    } {
+        const sources = reachableEndpoints(
+            accessByPlacementId.get(sourcePlacementId)?.transitAccessPoints ?? []
+        );
+        const destinations = reachableEndpoints(
+            accessByPlacementId.get(destinationPlacementId)?.transitAccessPoints ?? []
+        );
+        const unavailableReasons: BlueprintProductionTransferRouteUnavailableReason[] = [];
+        if (sources.length === 0) {
+            unavailableReasons.push('source-has-no-network-reachable-transit-point');
+        }
+        if (destinations.length === 0) {
+            unavailableReasons.push('destination-has-no-network-reachable-transit-point');
+        }
+        return {
+            unavailableReasons,
+            candidates: sources.flatMap((source) => destinations.map((destination) => {
+                const path = this.#navigationNetwork.findPathBetweenSamples({
+                    startSampleIndex: source.employeeReachability.path.end.sampleIndex,
+                    endSampleIndex: destination.employeeReachability.path.end.sampleIndex,
+                });
+                if (path.kind !== 'found') {
+                    throw new Error(
+                        `Production route ${sourcePlacementId} to ${destinationPlacementId} ` +
+                            'contains disconnected reachable samples'
+                    );
+                }
+                return {
+                    sourcePlacementId,
+                    sourceAccessPointIndex: source.accessPointIndex,
+                    sourceNetworkEndpoint: source.employeeReachability.path.end,
+                    destinationPlacementId,
+                    destinationAccessPointIndex: destination.accessPointIndex,
+                    destinationNetworkEndpoint: destination.employeeReachability.path.end,
+                    path,
+                };
+            })),
         };
     }
 
@@ -366,7 +459,12 @@ export class BlueprintProductionLogisticsAnalyzer {
             ? undefined
             : this.#buildableByItemId.get(destinationPlacement.itemId);
         const destinationCapacity = destinationBuildable === undefined
-            ? { status: 'filter-evidence-unavailable' as const, quantity: null }
+            ? {
+                status: 'filter-evidence-unavailable' as const,
+                quantity: null,
+                basis: 'unavailable' as const,
+                compatibleInputSlotIndexes: null,
+            }
             : this.#emptyInputCapacity(destinationBuildable, item);
         const employeeInventoryCapacity = multiplyCapacity(
             role.inventorySlotCount,
@@ -387,6 +485,9 @@ export class BlueprintProductionLogisticsAnalyzer {
             employeeInventoryCapacity,
             destinationEmptyCapacity: destinationCapacity.quantity,
             destinationCapacityStatus: destinationCapacity.status,
+            destinationCapacityBasis: destinationCapacity.basis,
+            destinationCompatibleInputSlotIndexes:
+                destinationCapacity.compatibleInputSlotIndexes,
             maximumMovedQuantityPerTrip:
                 destinationCapacity.quantity === null ? null : Math.min(...limits),
             movedQuantityLimits: [...this.#catalog.routeRules.movedQuantityLimits],
@@ -397,20 +498,39 @@ export class BlueprintProductionLogisticsAnalyzer {
     #emptyInputCapacity(
         buildable: Buildable,
         item: Item
-    ): { readonly status: 'calculated' | 'filter-evidence-unavailable'; readonly quantity: number | null } {
+    ): {
+        readonly status: 'calculated' | 'filter-evidence-unavailable';
+        readonly quantity: number | null;
+        readonly basis:
+            'normalized-station-input-slots' |
+            'normalized-storage-slots' |
+            'unavailable';
+        readonly compatibleInputSlotIndexes: readonly number[] | null;
+    } {
         const station = this.#catalog.stations.find((entry) => entry.itemId === buildable.itemId);
         if (station !== undefined) {
-            let compatibleSlots = 0;
+            const compatibleInputSlotIndexes: number[] = [];
             for (const slot of station.inputSlots) {
                 const compatibility = slotAllowsItem(slot, item);
                 if (compatibility === 'unknown') {
-                    return { status: 'filter-evidence-unavailable', quantity: null };
+                    return {
+                        status: 'filter-evidence-unavailable',
+                        quantity: null,
+                        basis: 'normalized-station-input-slots',
+                        compatibleInputSlotIndexes: null,
+                    };
                 }
-                if (compatibility) compatibleSlots++;
+                if (compatibility) compatibleInputSlotIndexes.push(slot.index);
             }
             return {
                 status: 'calculated',
-                quantity: multiplyCapacity(compatibleSlots, item.stackLimit, 'Station input capacity'),
+                quantity: multiplyCapacity(
+                    compatibleInputSlotIndexes.length,
+                    item.stackLimit,
+                    'Station input capacity'
+                ),
+                basis: 'normalized-station-input-slots',
+                compatibleInputSlotIndexes,
             };
         }
         if (buildable.storage !== null) {
@@ -421,15 +541,40 @@ export class BlueprintProductionLogisticsAnalyzer {
                     item.stackLimit,
                     'Storage input capacity'
                 ),
+                basis: 'normalized-storage-slots',
+                compatibleInputSlotIndexes: Array.from(
+                    { length: buildable.storage.slotCount },
+                    (_, index) => index
+                ),
             };
         }
-        return { status: 'filter-evidence-unavailable', quantity: null };
+        return {
+            status: 'filter-evidence-unavailable',
+            quantity: null,
+            basis: 'unavailable',
+            compatibleInputSlotIndexes: null,
+        };
     }
 }
 
 function routeAllowsItem(route: BlueprintHandlerRoute, itemId: string): boolean {
     const listed = route.filter.itemIds.includes(itemId);
     return route.filter.mode === 'whitelist' ? listed : !listed;
+}
+
+type ReachableEndpoint = BlueprintProductionTransitEndpointAccess & {
+    readonly employeeReachability: Extract<
+        BlueprintProductionTransitEndpointAccess['employeeReachability'],
+        { readonly kind: 'reachable' }
+    >;
+};
+
+function reachableEndpoints(
+    endpoints: readonly BlueprintProductionTransitEndpointAccess[]
+): ReachableEndpoint[] {
+    return endpoints.filter((endpoint): endpoint is ReachableEndpoint =>
+        endpoint.employeeReachability.kind === 'reachable'
+    );
 }
 
 function slotAllowsItem(slot: ProductionLogisticsSlot, item: Item): boolean | 'unknown' {

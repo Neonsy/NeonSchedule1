@@ -303,7 +303,8 @@ describe('blueprint production logistics', () => {
         expect(result).toMatchObject({
             productionRequirementScope: 'internally-produced-plan-dependencies',
             purchasedInputSupplyScope: 'first-production-consumers',
-            routeQuantityAllocation: 'not-evaluated',
+            routeQuantityAllocation: 'evaluated-static-empty-destination-capacity',
+            transferTiming: 'selected-network-traversals-only',
             employeeExecution: {
                 timingScope:
                     'assigned-production-placement-service-and-property-spawn-network-reachability-candidates',
@@ -481,7 +482,7 @@ describe('blueprint production logistics', () => {
                         employeeId: 'handler-1',
                         routeId: 'raw-to-source-a',
                         storedOrderIndex: 2,
-                        networkRouteCandidateStatus: 'not-evaluated',
+                        networkRouteCandidateStatus: 'available',
                         capacity: {
                             sourceAvailableQuantity: 2,
                             requestedDestinationQuantity: 1,
@@ -494,22 +495,384 @@ describe('blueprint production logistics', () => {
                 {
                     supplyId: 'raw-supply',
                     destinationPlacementId: 'source-b',
-                    movementCoverage: 'configured',
-                    movementCandidates: [{
-                        kind: 'botanist-station-specific',
-                        employeeId: 'botanist-1',
-                        networkRouteCandidateStatus: 'not-applicable-same-employee-assignment',
-                        capacity: {
-                            sourceAvailableQuantity: 2,
-                            requestedDestinationQuantity: 1,
-                            employeeInventoryCapacity: 100,
-                            destinationEmptyCapacity: 20,
-                            maximumMovedQuantityPerTrip: 1,
-                        },
-                    }],
+                    movementCoverage: 'unconfigured',
+                    movementCandidates: [],
                 },
             ],
         }]);
+        expect(result.movementPlan).toEqual({
+            status: 'partial',
+            quantityAllocation: 'deterministic-static-under-empty-destination-capacity',
+            destinationCapacityScope:
+                'per-consumer-step-destination-compatible-input-slot-reservations',
+            destinationSlotReservation:
+                'consumer-step-destination-least-flexible-item-first',
+            currentSourceAndDestinationContents: 'not-evaluated',
+            movementSelection:
+                'blueprint-employee-order-then-handler-stored-order-then-source-order',
+            allocationOptimality:
+                'not-optimized-preserves-production-and-configured-route-priority',
+            networkRouteSelection: 'minimum-network-distance-then-access-point-order',
+            selectedNetworkTraversalTiming: 'complete',
+            timingScope:
+                'selected-source-to-destination-network-edges-at-per-item-maximum-load',
+            aggregateTraversalTiming:
+                'not-composed-cross-item-trip-sharing-return-legs-task-order-and-concurrency',
+            endpointSnapTraversal: 'not-included-not-proven-walkable',
+            staticClearanceSufficiency: 'not-evaluated',
+            dynamicObstacleClearance: 'not-evaluated',
+            allocations: expect.arrayContaining([
+                expect.objectContaining({
+                    scope: 'internally-produced-plan-dependency',
+                    itemId: 'intermediate',
+                    producerStepIndex: 0,
+                    consumerStepIndex: 1,
+                    supplyId: null,
+                    sourcePlacementId: 'source-a',
+                    destinationPlacementId: 'destination-a',
+                    employeeId: 'handler-1',
+                    movementKind: 'configured-handler-route',
+                    routeId: 'first-ready',
+                    storedOrderIndex: 0,
+                    allocatedQuantity: 2,
+                    maximumMovedQuantityPerTrip: 2,
+                    minimumTripCount: 1,
+                    minimumSelectedNetworkTraversalSeconds: 4,
+                    selectedNetworkRoute: expect.objectContaining({
+                        selectionBasis: 'minimum-network-distance-then-access-point-order',
+                        networkDistance: 8,
+                        employeeWalkSpeed: 2,
+                        networkTraversalSecondsPerTrip: 4,
+                    }),
+                }),
+                expect.objectContaining({
+                    scope: 'planned-purchased-input',
+                    itemId: 'raw',
+                    supplyId: 'raw-supply',
+                    sourcePlacementId: 'raw-storage',
+                    destinationPlacementId: 'source-a',
+                    movementKind: 'configured-handler-route',
+                    routeId: 'raw-to-source-a',
+                    allocatedQuantity: 1,
+                    maximumMovedQuantityPerTrip: 1,
+                    minimumTripCount: 1,
+                    minimumSelectedNetworkTraversalSeconds: 8,
+                    selectedNetworkRoute: expect.objectContaining({
+                        networkDistance: 16,
+                        networkTraversalSecondsPerTrip: 8,
+                    }),
+                }),
+            ]),
+            unallocatedRequirements: expect.arrayContaining([
+                {
+                    scope: 'internally-produced-plan-dependency',
+                    itemId: 'intermediate',
+                    producerStepIndex: 0,
+                    consumerStepIndex: 1,
+                    destinationPlacementId: 'destination-b',
+                    requiredQuantity: 2,
+                    allocatedQuantity: 0,
+                    unallocatedQuantity: 2,
+                    reasons: ['configured-movement-unavailable'],
+                },
+                {
+                    scope: 'planned-purchased-input',
+                    itemId: 'raw',
+                    producerStepIndex: null,
+                    consumerStepIndex: 0,
+                    destinationPlacementId: 'source-b',
+                    requiredQuantity: 1,
+                    allocatedQuantity: 0,
+                    unallocatedQuantity: 1,
+                    reasons: ['configured-movement-unavailable'],
+                },
+            ]),
+        });
+        expect(result.movementPlan.allocations.map((allocation) => allocation.itemId))
+            .toEqual(['raw', 'intermediate']);
+        expect(result.movementPlan.unallocatedRequirements.map((requirement) => requirement.itemId))
+            .toEqual(['raw', 'intermediate']);
+    });
+
+    it('uses the employee inventory bound to calculate minimum selected-route trips', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            items: inputDataset.items.map((entry) =>
+                entry.id === 'intermediate' ? { ...entry, stackLimit: 1 } : entry
+            ),
+            productionLogistics: {
+                ...inputDataset.productionLogistics,
+                employeeRoles: inputDataset.productionLogistics.employeeRoles.map((role) =>
+                    role.employeeType === 'Handler'
+                        ? { ...role, inventorySlotCount: 1 }
+                        : role
+                ),
+            },
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.allocations.find((allocation) =>
+            allocation.itemId === 'intermediate'
+        )).toMatchObject({
+            itemId: 'intermediate',
+            allocatedQuantity: 2,
+            maximumMovedQuantityPerTrip: 1,
+            minimumTripCount: 2,
+            minimumSelectedNetworkTraversalSeconds: 8,
+        });
+    });
+
+    it('does not assign one destination slot to two different input items', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const sourceRecipe = inputDataset.production.stationRecipes[0]!;
+        const inputPlan = plan();
+        const sourceStep = inputPlan.productionSteps[0]!;
+        const input = logisticsBlueprint();
+        input.productionLogistics.supplies.push({
+            id: 'raw-2-supply',
+            itemId: 'raw-2',
+            sourcePlacementId: 'raw-storage',
+            quantity: 2,
+        });
+        const handler = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Handler'
+        )!;
+        handler.handlerRoutes[2]!.filter.itemIds.push('raw-2');
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            items: [...inputDataset.items, item('raw-2', 20)],
+            production: {
+                ...inputDataset.production,
+                stationRecipes: [{
+                    ...sourceRecipe,
+                    ingredients: [
+                        ...sourceRecipe.ingredients,
+                        { acceptedItemIds: ['raw-2'], quantity: 1 },
+                    ],
+                }, ...inputDataset.production.stationRecipes.slice(1)],
+            },
+        }).analyze(input, {
+            ...inputPlan,
+            requiredMaterialCost: 4,
+            purchaseCost: 4,
+            purchases: [
+                ...inputPlan.purchases,
+                {
+                    itemId: 'raw-2',
+                    requiredQuantity: 2,
+                    purchaseQuantity: 2,
+                    leftoverQuantity: 0,
+                    unitCost: 1,
+                    requiredCost: 2,
+                    purchaseCost: 2,
+                },
+            ],
+            productionSteps: [{
+                ...sourceStep,
+                inputs: [
+                    ...sourceStep.inputs,
+                    { itemId: 'raw-2', quantityPerBatch: 1, totalQuantity: 2 },
+                ],
+            }, ...inputPlan.productionSteps.slice(1)],
+        });
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.allocations).toContainEqual(expect.objectContaining({
+            itemId: 'raw',
+            destinationPlacementId: 'source-a',
+            allocatedQuantity: 1,
+        }));
+        expect(result.movementPlan.allocations).not.toContainEqual(expect.objectContaining({
+            itemId: 'raw-2',
+            destinationPlacementId: 'source-a',
+        }));
+        expect(result.movementPlan.unallocatedRequirements).toContainEqual({
+            scope: 'planned-purchased-input',
+            itemId: 'raw-2',
+            producerStepIndex: null,
+            consumerStepIndex: 0,
+            destinationPlacementId: 'source-a',
+            requiredQuantity: 1,
+            allocatedQuantity: 0,
+            unallocatedQuantity: 1,
+            reasons: ['destination-empty-capacity-insufficient'],
+        });
+    });
+
+    it('selects equal-distance endpoint routes by stable access-point order', () => {
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3, multipleTransitPoints: true })
+        ).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.allocations.find((allocation) =>
+            allocation.itemId === 'intermediate'
+        )?.selectedNetworkRoute).toMatchObject({
+            selectionBasis: 'minimum-network-distance-then-access-point-order',
+            sourceAccessPointIndex: 0,
+            destinationAccessPointIndex: 0,
+            networkDistance: 8,
+        });
+    });
+
+    it('routes a Handler supply even when no Botanist owns the source storage', () => {
+        const input = logisticsBlueprint();
+        const botanist = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Botanist'
+        )!;
+        botanist.supplyPlacementId = null;
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        const rawToSource = result.purchasedInputRequirements[0]?.supplyPairs.find((pair) =>
+            pair.destinationPlacementId === 'source-a'
+        );
+        expect(rawToSource?.movementCandidates[0]).toMatchObject({
+            kind: 'configured-handler-route',
+            networkRouteCandidateStatus: 'available',
+            networkRouteCandidates: [expect.objectContaining({
+                sourcePlacementId: 'raw-storage',
+                destinationPlacementId: 'source-a',
+            })],
+        });
+        expect(result.movementPlan.allocations).toContainEqual(expect.objectContaining({
+            scope: 'planned-purchased-input',
+            supplyId: 'raw-supply',
+            destinationPlacementId: 'source-a',
+            routeId: 'raw-to-source-a',
+            allocatedQuantity: 1,
+        }));
+    });
+
+    it('does not allocate more purchased input than the recorded source quantity', () => {
+        const input = logisticsBlueprint();
+        input.productionLogistics.supplies[0]!.quantity = 1;
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.purchasedInputRequirements[0]?.supplyQuantityCoverage).toBe('insufficient');
+        expect(result.movementPlan.allocations).toContainEqual(expect.objectContaining({
+            scope: 'planned-purchased-input',
+            destinationPlacementId: 'source-a',
+            allocatedQuantity: 1,
+        }));
+        expect(result.movementPlan.unallocatedRequirements).toContainEqual({
+            scope: 'planned-purchased-input',
+            itemId: 'raw',
+            producerStepIndex: null,
+            consumerStepIndex: 0,
+            destinationPlacementId: 'source-b',
+            requiredQuantity: 1,
+            allocatedQuantity: 0,
+            unallocatedQuantity: 1,
+            reasons: ['selected-allocation-order-exhausted-source-quantity'],
+        });
+    });
+
+    it('conserves separate purchased supplies and attributes each allocation', () => {
+        const input = logisticsBlueprint();
+        const handler = input.productionLogistics.employees.find(
+            (employee) => employee.employeeType === 'Handler'
+        )!;
+        handler.handlerRoutes[1] = {
+            id: 'raw-to-source-b',
+            sourcePlacementId: 'raw-storage',
+            destinationPlacementId: 'source-b',
+            filter: { mode: 'whitelist', itemIds: ['raw'] },
+        };
+        input.productionLogistics.supplies[0]!.quantity = 1;
+        input.productionLogistics.supplies.push({
+            id: 'raw-supply-2',
+            itemId: 'raw',
+            sourcePlacementId: 'raw-storage',
+            quantity: 1,
+        });
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3 })
+        ).analyze(input, plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.allocations.filter((allocation) =>
+            allocation.scope === 'planned-purchased-input'
+        ).map((allocation) => ({
+            supplyId: allocation.supplyId,
+            destinationPlacementId: allocation.destinationPlacementId,
+            allocatedQuantity: allocation.allocatedQuantity,
+        }))).toEqual([
+            {
+                supplyId: 'raw-supply',
+                destinationPlacementId: 'source-a',
+                allocatedQuantity: 1,
+            },
+            {
+                supplyId: 'raw-supply-2',
+                destinationPlacementId: 'source-b',
+                allocatedQuantity: 1,
+            },
+        ]);
+    });
+
+    it('keeps configured quantities unallocated when endpoint routes are unavailable', () => {
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            dataset({ employeeCapacity: 3, missingSourceTransitPoint: true })
+        ).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.status).toBe('unavailable');
+        expect(result.movementPlan.allocations).toEqual([]);
+        expect(result.movementPlan.unallocatedRequirements).toContainEqual({
+            scope: 'internally-produced-plan-dependency',
+            itemId: 'intermediate',
+            producerStepIndex: 0,
+            consumerStepIndex: 1,
+            destinationPlacementId: 'destination-a',
+            requiredQuantity: 2,
+            allocatedQuantity: 0,
+            unallocatedQuantity: 2,
+            reasons: ['network-route-unavailable'],
+        });
+    });
+
+    it('selects graph routes while keeping timing unavailable without walk speed', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            productionLogistics: {
+                ...inputDataset.productionLogistics,
+                employeeRoles: inputDataset.productionLogistics.employeeRoles.map((role) =>
+                    role.employeeType === 'Handler' ? { ...role, walkSpeed: null } : role
+                ),
+            },
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPlan.selectedNetworkTraversalTiming)
+            .toBe('partial-walk-speed-unavailable');
+        expect(result.movementPlan.allocations.find((allocation) =>
+            allocation.routeId === 'first-ready'
+        )).toMatchObject({
+            routeId: 'first-ready',
+            minimumSelectedNetworkTraversalSeconds: null,
+            selectedNetworkRoute: {
+                networkDistance: 8,
+                employeeWalkSpeed: null,
+                traversalTimeStatus: 'walk-speed-unavailable',
+                networkTraversalSecondsPerTrip: null,
+            },
+        });
     });
 
     it('reports unsupported ownership, limits, endpoints, filters, and shared assignments', () => {
@@ -839,6 +1202,78 @@ describe('blueprint production logistics', () => {
         }]);
     });
 
+    it('allocates a purchased grow-container input through the assigned Botanist supplies', () => {
+        const baseDataset = seedDataset();
+        const inputDataset = {
+            ...baseDataset,
+            items: [...baseDataset.items, item('soil', 20)],
+        };
+        const input = blueprint([
+            placement('pot-1', 'pot', 0),
+            placement('supply-1', 'storage', 4),
+        ]);
+        input.productionLogistics.employees = [{
+            id: 'botanist-1',
+            employeeType: 'Botanist',
+            assignedPotPlacementIds: ['pot-1'],
+            supplyPlacementId: 'supply-1',
+        }];
+        input.productionLogistics.supplies = [{
+            id: 'soil-supply',
+            itemId: 'soil',
+            sourcePlacementId: 'supply-1',
+            quantity: 1,
+        }];
+        const basePlan = seedPlan();
+        const result = new BlueprintProductionLogisticsAnalyzer(inputDataset).analyze(input, {
+            ...basePlan,
+            requiredMaterialCost: 1,
+            purchaseCost: 1,
+            purchases: [{
+                itemId: 'soil',
+                requiredQuantity: 1,
+                purchaseQuantity: 1,
+                leftoverQuantity: 0,
+                unitCost: 1,
+                requiredCost: 1,
+                purchaseCost: 1,
+            }],
+        });
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.purchasedInputRequirements[0]?.supplyPairs[0]?.movementCandidates[0])
+            .toMatchObject({
+                kind: 'botanist-station-specific',
+                employeeId: 'botanist-1',
+                networkRouteCandidateStatus: 'available',
+            });
+        expect(result.movementPlan).toMatchObject({
+            status: 'complete',
+            selectedNetworkTraversalTiming: 'complete',
+            allocations: [{
+                scope: 'planned-purchased-input',
+                itemId: 'soil',
+                supplyId: 'soil-supply',
+                sourcePlacementId: 'supply-1',
+                destinationPlacementId: 'pot-1',
+                employeeId: 'botanist-1',
+                movementKind: 'botanist-station-specific',
+                routeId: null,
+                allocatedQuantity: 1,
+                maximumMovedQuantityPerTrip: 1,
+                minimumTripCount: 1,
+                minimumSelectedNetworkTraversalSeconds: 8,
+                selectedNetworkRoute: {
+                    networkDistance: 16,
+                    employeeWalkSpeed: 2,
+                    networkTraversalSecondsPerTrip: 8,
+                },
+            }],
+            unallocatedRequirements: [],
+        });
+    });
+
     it('keeps task-internal routes unavailable without movement facts', () => {
         const inputDataset = dataset({ employeeCapacity: 3 });
         const scheduling = inputDataset.productionLogistics.employeeScheduling!;
@@ -921,6 +1356,17 @@ describe('blueprint production logistics', () => {
             destinationEmptyCapacity: null,
             destinationCapacityStatus: 'filter-evidence-unavailable',
             maximumMovedQuantityPerTrip: null,
+        });
+        expect(result.movementPlan.unallocatedRequirements).toContainEqual({
+            scope: 'internally-produced-plan-dependency',
+            itemId: 'intermediate',
+            producerStepIndex: 0,
+            consumerStepIndex: 1,
+            destinationPlacementId: 'destination-a',
+            requiredQuantity: 2,
+            allocatedQuantity: 0,
+            unallocatedQuantity: 2,
+            reasons: ['destination-capacity-evidence-unavailable'],
         });
     });
 

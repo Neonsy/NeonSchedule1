@@ -91,6 +91,15 @@ export class BlueprintProductionRoutingInputsAnalyzer {
             if (employee.employeeType === 'Botanist' && employee.supplyPlacementId !== null) {
                 placementIds.add(employee.supplyPlacementId);
             }
+            if (employee.employeeType === 'Handler') {
+                for (const route of employee.handlerRoutes) {
+                    placementIds.add(route.sourcePlacementId);
+                    placementIds.add(route.destinationPlacementId);
+                }
+            }
+        }
+        for (const supply of blueprint.productionLogistics.supplies) {
+            placementIds.add(supply.sourcePlacementId);
         }
         const placements = [...placementIds]
             .flatMap((placementId) => {

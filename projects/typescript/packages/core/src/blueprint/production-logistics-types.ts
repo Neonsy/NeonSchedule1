@@ -13,7 +13,9 @@ import type {
 } from '#core/data/production-logistics';
 import type { BlueprintProductionEndpointAccessDataset } from '#core/blueprint/production-endpoint-access';
 import type {
+    BlueprintProductionNetworkRouteCandidate,
     BlueprintProductionTransferAssignmentPair,
+    BlueprintProductionTransferRouteUnavailableReason,
     BlueprintProductionTransferResult,
 } from '#core/blueprint/production-transfers';
 
@@ -129,6 +131,11 @@ export interface BlueprintProductionTransferCapacity {
     readonly employeeInventoryCapacity: number;
     readonly destinationEmptyCapacity: number | null;
     readonly destinationCapacityStatus: 'calculated' | 'filter-evidence-unavailable';
+    readonly destinationCapacityBasis:
+        'normalized-station-input-slots' |
+        'normalized-storage-slots' |
+        'unavailable';
+    readonly destinationCompatibleInputSlotIndexes: readonly number[] | null;
     readonly maximumMovedQuantityPerTrip: number | null;
     readonly movedQuantityLimits: ProductionLogisticsRouteRules['movedQuantityLimits'];
     readonly currentSlotContents: 'not-evaluated';
@@ -139,12 +146,16 @@ export interface BlueprintProductionConfiguredRouteCandidate {
     readonly routeId: string;
     readonly storedOrderIndex: number;
     readonly networkRouteCandidateStatus: BlueprintProductionTransferAssignmentPair['networkRouteCandidateStatus'];
+    readonly unavailableReasons: readonly BlueprintProductionTransferRouteUnavailableReason[];
+    readonly networkRouteCandidates: readonly BlueprintProductionNetworkRouteCandidate[];
     readonly capacity: BlueprintProductionTransferCapacity;
 }
 
 export interface BlueprintProductionLogisticsRequirementPair {
     readonly sourcePlacementId: string;
+    readonly sourceAvailableQuantity: number;
     readonly destinationPlacementId: string;
+    readonly destinationRequiredQuantity: number;
     readonly configuredRouteCoverage: 'configured' | 'unconfigured';
     readonly configuredRouteCandidates: readonly BlueprintProductionConfiguredRouteCandidate[];
 }
@@ -170,13 +181,17 @@ export type BlueprintProductionInputMovementCandidate =
         readonly employeeId: string;
         readonly routeId: string;
         readonly storedOrderIndex: number;
-        readonly networkRouteCandidateStatus: 'not-evaluated';
+        readonly networkRouteCandidateStatus: 'available' | 'unavailable';
+        readonly unavailableReasons: readonly BlueprintProductionTransferRouteUnavailableReason[];
+        readonly networkRouteCandidates: readonly BlueprintProductionNetworkRouteCandidate[];
         readonly capacity: BlueprintProductionTransferCapacity;
     }
     | {
         readonly kind: 'botanist-station-specific';
         readonly employeeId: string;
-        readonly networkRouteCandidateStatus: 'not-applicable-same-employee-assignment';
+        readonly networkRouteCandidateStatus: 'available' | 'unavailable';
+        readonly unavailableReasons: readonly BlueprintProductionTransferRouteUnavailableReason[];
+        readonly networkRouteCandidates: readonly BlueprintProductionNetworkRouteCandidate[];
         readonly capacity: BlueprintProductionTransferCapacity;
     };
 
@@ -199,6 +214,91 @@ export interface BlueprintProductionPurchasedInputRequirement {
     readonly supplyQuantityCoverage: 'sufficient' | 'insufficient';
     readonly destinationAssignments: readonly BlueprintProductionInputDestinationAssignment[];
     readonly supplyPairs: readonly BlueprintProductionInputSupplyPair[];
+}
+
+export type BlueprintProductionMovementScope =
+    | 'internally-produced-plan-dependency'
+    | 'planned-purchased-input';
+
+export type BlueprintProductionUnallocatedMovementReason =
+    | 'configured-movement-unavailable'
+    | 'network-route-unavailable'
+    | 'destination-capacity-evidence-unavailable'
+    | 'destination-empty-capacity-insufficient'
+    | 'employee-inventory-capacity-unavailable'
+    | 'selected-allocation-order-exhausted-source-quantity';
+
+export interface BlueprintProductionSelectedNetworkRoute {
+    readonly selectionBasis: 'minimum-network-distance-then-access-point-order';
+    readonly sourceAccessPointIndex: number;
+    readonly sourceNetworkSampleIndex: number;
+    readonly destinationAccessPointIndex: number;
+    readonly destinationNetworkSampleIndex: number;
+    readonly networkDistance: number;
+    readonly distanceScope: 'navigation-graph-edges-only';
+    readonly employeeWalkSpeed: number | null;
+    readonly traversalTimeStatus: 'calculated' | 'walk-speed-unavailable';
+    readonly networkTraversalSecondsPerTrip: number | null;
+}
+
+export interface BlueprintProductionMovementAllocation {
+    readonly scope: BlueprintProductionMovementScope;
+    readonly itemId: string;
+    readonly producerStepIndex: number | null;
+    readonly consumerStepIndex: number;
+    readonly supplyId: string | null;
+    readonly sourcePlacementId: string;
+    readonly destinationPlacementId: string;
+    readonly employeeId: string;
+    readonly movementKind: 'configured-handler-route' | 'botanist-station-specific';
+    readonly routeId: string | null;
+    readonly storedOrderIndex: number | null;
+    readonly allocatedQuantity: number;
+    readonly maximumMovedQuantityPerTrip: number;
+    readonly minimumTripCount: number;
+    readonly selectedNetworkRoute: BlueprintProductionSelectedNetworkRoute;
+    readonly minimumSelectedNetworkTraversalSeconds: number | null;
+}
+
+export interface BlueprintProductionUnallocatedMovementRequirement {
+    readonly scope: BlueprintProductionMovementScope;
+    readonly itemId: string;
+    readonly producerStepIndex: number | null;
+    readonly consumerStepIndex: number;
+    readonly destinationPlacementId: string;
+    readonly requiredQuantity: number;
+    readonly allocatedQuantity: number;
+    readonly unallocatedQuantity: number;
+    readonly reasons: readonly BlueprintProductionUnallocatedMovementReason[];
+}
+
+export interface BlueprintProductionMovementPlan {
+    readonly status: 'complete' | 'partial' | 'unavailable';
+    readonly quantityAllocation:
+        'deterministic-static-under-empty-destination-capacity';
+    readonly destinationCapacityScope:
+        'per-consumer-step-destination-compatible-input-slot-reservations';
+    readonly destinationSlotReservation:
+        'consumer-step-destination-least-flexible-item-first';
+    readonly currentSourceAndDestinationContents: 'not-evaluated';
+    readonly movementSelection:
+        'blueprint-employee-order-then-handler-stored-order-then-source-order';
+    readonly allocationOptimality:
+        'not-optimized-preserves-production-and-configured-route-priority';
+    readonly networkRouteSelection:
+        'minimum-network-distance-then-access-point-order';
+    readonly selectedNetworkTraversalTiming:
+        'complete' | 'partial-walk-speed-unavailable' | 'not-applicable';
+    readonly timingScope:
+        'selected-source-to-destination-network-edges-at-per-item-maximum-load';
+    readonly aggregateTraversalTiming:
+        'not-composed-cross-item-trip-sharing-return-legs-task-order-and-concurrency';
+    readonly endpointSnapTraversal: 'not-included-not-proven-walkable';
+    readonly staticClearanceSufficiency: 'not-evaluated';
+    readonly dynamicObstacleClearance: 'not-evaluated';
+    readonly allocations: readonly BlueprintProductionMovementAllocation[];
+    readonly unallocatedRequirements:
+        readonly BlueprintProductionUnallocatedMovementRequirement[];
 }
 
 export type BlueprintProductionEmployeeServiceTask =
@@ -433,8 +533,9 @@ export type BlueprintProductionLogisticsResult =
         readonly configuration: BlueprintProductionLogisticsConfiguration;
         readonly productionRequirementScope: 'internally-produced-plan-dependencies';
         readonly purchasedInputSupplyScope: 'first-production-consumers';
-        readonly routeQuantityAllocation: 'not-evaluated';
-        readonly transferTiming: 'not-evaluated';
+        readonly routeQuantityAllocation: 'evaluated-static-empty-destination-capacity';
+        readonly transferTiming: 'selected-network-traversals-only';
+        readonly movementPlan: BlueprintProductionMovementPlan;
         readonly employeeExecution: BlueprintProductionEmployeeExecution;
         readonly requirements: readonly BlueprintProductionLogisticsRequirement[];
         readonly purchasedInputRequirements: readonly BlueprintProductionPurchasedInputRequirement[];
