@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.24";
+    public const string ExporterVersion = "0.0.25";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();
@@ -136,6 +136,8 @@ public sealed class ExporterMod : MelonMod
                 $"{report.Discovery.NpcSchedules.Sum(x => x.Actions.Count(a => a.Location is not null))} located actions, " +
                 $"{report.Discovery.Navigation.Samples.Count} navigation samples with " +
                 $"{report.Discovery.Navigation.Edges.Count / 2} verified edges, " +
+                $"{report.Discovery.PlayerNavigation.Links.Count} loaded navigation links, " +
+                $"{report.Discovery.PlayerNavigation.RouteProbes.Count} player route probes, " +
                 $"{report.Discovery.VisualAssets.Meshes.Count} mesh assets, " +
                 $"{report.Discovery.VisualMeshFileCount} exported mesh files, " +
                 $"{report.Discovery.VisualTextureFileCount} exported material textures, " +

@@ -211,6 +211,93 @@ internal sealed class DiscoveryNavigationSnapshot : DiscoveryNavigationGraphSnap
 internal sealed class DiscoveryPlayerNavigationSnapshot : DiscoveryNavigationGraphSnapshot
 {
     public string Applicability { get; set; } = string.Empty;
+    public string LinkApplicability { get; set; } = string.Empty;
+    public List<DiscoveryNavigationLinkSnapshot> Links { get; set; } = new();
+    public string LinkError { get; set; } = string.Empty;
+    public string RouteProbeMethod { get; set; } = string.Empty;
+    public string RouteProbeApplicability { get; set; } = string.Empty;
+    public float RouteEndpointMaxSampleDistance { get; set; }
+    public float ControllerClearanceSampleSpacing { get; set; }
+    public List<DiscoveryPlayerRouteProbeSnapshot> RouteProbes { get; set; } = new();
+    public string RouteProbeError { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryNavigationLinkSnapshot
+{
+    public string Source { get; init; } = string.Empty;
+    public string ObjectPath { get; init; } = string.Empty;
+    public string SceneName { get; init; } = string.Empty;
+    public bool Enabled { get; init; }
+    public bool ActiveInHierarchy { get; init; }
+    public int? AgentTypeId { get; init; }
+    public bool? MatchesPlayerAgent { get; init; }
+    public VectorSnapshot3? StartPosition { get; init; }
+    public VectorSnapshot3? EndPosition { get; init; }
+    public float? Width { get; init; }
+    public float CostModifier { get; init; }
+    public bool Bidirectional { get; init; }
+    public int Area { get; init; }
+    public bool AutoUpdatePositions { get; init; }
+    public bool? Activated { get; init; }
+    public bool? Occupied { get; init; }
+    public string Error { get; init; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerRouteProbeSnapshot
+{
+    public string PropertyCode { get; init; } = string.Empty;
+    public string ShopCode { get; init; } = string.Empty;
+    public string ShopInstanceKey { get; init; } = string.Empty;
+    public VectorSnapshot3 RequestedStart { get; init; } = new();
+    public VectorSnapshot3? SampledStart { get; set; }
+    public float? StartSampleDistance { get; set; }
+    public List<DiscoveryPlayerRouteCandidateSnapshot> Candidates { get; set; } = new();
+    public string Outcome { get; set; } = string.Empty;
+    public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerRouteCandidateSnapshot
+{
+    public string EndpointKind { get; init; } = string.Empty;
+    public int EndpointIndex { get; init; }
+    public VectorSnapshot3 RequestedEnd { get; init; } = new();
+    public VectorSnapshot3? SampledEnd { get; set; }
+    public float? EndSampleDistance { get; set; }
+    public bool CalculatePathReturned { get; set; }
+    public string PathStatus { get; set; } = string.Empty;
+    public float? PathLength { get; set; }
+    public List<VectorSnapshot3> Corners { get; set; } = new();
+    public bool IsSelected { get; set; }
+    public DiscoveryPlayerControllerRouteCompatibilitySnapshot? ControllerCompatibility { get; set; }
+    public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerControllerRouteCompatibilitySnapshot
+{
+    public string Method { get; init; } = string.Empty;
+    public string Applicability { get; init; } = string.Empty;
+    public string Limitation { get; init; } = string.Empty;
+    public float SampleSpacing { get; init; }
+    public float ControllerRadius { get; init; }
+    public float AgentRadius { get; init; }
+    public float RequiredAdditionalRadius { get; init; }
+    public float ControllerHeight { get; init; }
+    public float AgentHeight { get; init; }
+    public float ControllerSlopeLimit { get; init; }
+    public float AgentMaximumSlope { get; init; }
+    public float ControllerStepOffset { get; init; }
+    public float AgentStepHeight { get; init; }
+    public int BoundarySampleCount { get; set; }
+    public int BoundaryQueryFailureCount { get; set; }
+    public int RouteSurfaceSampleFailureCount { get; set; }
+    public float? MinimumBoundaryDistance { get; set; }
+    public float MaximumObservedAbsoluteRise { get; set; }
+    public float MaximumObservedElevationExcess { get; set; }
+    public bool RadiusMarginSatisfied { get; set; }
+    public bool HeightEnvelopeSatisfied { get; set; }
+    public bool RouteElevationSatisfied { get; set; }
+    public bool SupportedByProbe { get; set; }
+    public string Error { get; set; } = string.Empty;
 }
 
 internal sealed class DiscoveryPlayerMovementSnapshot

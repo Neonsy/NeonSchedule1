@@ -58,10 +58,14 @@ internal static partial class DiscoveryCollector
         progress?.Invoke("Discovery 8/9: alternate presentation asset candidates.");
         CollectPresentationCandidates(items, assets, result);
         progress?.Invoke($"Discovery 8/9 complete: {result.PresentationAssetCandidates.Count} candidates.");
-        progress?.Invoke("Discovery 9/9: shop locations, delivery bays, and access-zone proximity.");
+        progress?.Invoke(
+            "Discovery 9/9: shop locations, delivery bays, access-zone proximity, and player route probes.");
         CollectShops(result);
         AssociateTimedAccessZones(result);
-        progress?.Invoke($"Discovery 9/9 complete: {result.ShopDetails.Count} shops.");
+        CollectPlayerRouteProbes(result, progress);
+        progress?.Invoke(
+            $"Discovery 9/9 complete: {result.ShopDetails.Count} shops and " +
+            $"{result.PlayerNavigation.RouteProbes.Count} player route probes.");
         result.VisualAssets = visualAssets.CreateSnapshot();
         result.VisualMeshFileCount = result.VisualAssets.Meshes.Count(mesh =>
             !string.IsNullOrWhiteSpace(mesh.Asset?.RelativePath));

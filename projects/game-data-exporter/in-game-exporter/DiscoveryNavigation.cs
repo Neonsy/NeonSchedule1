@@ -18,6 +18,7 @@ internal static partial class DiscoveryCollector
     {
         ConfigureNavigationGraph(result.Navigation);
         ConfigureNavigationGraph(result.PlayerNavigation);
+        ConfigurePlayerRouteProbe(result.PlayerNavigation);
         result.PlayerNavigation.Applicability =
             "candidate-humanoid-navmesh-not-native-player-path-contract";
         CollectPlayerMovement(result.PlayerMovement);
@@ -115,13 +116,15 @@ internal static partial class DiscoveryCollector
                 "employee",
                 progress);
         }
-        if (PlayerNavigationAgentTypeId(
-                result.PlayerNavigation,
-                result.Navigation.Surfaces) is int playerAgentTypeId)
+        var playerAgentTypeId = PlayerNavigationAgentTypeId(
+            result.PlayerNavigation,
+            result.Navigation.Surfaces);
+        CollectPlayerNavigationLinks(result.PlayerNavigation, playerAgentTypeId);
+        if (playerAgentTypeId is int candidatePlayerAgentTypeId)
         {
             SampleNavigationGraph(
                 result.PlayerNavigation,
-                playerAgentTypeId,
+                candidatePlayerAgentTypeId,
                 "candidate player",
                 progress);
         }

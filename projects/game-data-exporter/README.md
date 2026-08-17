@@ -16,7 +16,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.24` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.25` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
