@@ -17,6 +17,44 @@ const assets: VerifiedAssets = {
 };
 
 describe('buildable and property-layout normalization', () => {
+    it('normalizes omitted trash metadata to null', () => {
+        const integrity = new Integrity();
+        const buildables = normalizeBuildables(
+            {
+                discovery: {
+                    buildables: [
+                        {
+                            itemId: 'television',
+                            runtimeType: 'Game.GridItem',
+                            placementKind: 'grid',
+                            holdDistance: 3.5,
+                            footprintWidth: null,
+                            footprintHeight: null,
+                            validSurfaceTypes: [],
+                            buildPoint: transform('BuildPoint'),
+                            boundingCollider: collider('built-item', 'Bounds'),
+                            footprintTiles: [],
+                            componentTypes: [],
+                            colliders: [],
+                            temperatureEmitters: [],
+                            interactionPoints: [],
+                            isTransitEntity: false,
+                            transitAccessPoints: [],
+                            proceduralTiles: [],
+                            visuals: { renderers: [], meshes: [] },
+                        },
+                    ],
+                },
+            },
+            assets,
+            new Set(['television']),
+            integrity
+        );
+
+        expect(integrity.errors).toEqual([]);
+        expect(buildables[0]?.trash).toBeNull();
+    });
+
     it('keeps stable placement geometry and resolves visual asset references', () => {
         const integrity = new Integrity();
         const buildables = normalizeBuildables(

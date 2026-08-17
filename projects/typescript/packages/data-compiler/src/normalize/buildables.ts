@@ -130,7 +130,7 @@ function normalizeBuildable(
             .map((point, index) =>
                 normalizeTransform(point, `${path}.transitAccessPoints[${index}]`)
             ),
-        trash: trashRaw === null
+        trash: trashRaw === undefined || trashRaw === null
             ? null
             : {
                 usableByCleaners: booleanField(
