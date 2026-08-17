@@ -15,7 +15,7 @@ internal static partial class DiscoveryCollector
         navigation.LinkApplicability =
             "loaded-scene-link-inventory-link-use-by-player-charactercontroller-not-established";
         navigation.RouteProbeMethod =
-            "unity-navmesh-calculate-path-with-humanoid-agent-query-filter";
+            "unity-navmesh-calculate-path-with-explicit-humanoid-agent";
         navigation.RouteProbeApplicability =
             "candidate-property-to-physical-shop-topology-and-controller-envelope-not-native-player-movement";
         navigation.RouteEndpointMaxSampleDistance =
@@ -183,12 +183,6 @@ internal static partial class DiscoveryCollector
             return;
         }
 
-        var filter = new NavMeshQueryFilter
-        {
-            agentTypeID = navigation.Agent.TypeId,
-            areaMask = NavMesh.AllAreas,
-        };
-
         for (var propertyIndex = 0; propertyIndex < properties.Count; propertyIndex++)
         {
             var property = properties[propertyIndex];
@@ -232,8 +226,7 @@ internal static partial class DiscoveryCollector
                     route.Candidates.Add(ProbePlayerRouteCandidate(
                         startHit.position,
                         shop.Endpoints[endpointIndex],
-                        navigation,
-                        filter));
+                        navigation));
                 }
 
                 var selected = route.Candidates
@@ -259,8 +252,7 @@ internal static partial class DiscoveryCollector
                 selected.ControllerCompatibility = ProbePlayerControllerCompatibility(
                     selected.Corners,
                     navigation,
-                    result.PlayerMovement,
-                    filter);
+                    result.PlayerMovement);
                 route.Outcome = selected.ControllerCompatibility.SupportedByProbe
                     ? "complete-path-controller-envelope-supported-by-probe"
                     : "complete-path-controller-envelope-not-supported-by-probe";
@@ -275,8 +267,7 @@ internal static partial class DiscoveryCollector
     private static DiscoveryPlayerRouteCandidateSnapshot ProbePlayerRouteCandidate(
         Vector3 start,
         PlayerRouteEndpoint endpoint,
-        DiscoveryPlayerNavigationSnapshot navigation,
-        NavMeshQueryFilter filter)
+        DiscoveryPlayerNavigationSnapshot navigation)
     {
         var candidate = new DiscoveryPlayerRouteCandidateSnapshot
         {
@@ -302,11 +293,15 @@ internal static partial class DiscoveryCollector
                 endpoint.Position,
                 endHit.position);
             var path = new NavMeshPath();
-            candidate.CalculatePathReturned = NavMesh.CalculatePath(
+            // Avoid retaining the generated IL2CPP query-filter wrapper.
+            // Null costs preserve the filter's default area-cost behavior.
+            candidate.CalculatePathReturned = NavMesh.CalculatePathFilterInternal(
                 start,
                 endHit.position,
-                filter,
-                path);
+                path,
+                navigation.Agent.TypeId,
+                NavMesh.AllAreas,
+                null!);
             candidate.PathStatus = path.status.ToString();
             var corners = path.corners;
             for (var cornerIndex = 0; cornerIndex < corners.Length; cornerIndex++)
@@ -326,8 +321,7 @@ internal static partial class DiscoveryCollector
         ProbePlayerControllerCompatibility(
             IReadOnlyList<VectorSnapshot3> corners,
             DiscoveryPlayerNavigationSnapshot navigation,
-            DiscoveryPlayerMovementSnapshot movement,
-            NavMeshQueryFilter filter)
+            DiscoveryPlayerMovementSnapshot movement)
     {
         var controller = movement.LoadedController;
         var probe = new DiscoveryPlayerControllerRouteCompatibilitySnapshot
@@ -362,6 +356,9 @@ internal static partial class DiscoveryCollector
             return probe;
         }
 
+        const float tolerance = 1e-4f;
+        probe.HeightEnvelopeSatisfied =
+            controller.Height <= navigation.Agent.Height + tolerance;
         try
         {
             var (samples, routeSurfaceSampleFailureCount) = SamplePlayerRoute(
@@ -373,7 +370,11 @@ internal static partial class DiscoveryCollector
             var minimumBoundaryDistance = float.PositiveInfinity;
             for (var index = 0; index < samples.Count; index++)
             {
-                if (NavMesh.FindClosestEdge(samples[index], out var hit, filter))
+                if (NavMesh.FindClosestEdgeFilter(
+                        samples[index],
+                        out var hit,
+                        navigation.Agent.TypeId,
+                        NavMesh.AllAreas))
                 {
                     probe.BoundarySampleCount++;
                     minimumBoundaryDistance = MathF.Min(
@@ -408,13 +409,10 @@ internal static partial class DiscoveryCollector
                     absoluteRise - allowedRise);
             }
 
-            const float tolerance = 1e-4f;
             probe.RadiusMarginSatisfied =
                 probe.BoundaryQueryFailureCount == 0 &&
                 probe.MinimumBoundaryDistance is float minimumDistance &&
                 minimumDistance + tolerance >= probe.RequiredAdditionalRadius;
-            probe.HeightEnvelopeSatisfied =
-                controller.Height <= navigation.Agent.Height + tolerance;
             probe.RouteElevationSatisfied =
                 probe.RouteSurfaceSampleFailureCount == 0 &&
                 probe.MaximumObservedElevationExcess <= tolerance;
