@@ -134,7 +134,7 @@ export class BlueprintProductionLogisticsConfigurationAnalyzer {
             valid: issues.length === 0,
             propertyEmployeeCapacity,
             employeeCount: employees.length,
-            assignmentOwnership: 'exclusive',
+            stationAssignmentOwnership: 'exclusive',
             routeSelection: this.#catalog.routeRules.selection,
             stationMovementScope: 'employee-specific-not-configured-handler-routes',
             employees,

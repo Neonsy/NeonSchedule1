@@ -96,6 +96,28 @@ describe('blueprint validation', () => {
         }));
     });
 
+    it('allows an eligible bin to be assigned to more than one Cleaner', () => {
+        const input = cleanerDataset();
+        const placements = cleanerPlacements(1, 'trash-can');
+        const result = new BlueprintCleanerTrashAnalyzer(input).analyze({
+            ...blueprint(placements),
+            productionLogistics: {
+                employees: ['cleaner-1', 'cleaner-2'].map((id) => ({
+                    id,
+                    employeeType: 'Cleaner' as const,
+                    assignedBinPlacementIds: [placements[0]!.id],
+                })),
+                supplies: [],
+            },
+        });
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.valid).toBe(true);
+        expect(result.issues).toEqual([]);
+        expect(result.employees.map(({ configuredBinCount }) => configuredBinCount)).toEqual([1, 1]);
+    });
+
     it('resolves rotated grid footprints to exact property tiles', () => {
         const validator = new BlueprintValidator(dataset());
         const result = validator.validate(blueprint([

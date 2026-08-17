@@ -263,6 +263,7 @@ describe('blueprint production logistics', () => {
         expect(result.configuration).toMatchObject({
             valid: true,
             employeeCount: 3,
+            stationAssignmentOwnership: 'exclusive',
             routeSelection: 'stored-order-first-ready',
             stationMovementScope: 'employee-specific-not-configured-handler-routes',
             employees: [

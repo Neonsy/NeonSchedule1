@@ -113,7 +113,7 @@ export interface BlueprintProductionLogisticsConfiguration {
     readonly valid: boolean;
     readonly propertyEmployeeCapacity: number | null;
     readonly employeeCount: number;
-    readonly assignmentOwnership: 'exclusive';
+    readonly stationAssignmentOwnership: 'exclusive';
     readonly routeSelection: 'stored-order-first-ready';
     readonly stationMovementScope: 'employee-specific-not-configured-handler-routes';
     readonly employees: readonly BlueprintProductionEmployeeLogistics[];
