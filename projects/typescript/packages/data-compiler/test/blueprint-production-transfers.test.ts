@@ -3,17 +3,22 @@ import { describe, expect, it } from 'vitest';
 import {
     BRICK_PRESS_OPERATION_RULES,
     PACKAGING_OPERATION_RULES,
+    BlueprintProductionBusinessAssessmentAnalyzer,
     BlueprintProductionLogisticsAnalyzer,
     BlueprintProductionTransferAnalyzer,
+    composeFinishedRecipeElapsedLifecycle,
     type BlueprintDocument,
     type BlueprintProductionLogisticsDataset,
     type Buildable,
     type Collider,
+    type FinishedRecipeProductionPlan,
+    type FinishedRecipeRealizedProfitInput,
     type NavigationGraph,
     type ProductionBatchPlan,
     type ProductionCatalog,
     type Property,
     type PropertyLayout,
+    type Shop,
     type Transform,
     type Vector3,
 } from '@neonschedule1/core';
@@ -1632,6 +1637,289 @@ describe('blueprint production logistics', () => {
     });
 });
 
+describe('blueprint production business assessment', () => {
+    it('composes existing blueprint costs, wages, capacity, schedule, and blockers', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const result = new BlueprintProductionBusinessAssessmentAnalyzer({
+            ...inputDataset,
+            shops: [businessShop([
+                businessListing('source-station', 100),
+                businessListing('destination-station', 200),
+                businessListing('storage', 50),
+            ])],
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result).toMatchObject({
+            scope: 'blueprint-base-production-business-assessment',
+            constructionCost: {
+                status: 'complete',
+                proof: 'exact-minimum-listed-cost',
+                pricedSubtotal: 650,
+                minimumListedCost: 650,
+            },
+            configuredLabor: {
+                status: 'complete',
+                proof: 'exact',
+                knownDailyWage: 600,
+                totalDailyWage: 600,
+            },
+            installedCapacity: {
+                status: 'partial',
+                proof: 'exact-installed-unit-counts',
+                totalInstalledUnitCount: 4,
+            },
+            scheduledDuration: {
+                status: 'complete',
+                proof: 'exact-selected-schedule',
+                scheduledElapsedMinutes: 5,
+                selectedScheduleOptimality: 'not-proven',
+                employeeExecutionComposition: 'not-applied',
+            },
+            profit: {
+                status: 'not-supplied',
+                expectationBasis: 'not-modeled-realized-sale-evidence-only',
+                constructionCostTreatment: 'independent-not-automatically-attributed',
+                realizedProfit: null,
+            },
+            operationalFeasibility: {
+                status: 'blocked',
+                placement: 'clear',
+                schedule: 'clear',
+                logistics: 'clear',
+                movement: 'blocked',
+                physical: 'clear',
+                limitations: [
+                    'runtime-storage-contents-not-evaluated',
+                    'employee-task-sequence-and-readiness-not-evaluated',
+                    'aggregate-movement-time-not-composed',
+                    'dynamic-obstacles-not-evaluated',
+                ],
+            },
+        });
+        expect(result.installedCapacity.equipment).toEqual([
+            {
+                itemId: 'destination-station',
+                installedUnitCount: 2,
+                itemLimitPerUnit: null,
+                installedItemLimit: null,
+                itemLimitProof: 'not-recorded',
+            },
+            {
+                itemId: 'source-station',
+                installedUnitCount: 2,
+                itemLimitPerUnit: null,
+                installedItemLimit: null,
+                itemLimitProof: 'not-recorded',
+            },
+        ]);
+        expect(result.operationalFeasibility.unallocatedMovementRequirements).not.toEqual([]);
+    });
+
+    it('keeps unlisted construction items and unavailable role wages incomplete', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const result = new BlueprintProductionBusinessAssessmentAnalyzer({
+            ...inputDataset,
+            productionLogistics: {
+                ...inputDataset.productionLogistics,
+                employeeRoles: inputDataset.productionLogistics.employeeRoles.filter((role) =>
+                    role.employeeType !== 'Handler'
+                ),
+            },
+            shops: [businessShop([businessListing('storage', 50)])],
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.constructionCost).toEqual({
+            status: 'incomplete',
+            proof: 'partial-listed-subtotal',
+            source: 'blueprint-item-cost-summary',
+            pricingBasis: 'minimum-listed-price-per-item',
+            pricedSubtotal: 50,
+            minimumListedCost: null,
+            unlistedItemIds: ['destination-station', 'source-station'],
+        });
+        expect(result.configuredLabor).toMatchObject({
+            status: 'incomplete',
+            proof: 'incomplete',
+            knownDailyWage: 400,
+            totalDailyWage: null,
+            missingWageEmployeeIds: ['handler-1'],
+        });
+        expect(result.operationalFeasibility).toMatchObject({
+            status: 'blocked',
+            logistics: 'blocked',
+            logisticsIssueCodes: ['employee-role-unavailable'],
+        });
+    });
+
+    it('distinguishes unavailable movement evidence from a proven operational block', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const destination = inputDataset.productionLogistics.stations.find((station) =>
+            station.itemId === 'destination-station'
+        )!;
+        destination.inputSlots[0]!.filters = [{
+            nativeType: 'ScheduleOne.ItemFramework.ItemFilter_Dryable',
+            isWhitelist: null,
+            itemIds: [],
+            categories: [],
+        }];
+        const inputBlueprint = logisticsBlueprint();
+        const handler = inputBlueprint.productionLogistics.employees.find((employee) =>
+            employee.employeeType === 'Handler'
+        )!;
+        handler.handlerRoutes.push(
+            {
+                id: 'source-b-to-destination-b',
+                sourcePlacementId: 'source-b',
+                destinationPlacementId: 'destination-b',
+                filter: { mode: 'whitelist', itemIds: ['intermediate'] },
+            },
+            {
+                id: 'raw-to-source-b',
+                sourcePlacementId: 'raw-storage',
+                destinationPlacementId: 'source-b',
+                filter: { mode: 'whitelist', itemIds: ['raw'] },
+            }
+        );
+        const result = new BlueprintProductionBusinessAssessmentAnalyzer({
+            ...inputDataset,
+            shops: [],
+        }).analyze(inputBlueprint, plan());
+
+        expect(result.operationalFeasibility).toMatchObject({
+            status: 'incomplete',
+            placement: 'clear',
+            schedule: 'clear',
+            logistics: 'clear',
+            movement: 'incomplete',
+            physical: 'clear',
+        });
+        expect(result.operationalFeasibility.unallocatedMovementRequirements)
+            .toContainEqual(expect.objectContaining({
+                reasons: ['destination-capacity-evidence-unavailable'],
+            }));
+    });
+
+    it('keeps every dependent business value unavailable for an invalid blueprint', () => {
+        const inputBlueprint = {
+            ...blueprint([]),
+            datasetSha256: 'b'.repeat(64),
+        };
+        const result = new BlueprintProductionBusinessAssessmentAnalyzer({
+            ...datasetWithPlacementCollidersAtZ(100),
+            shops: [],
+        }).analyze(inputBlueprint, emptyProductionPlan());
+
+        expect(result).toMatchObject({
+            constructionCost: { status: 'unavailable', minimumListedCost: null },
+            configuredLabor: { status: 'unavailable', totalDailyWage: null },
+            installedCapacity: { status: 'unavailable', totalInstalledUnitCount: null },
+            scheduledDuration: { status: 'unavailable', scheduledElapsedMinutes: null },
+            operationalFeasibility: {
+                status: 'blocked',
+                placement: 'blocked',
+                placementIssueCodes: ['dataset-mismatch'],
+                schedule: 'blocked',
+                logistics: 'blocked',
+                movement: 'not-applicable',
+                physical: 'not-applicable',
+            },
+        });
+    });
+
+    it('reports exact realized profit only from matching complete lifecycle evidence', () => {
+        const inputPlan = emptyProductionPlan();
+        const profitInput = completeBusinessProfitInput(inputPlan);
+        const inputBlueprint = blueprint([placement('storage-one', 'storage', 0)]);
+        const analyzer = new BlueprintProductionBusinessAssessmentAnalyzer({
+            ...datasetWithPlacementCollidersAtZ(100),
+            shops: [businessShop([businessListing('storage', 50)])],
+        });
+        const result = analyzer.analyze(inputBlueprint, inputPlan, profitInput);
+
+        expect(result).toMatchObject({
+            constructionCost: {
+                status: 'complete',
+                minimumListedCost: 50,
+            },
+            configuredLabor: {
+                status: 'complete',
+                totalDailyWage: 0,
+            },
+            installedCapacity: {
+                status: 'complete',
+                totalInstalledUnitCount: 0,
+                equipment: [],
+            },
+            scheduledDuration: {
+                status: 'complete',
+                scheduledElapsedMinutes: 0,
+            },
+            profit: {
+                status: 'complete',
+                proof: 'exact',
+                recordedRevenue: 100,
+                attributedCost: 30,
+                realizedProfit: 70,
+                profitPerGameMinute: 14,
+            },
+            operationalFeasibility: {
+                status: 'clear',
+                movement: 'not-applicable',
+                physical: 'not-applicable',
+                limitations: [],
+            },
+        });
+
+        const incompleteRevenue = analyzer.analyze(inputBlueprint, inputPlan, {
+            ...profitInput,
+            revenue: { ...profitInput.revenue, coverage: 'partial' },
+        });
+        expect(incompleteRevenue.profit).toMatchObject({
+            status: 'unavailable',
+            proof: 'incomplete',
+            recordedRevenue: 100,
+            attributedCost: 30,
+            realizedProfit: null,
+            profitPerGameMinute: null,
+        });
+        expect(incompleteRevenue.sourceResults.realizedProfit?.gaps)
+            .toContainEqual({ code: 'realized-revenue-incomplete' });
+
+        const incompleteCosts = analyzer.analyze(inputBlueprint, inputPlan, {
+            ...profitInput,
+            costs: {
+                ...profitInput.costs,
+                coverage: 'partial',
+                treatments: [{ category: 'materials', treatment: 'included', amount: 20 }],
+            },
+        });
+        expect(incompleteCosts.profit).toMatchObject({
+            status: 'unavailable',
+            proof: 'incomplete',
+            attributedCost: 20,
+            realizedProfit: null,
+            profitPerGameMinute: null,
+        });
+        expect(incompleteCosts.sourceResults.realizedProfit?.gaps)
+            .toContainEqual({ code: 'attributed-cost-coverage-incomplete' });
+
+        expect(() => analyzer.analyze(inputBlueprint, {
+            ...inputPlan,
+            targetQuantity: 3,
+        }, profitInput)).toThrow('does not match the blueprint production plan');
+        expect(() => analyzer.analyze(inputBlueprint, inputPlan, {
+            ...profitInput,
+            lifecycleInput: {
+                ...profitInput.lifecycleInput,
+                readiness: {
+                    ...profitInput.lifecycleInput.readiness,
+                    propertyId: 'other-property',
+                },
+            },
+        })).toThrow('does not match the blueprint property');
+    });
+});
+
 interface DatasetOptions {
     readonly employeeCapacity?: number;
     readonly missingSourceTransitPoint?: boolean;
@@ -2361,4 +2649,245 @@ function transform(path: string, x: number): Transform {
 
 function vector(x: number, y: number, z: number): Vector3 {
     return { x, y, z };
+}
+
+function businessShop(listings: Shop['listings']): Shop {
+    return {
+        schema: 'neonschedule1-shop-1',
+        code: 'business-shop',
+        name: 'Business shop',
+        description: '',
+        paymentType: 'Cash',
+        sceneName: 'Main',
+        locationSource: 'shop-position',
+        position: null,
+        rotation: null,
+        holderPersonId: null,
+        openTime: null,
+        closeTime: null,
+        deliveryBayPositions: [],
+        listings,
+    };
+}
+
+function businessListing(itemId: string, price: number): Shop['listings'][number] {
+    return { itemId, price, defaultStock: null, canBeDelivered: false };
+}
+
+function emptyProductionPlan(): ProductionBatchPlan {
+    return {
+        dataset: { gameVersion, datasetSha256 },
+        targetItemId: 'final',
+        targetQuantity: 2,
+        productionSteps: [],
+        purchases: [],
+        totalProcessMinutes: 0,
+        requiredMaterialCost: 0,
+        purchaseCost: 0,
+    };
+}
+
+function completeBusinessProfitInput(
+    baseProductPlan: ProductionBatchPlan
+): FinishedRecipeRealizedProfitInput {
+    const productionPlan: FinishedRecipeProductionPlan = {
+        dataset: { ...baseProductPlan.dataset },
+        recipe: {
+            ruleProfile: { kind: 'standard' },
+            productId: baseProductPlan.targetItemId,
+            ingredientIds: [],
+            effectIds: [],
+            productValue: 50,
+            baseProductCost: 10,
+            baseProductCostBasis: 'base-purchase-price',
+            ingredientCost: 0,
+            totalCost: 10,
+            netValue: 40,
+            ingredientCount: 0,
+        },
+        finishedQuantity: baseProductPlan.targetQuantity,
+        baseProductPlan,
+        growAdditiveSteps: [],
+        ingredientDemands: [],
+        purchases: [],
+        mixingSteps: [],
+        dryingStep: null,
+        packagingStep: null,
+        brickPressingStep: null,
+        equipment: {
+            quantityBasis: 'minimum-one-per-selected-item-for-serial-plan',
+            selectionProof: 'exact',
+            unresolvedProductionRouteIds: [],
+            purchaseCostProof: 'exact',
+            requirements: [],
+            totalRequiredPurchaseCost: 0,
+        },
+        inventory: {
+            allocationOrder: 'reserve-equipment-before-recurring-materials',
+            demandProof: 'exact',
+            inventoryProof: 'supplied',
+            quantityProof: 'exact',
+            costProof: 'exact',
+            requirements: [],
+            totalMaterialReorderCost: 0,
+            totalEquipmentReorderCost: 0,
+            totalReorderCost: 0,
+            requiredStackCount: 0,
+            currentStackCount: 0,
+            reorderStackCount: 0,
+            postReorderStackCount: 0,
+            additionalStackCount: 0,
+        },
+        duration: {
+            baseProductProcessMinutes: 0,
+            mixingProcessMinutes: 0,
+            dryingProcessMinutes: null,
+            packagingEmployeeRealSeconds: null,
+            brickPressingEmployeeRealSeconds: null,
+            knownProcessMinutes: 0,
+            modeledTotalProcessMinutes: 0,
+        },
+        cost: {
+            recipeEstimatedUnitMaterialCost: 10,
+            recipeEstimatedMaterialCost: 20,
+            requiredMaterialCost: 0,
+            materialReorderCost: 0,
+            equipmentReorderCost: 0,
+            combinedReorderCost: 0,
+        },
+        evidence: {
+            modeledScope: 'base-product-and-ordered-mixing',
+            modeledQuantityProof: 'exact',
+            materialCostCoverage: 'modeled-materials-only',
+            modeledDurationProof: 'complete',
+            finishedLifecycleProof: 'partial',
+            missingFacts: [],
+            dryingApplicability: 'not-applicable',
+            packagingApplicability: 'not-applicable',
+            brickPressingApplicability: 'not-applicable',
+            unmodeledOperations: [],
+        },
+    };
+    const lifecycleInput = {
+        readiness: {
+            propertyId: 'warehouse',
+            productionPlan,
+            transferPlan: {
+                objective: 'maximize-transferred-reorder-quantity-per-item' as const,
+                tieBreak: 'canonical-item-source-destination-candidate-identity-order' as const,
+                routeOptimization: 'not-evaluated' as const,
+                demandProof: 'exact' as const,
+                transferEvidenceProof: 'exact' as const,
+                allocationProof: 'maximum' as const,
+                residualProof: 'exact' as const,
+                residualCostProof: 'exact' as const,
+                requirements: [],
+                sources: [],
+                allocations: [],
+                totalRequestedReorderQuantity: 0,
+                knownAllocatedQuantity: 0,
+                unallocatedAfterKnownTransfersQuantity: 0,
+                totalResidualReorderQuantity: 0,
+                totalResidualMaterialReorderCost: 0,
+                totalResidualEquipmentReorderCost: 0,
+                totalResidualReorderCost: 0,
+            },
+            purchasePlan: {
+                objective: 'maximize-supported-fulfillment-then-minimize-cost-per-item' as const,
+                tieBreak: 'unit-price-then-shop-code' as const,
+                routeOptimization: 'not-evaluated' as const,
+                timingProof: 'not-evaluated' as const,
+                demandProof: 'exact' as const,
+                sellerEvidenceProof: 'exact' as const,
+                allocationProof: 'minimum-cost' as const,
+                fulfillmentProof: 'exact' as const,
+                requirements: [],
+                items: [],
+                allocations: [],
+                totalRequestedQuantity: 0,
+                knownAllocatedQuantity: 0,
+                unallocatedAfterSupportedPurchases: 0,
+                totalFinalUnallocatedQuantity: 0,
+                knownAllocatedCost: 0,
+                minimumRequiredPurchaseCost: 0,
+            },
+            shopping: {
+                dataset: { ...baseProductPlan.dataset },
+                arrivalDestination: {
+                    kind: 'production-property' as const,
+                    propertyId: 'warehouse',
+                    evidence: 'caller-supplied-depot-and-remote-delivery-destination' as const,
+                },
+                route: {
+                    kind: 'planned' as const,
+                    plan: {
+                        objective: 'minimum-elapsed-minutes' as const,
+                        tieBreak:
+                            'remaining-metrics-then-trip-count-then-canonical-shop-item-identity-order' as const,
+                        movementModelId: 'test',
+                        carryingModel: 'caller-supplied-load-units' as const,
+                        tripModel: 'each-trip-starts-and-returns-to-depot' as const,
+                        scheduleModel:
+                            'service-start-must-be-within-recurring-shop-window' as const,
+                        remoteDeliveryModel:
+                            'caller-supplied-concurrent-duration-from-route-start' as const,
+                        proof: 'optimal' as const,
+                        evidenceProof: 'complete' as const,
+                        searchProof: 'exhaustive' as const,
+                        evidenceGaps: [],
+                        visitedStates: 1,
+                        maximumStates: 1,
+                        allocations: [],
+                        trips: [],
+                        remoteDeliveries: [],
+                        totalPurchaseCost: 0,
+                        totalTravelDistance: 0,
+                        physicalCompletionMinute: 10,
+                        remoteCompletionMinute: 10,
+                        completionMinute: 10,
+                        elapsedMinutes: 0,
+                    },
+                },
+            },
+        },
+        execution: {
+            startMinute: 10,
+            executionModel: 'caller-supplied-exclusive-sequential-execution' as const,
+        },
+        sale: {
+            kind: 'direct' as const,
+            sellerId: 'player',
+            destinationId: 'customer',
+            quantity: baseProductPlan.targetQuantity,
+            startMinute: 10,
+            travelDurationMinutes: 5,
+            completionMinute: 15,
+            completionRule: 'caller-supplied-sale-confirmed-at-destination' as const,
+        },
+    };
+    return {
+        lifecycleInput,
+        lifecycleResult: composeFinishedRecipeElapsedLifecycle(lifecycleInput),
+        revenue: {
+            dataset: { ...baseProductPlan.dataset },
+            quantity: baseProductPlan.targetQuantity,
+            coverage: 'complete',
+            recordedRevenue: 100,
+            evidence: 'caller-supplied-realized-sale-revenue',
+        },
+        costs: {
+            dataset: { ...baseProductPlan.dataset },
+            quantity: baseProductPlan.targetQuantity,
+            coverage: 'complete',
+            accountingBasis: 'caller-supplied-costs-attributed-to-sold-output',
+            treatments: [
+                { category: 'materials', treatment: 'included', amount: 20 },
+                { category: 'equipment', treatment: 'not-incurred', amount: 0 },
+                { category: 'labor', treatment: 'included', amount: 5 },
+                { category: 'transport', treatment: 'included', amount: 3 },
+                { category: 'sale-fees', treatment: 'included', amount: 2 },
+                { category: 'other', treatment: 'not-incurred', amount: 0 },
+            ],
+        },
+    };
 }
