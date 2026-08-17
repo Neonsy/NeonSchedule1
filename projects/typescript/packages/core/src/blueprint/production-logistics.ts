@@ -23,6 +23,7 @@ import type {
 import { BlueprintProductionLogisticsConfigurationAnalyzer } from '#core/blueprint/production-logistics-configuration';
 import { analyzeProductionEmployeeExecution } from '#core/blueprint/production-employee-execution';
 import { planBlueprintProductionMovement } from '#core/blueprint/production-movement-plan';
+import { BlueprintProductionMovementFeasibilityAnalyzer } from '#core/blueprint/production-movement-feasibility';
 import {
     BlueprintProductionTransferAnalyzer,
     type BlueprintProductionNetworkRouteCandidate,
@@ -53,6 +54,7 @@ interface IndexedRoute {
 export class BlueprintProductionLogisticsAnalyzer {
     readonly #transfers: BlueprintProductionTransferAnalyzer;
     readonly #configuration: BlueprintProductionLogisticsConfigurationAnalyzer;
+    readonly #movementFeasibility: BlueprintProductionMovementFeasibilityAnalyzer;
     readonly #catalog: ProductionLogisticsCatalog;
     readonly #navigation: NavigationGraph;
     readonly #navigationNetwork: NavigationNetwork;
@@ -61,6 +63,7 @@ export class BlueprintProductionLogisticsAnalyzer {
 
     constructor(dataset: BlueprintProductionLogisticsDataset) {
         this.#transfers = new BlueprintProductionTransferAnalyzer(dataset);
+        this.#movementFeasibility = new BlueprintProductionMovementFeasibilityAnalyzer(dataset);
         this.#catalog = ProductionLogisticsCatalogSchema.assert(dataset.productionLogistics);
         this.#navigation = dataset.navigation;
         this.#navigationNetwork = new NavigationNetwork(dataset.navigation);
@@ -139,6 +142,11 @@ export class BlueprintProductionLogisticsAnalyzer {
             requirements,
             purchasedInputRequirements
         );
+        const movementPhysicalFeasibility = this.#movementFeasibility.analyze(
+            blueprint,
+            transfers.endpointAccess,
+            movementPlan
+        );
         const employeeExecution = analyzeProductionEmployeeExecution(
             blueprint,
             plan,
@@ -155,6 +163,7 @@ export class BlueprintProductionLogisticsAnalyzer {
             routeQuantityAllocation: 'evaluated-static-empty-destination-capacity',
             transferTiming: 'selected-network-traversals-only',
             movementPlan,
+            movementPhysicalFeasibility,
             employeeExecution,
             requirements,
             purchasedInputRequirements,

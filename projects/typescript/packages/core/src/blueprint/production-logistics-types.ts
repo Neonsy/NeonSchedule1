@@ -4,6 +4,8 @@ import type {
     BlueprintHandlerRoute,
 } from '#core/data/blueprint';
 import type { Item } from '#core/data/item';
+import type { Vector3 } from '#core/data/common';
+import type { ColliderShape } from '#core/data/geometry';
 import type {
     ProductionLogisticsCatalog,
     ProductionLogisticsEmployeeMovement,
@@ -301,6 +303,103 @@ export interface BlueprintProductionMovementPlan {
         readonly BlueprintProductionUnallocatedMovementRequirement[];
 }
 
+export type BlueprintProductionPhysicalObstacle =
+    | {
+        readonly kind: 'placement';
+        readonly placementId: string;
+        readonly index: number;
+        readonly path: string;
+        readonly shape: ColliderShape;
+    }
+    | {
+        readonly kind: 'property-fixed';
+        readonly index: number;
+        readonly path: string;
+        readonly shape: ColliderShape;
+    };
+
+export type BlueprintProductionPhysicalSegmentLimitation =
+    | {
+        readonly code: 'employee-body-overlap';
+        readonly obstacle: BlueprintProductionPhysicalObstacle;
+    }
+    | {
+        readonly code: 'conservative-body-envelope-overlap';
+        readonly obstacle: BlueprintProductionPhysicalObstacle;
+    }
+    | {
+        readonly code: 'collider-activity-unavailable';
+        readonly obstacle: BlueprintProductionPhysicalObstacle;
+    }
+    | {
+        readonly code: 'unsupported-obstacle-geometry';
+        readonly obstacle: BlueprintProductionPhysicalObstacle;
+    };
+
+export interface BlueprintProductionPhysicalSegmentFeasibility {
+    readonly kind:
+        | 'source-endpoint-snap'
+        | 'selected-network-edge'
+        | 'destination-endpoint-snap';
+    readonly segmentIndex: number | null;
+    readonly start: Vector3;
+    readonly end: Vector3;
+    readonly horizontalDistance: number;
+    readonly verticalDistance: number;
+    readonly localMovementLimits: 'traversable' | 'exceeded';
+    readonly staticGeometry: 'clear' | 'incomplete' | 'blocked';
+    readonly status: 'clear' | 'incomplete' | 'blocked';
+    readonly limitations: readonly BlueprintProductionPhysicalSegmentLimitation[];
+}
+
+export interface BlueprintProductionMovementAllocationFeasibility {
+    readonly allocationIndex: number;
+    readonly itemId: string;
+    readonly sourcePlacementId: string;
+    readonly destinationPlacementId: string;
+    readonly status: 'clear' | 'incomplete' | 'blocked';
+    readonly sourceEndpointSnap: BlueprintProductionPhysicalSegmentFeasibility;
+    readonly selectedNetworkEdges: readonly BlueprintProductionPhysicalSegmentFeasibility[];
+    readonly destinationEndpointSnap: BlueprintProductionPhysicalSegmentFeasibility;
+}
+
+export interface BlueprintProductionMovementPhysicalFeasibility {
+    readonly status: 'clear' | 'incomplete' | 'blocked' | 'not-applicable';
+    readonly employeeBodyBasis: {
+        readonly source: 'normalized-navigation-agent';
+        readonly radius: number;
+        readonly height: number;
+        readonly maximumSlope: number;
+        readonly stepHeight: number;
+        readonly posture: 'upright';
+        readonly collisionEnvelope:
+            'swept-upright-cylinder-with-conservative-unsupported-geometry-bounds';
+    };
+    readonly endpointSnapScope:
+        'transit-access-point-to-selected-navigation-sample-against-projected-and-fixed-geometry';
+    readonly selectedRouteScope:
+        'selected-navigation-graph-edges-rechecked-against-projected-placements';
+    readonly placementObstacleBasis:
+        'projected-enabled-non-trigger-built-item-colliders';
+    readonly unsupportedPlacementGeometryBound:
+        'source-world-bounds-then-projected-placement-bound';
+    readonly colliderActivityBasis:
+        'positive-source-world-bounds-or-incomplete';
+    readonly propertyObstacleBasis: 'enabled-non-trigger-fixed-colliders';
+    readonly propertyObstacleApplication:
+        'endpoint-snaps-only-navigation-graph-already-accounts-for-fixed-geometry';
+    readonly clearanceConclusion:
+        'clear-when-exact-upright-box-tests-and-conservative-unsupported-geometry-bounds-are-clear';
+    readonly navigationRebakeEvidence:
+        | 'selected-segments-clear-under-normalized-static-geometry'
+        | 'unresolved-for-selected-segments'
+        | 'selected-segment-blocked'
+        | 'not-applicable-no-selected-network-edges'
+        | 'not-applicable-no-selected-movements';
+    readonly dynamicObstacleClearance: 'not-evaluated';
+    readonly allocations: readonly BlueprintProductionMovementAllocationFeasibility[];
+}
+
 export type BlueprintProductionEmployeeServiceTask =
     | 'grow-container-soil'
     | 'sow-seed'
@@ -536,6 +635,7 @@ export type BlueprintProductionLogisticsResult =
         readonly routeQuantityAllocation: 'evaluated-static-empty-destination-capacity';
         readonly transferTiming: 'selected-network-traversals-only';
         readonly movementPlan: BlueprintProductionMovementPlan;
+        readonly movementPhysicalFeasibility: BlueprintProductionMovementPhysicalFeasibility;
         readonly employeeExecution: BlueprintProductionEmployeeExecution;
         readonly requirements: readonly BlueprintProductionLogisticsRequirement[];
         readonly purchasedInputRequirements: readonly BlueprintProductionPurchasedInputRequirement[];

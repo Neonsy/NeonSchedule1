@@ -592,6 +592,250 @@ describe('blueprint production logistics', () => {
             .toEqual(['raw', 'intermediate']);
         expect(result.movementPlan.unallocatedRequirements.map((requirement) => requirement.itemId))
             .toEqual(['raw', 'intermediate']);
+        expect(result.movementPhysicalFeasibility).toMatchObject({
+            status: 'blocked',
+            employeeBodyBasis: {
+                source: 'normalized-navigation-agent',
+                radius: 0.35,
+                height: 1.8,
+                maximumSlope: 45,
+                stepHeight: 0.4,
+                posture: 'upright',
+                collisionEnvelope:
+                    'swept-upright-cylinder-with-conservative-unsupported-geometry-bounds',
+            },
+            endpointSnapScope:
+                'transit-access-point-to-selected-navigation-sample-against-projected-and-fixed-geometry',
+            selectedRouteScope:
+                'selected-navigation-graph-edges-rechecked-against-projected-placements',
+            placementObstacleBasis:
+                'projected-enabled-non-trigger-built-item-colliders',
+            unsupportedPlacementGeometryBound:
+                'source-world-bounds-then-projected-placement-bound',
+            colliderActivityBasis:
+                'positive-source-world-bounds-or-incomplete',
+            propertyObstacleBasis: 'enabled-non-trigger-fixed-colliders',
+            navigationRebakeEvidence: 'selected-segment-blocked',
+            dynamicObstacleClearance: 'not-evaluated',
+        });
+        expect(result.movementPhysicalFeasibility.allocations.flatMap((allocation) => [
+            allocation.sourceEndpointSnap,
+            ...allocation.selectedNetworkEdges,
+            allocation.destinationEndpointSnap,
+        ]).flatMap((segment) => segment.limitations)).toContainEqual({
+            code: 'employee-body-overlap',
+            obstacle: {
+                kind: 'placement',
+                placementId: 'source-b',
+                index: 0,
+                path: 'Bounds',
+                shape: 'box',
+            },
+        });
+    });
+
+    it('retains incomplete proof when exact collider geometry lacks activity evidence', () => {
+        const inputDataset = dataset({ employeeCapacity: 3 });
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            buildables: inputDataset.buildables.map((buildable) => ({
+                ...buildable,
+                colliders: buildable.colliders.map((placementCollider) => ({
+                    ...placementCollider,
+                    worldBounds: {
+                        ...placementCollider.worldBounds,
+                        size: vector(0, 0, 0),
+                    },
+                })),
+            })),
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPhysicalFeasibility.status).toBe('incomplete');
+        expect(result.movementPhysicalFeasibility.allocations.flatMap((allocation) => [
+            allocation.sourceEndpointSnap,
+            ...allocation.selectedNetworkEdges,
+            allocation.destinationEndpointSnap,
+        ]).flatMap((segment) => segment.limitations)).toContainEqual({
+            code: 'collider-activity-unavailable',
+            obstacle: {
+                kind: 'placement',
+                placementId: 'source-b',
+                index: 0,
+                path: 'Bounds',
+                shape: 'box',
+            },
+        });
+    });
+
+    it('proves selected snaps and graph edges clear when projected physical colliders fit', () => {
+        const result = new BlueprintProductionLogisticsAnalyzer(
+            datasetWithPlacementCollidersAtZ(100)
+        ).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPhysicalFeasibility).toMatchObject({
+            status: 'clear',
+            navigationRebakeEvidence:
+                'selected-segments-clear-under-normalized-static-geometry',
+        });
+        expect(result.movementPhysicalFeasibility.allocations.length).toBeGreaterThan(0);
+        expect(result.movementPhysicalFeasibility.allocations.every((allocation) =>
+            allocation.status === 'clear' &&
+            allocation.sourceEndpointSnap.status === 'clear' &&
+            allocation.selectedNetworkEdges.every((segment) => segment.status === 'clear') &&
+            allocation.destinationEndpointSnap.status === 'clear'
+        )).toBe(true);
+    });
+
+    it('retains incomplete proof when unsupported placement geometry can affect a selected edge', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            buildables: inputDataset.buildables.map((buildable) =>
+                buildable.itemId === 'source-station'
+                    ? {
+                        ...buildable,
+                        colliders: buildable.colliders.map((placementCollider) => ({
+                            ...placementCollider,
+                            shape: 'sphere' as const,
+                            localCenter: null,
+                            localSize: null,
+                            radius: 0.5,
+                            worldBounds: {
+                                center: vector(0, 0, 0),
+                                size: vector(1, 1, 1),
+                            },
+                        })),
+                    }
+                    : buildable
+            ),
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPhysicalFeasibility.status).toBe('incomplete');
+        expect(result.movementPhysicalFeasibility.allocations.flatMap((allocation) =>
+            allocation.selectedNetworkEdges
+        ).flatMap((segment) => segment.limitations)).toContainEqual({
+            code: 'unsupported-obstacle-geometry',
+            obstacle: {
+                kind: 'placement',
+                placementId: 'source-b',
+                index: 0,
+                path: 'Bounds',
+                shape: 'sphere',
+            },
+        });
+    });
+
+    it('blocks an endpoint snap that exceeds normalized employee step and slope limits', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const result = new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            navigation: {
+                ...inputDataset.navigation,
+                samples: inputDataset.navigation.samples.map((sample, index) =>
+                    index === 1
+                        ? { ...sample, position: { ...sample.position, y: 0.5 } }
+                        : sample
+                ),
+            },
+        }).analyze(logisticsBlueprint(), plan());
+
+        expect(result.kind).toBe('analyzed');
+        if (result.kind !== 'analyzed') return;
+        expect(result.movementPhysicalFeasibility).toMatchObject({
+            status: 'blocked',
+            navigationRebakeEvidence:
+                'selected-segments-clear-under-normalized-static-geometry',
+        });
+        expect(result.movementPhysicalFeasibility.allocations).toContainEqual(
+            expect.objectContaining({
+                itemId: 'intermediate',
+                status: 'blocked',
+                sourceEndpointSnap: expect.objectContaining({
+                    horizontalDistance: 0,
+                    verticalDistance: 0.5,
+                    localMovementLimits: 'exceeded',
+                    status: 'blocked',
+                }),
+            })
+        );
+    });
+
+    it('checks enabled fixed boxes and ignores trigger-only property geometry', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const fixed = {
+            ...collider(),
+            transform: transform('Fixed', 1),
+            worldBounds: { center: vector(1, 0, 0), size: vector(1, 1, 1) },
+        };
+        const analyze = (propertyCollider: Collider) =>
+            new BlueprintProductionLogisticsAnalyzer({
+                ...inputDataset,
+                propertyLayouts: inputDataset.propertyLayouts.map((layout) => ({
+                    ...layout,
+                    fixedColliders: [propertyCollider],
+                })),
+            }).analyze(logisticsBlueprint(), plan());
+
+        const obstructed = analyze(fixed);
+        expect(obstructed.kind).toBe('analyzed');
+        if (obstructed.kind !== 'analyzed') return;
+        expect(obstructed.movementPhysicalFeasibility.status).toBe('blocked');
+        expect(obstructed.movementPhysicalFeasibility.allocations.flatMap((allocation) => [
+            allocation.sourceEndpointSnap,
+            allocation.destinationEndpointSnap,
+        ]).flatMap((segment) => segment.limitations)).toContainEqual({
+            code: 'employee-body-overlap',
+            obstacle: { kind: 'property-fixed', index: 0, path: 'Fixed', shape: 'box' },
+        });
+
+        const triggerOnly = analyze({ ...fixed, isTrigger: true });
+        expect(triggerOnly.kind).toBe('analyzed');
+        if (triggerOnly.kind !== 'analyzed') return;
+        expect(triggerOnly.movementPhysicalFeasibility.status).toBe('clear');
+    });
+
+    it('clears supporting contact and upright-box corners outside the employee cylinder', () => {
+        const inputDataset = datasetWithPlacementCollidersAtZ(100);
+        const analyze = (fixed: Collider) => new BlueprintProductionLogisticsAnalyzer({
+            ...inputDataset,
+            propertyLayouts: inputDataset.propertyLayouts.map((layout) => ({
+                ...layout,
+                fixedColliders: [fixed],
+            })),
+        }).analyze(logisticsBlueprint(), plan());
+        const floorTransform = {
+            ...transform('Floor', 1),
+            worldPosition: vector(1, -0.5, 0),
+            localPosition: vector(1, -0.5, 0),
+        };
+        const floor = analyze({
+            ...collider(),
+            transform: floorTransform,
+            worldBounds: { center: floorTransform.worldPosition, size: vector(1, 1, 1) },
+        });
+        expect(floor.kind).toBe('analyzed');
+        if (floor.kind !== 'analyzed') return;
+        expect(floor.movementPhysicalFeasibility.status).toBe('clear');
+
+        const cornerTransform = {
+            ...transform('Corner', 1.8),
+            worldPosition: vector(1.8, 0, 0.8),
+            localPosition: vector(1.8, 0, 0.8),
+        };
+        const corner = analyze({
+            ...collider(),
+            transform: cornerTransform,
+            worldBounds: { center: cornerTransform.worldPosition, size: vector(1, 1, 1) },
+        });
+        expect(corner.kind).toBe('analyzed');
+        if (corner.kind !== 'analyzed') return;
+        expect(corner.movementPhysicalFeasibility.status).toBe('clear');
     });
 
     it('uses the employee inventory bound to calculate minimum selected-route trips', () => {
@@ -832,6 +1076,11 @@ describe('blueprint production logistics', () => {
         if (result.kind !== 'analyzed') return;
         expect(result.movementPlan.status).toBe('unavailable');
         expect(result.movementPlan.allocations).toEqual([]);
+        expect(result.movementPhysicalFeasibility).toMatchObject({
+            status: 'not-applicable',
+            navigationRebakeEvidence: 'not-applicable-no-selected-movements',
+            allocations: [],
+        });
         expect(result.movementPlan.unallocatedRequirements).toContainEqual({
             scope: 'internally-produced-plan-dependency',
             itemId: 'intermediate',
@@ -1596,6 +1845,28 @@ function dataset(options: DatasetOptions): BlueprintProductionLogisticsDataset {
     };
 }
 
+function datasetWithPlacementCollidersAtZ(z: number): BlueprintProductionLogisticsDataset {
+    const input = dataset({ employeeCapacity: 3 });
+    return {
+        ...input,
+        buildables: input.buildables.map((buildable) => ({
+            ...buildable,
+            colliders: buildable.colliders.map((placementCollider) => ({
+                ...placementCollider,
+                transform: {
+                    ...placementCollider.transform,
+                    localPosition: vector(0, 0, z),
+                    worldPosition: vector(0, 0, z),
+                },
+                worldBounds: {
+                    ...placementCollider.worldBounds,
+                    center: vector(0, 0, z),
+                },
+            })),
+        })),
+    };
+}
+
 function seedDataset(): BlueprintProductionLogisticsDataset {
     const base = dataset({ employeeCapacity: 1 });
     return {
@@ -1962,7 +2233,7 @@ function buildable(itemId: string, transitAccessPoints: Transform[]): Buildable 
             }],
         },
         componentTypes: [],
-        colliders: [],
+        colliders: [collider()],
         storage: itemId === 'storage' ? {
             name: 'Storage',
             subtitle: '',
