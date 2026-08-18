@@ -289,8 +289,16 @@ internal sealed class DiscoveryPlayerControllerRouteCompatibilitySnapshot
     public float AgentStepHeight { get; init; }
     public int BoundarySampleCount { get; set; }
     public int BoundaryQueryFailureCount { get; set; }
+    public int BoundaryMarginFailureSampleCount { get; set; }
     public int RouteSurfaceSampleFailureCount { get; set; }
+    public List<DiscoveryPlayerRouteSurfaceFailureSpanSnapshot>
+        RouteSurfaceFailureSpans { get; set; } = new();
     public float? MinimumBoundaryDistance { get; set; }
+    public DiscoveryPlayerRouteBoundarySampleSnapshot? MinimumBoundarySample { get; set; }
+    public DiscoveryPlayerRouteBoundarySampleSnapshot?
+        FirstBoundaryMarginFailure { get; set; }
+    public DiscoveryPlayerRouteBoundarySampleSnapshot?
+        LastBoundaryMarginFailure { get; set; }
     public float MaximumObservedAbsoluteRise { get; set; }
     public float MaximumObservedElevationExcess { get; set; }
     public bool RadiusMarginSatisfied { get; set; }
@@ -298,6 +306,32 @@ internal sealed class DiscoveryPlayerControllerRouteCompatibilitySnapshot
     public bool RouteElevationSatisfied { get; set; }
     public bool SupportedByProbe { get; set; }
     public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryPlayerRouteBoundarySampleSnapshot
+{
+    public int SampleIndex { get; init; }
+    public int PathSegmentIndex { get; init; }
+    public VectorSnapshot3 Position { get; init; } = new();
+    public float DistanceFromRouteStart { get; init; }
+    public float DistanceFromRouteEnd { get; init; }
+    public float BoundaryDistance { get; init; }
+    public bool RouteSurfaceSampleSucceeded { get; init; }
+}
+
+internal sealed class DiscoveryPlayerRouteSurfaceFailureSpanSnapshot
+{
+    public int StartSampleIndex { get; init; }
+    public int EndSampleIndex { get; set; }
+    public int StartPathSegmentIndex { get; init; }
+    public int EndPathSegmentIndex { get; set; }
+    public int SampleCount { get; set; }
+    public VectorSnapshot3 StartPosition { get; init; } = new();
+    public VectorSnapshot3 EndPosition { get; set; } = new();
+    public float StartDistanceFromRouteStart { get; init; }
+    public float EndDistanceFromRouteStart { get; set; }
+    public float StartDistanceFromRouteEnd { get; init; }
+    public float EndDistanceFromRouteEnd { get; set; }
 }
 
 internal sealed class DiscoveryPlayerMovementSnapshot
