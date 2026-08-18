@@ -33,6 +33,7 @@ internal sealed class DiscoverySnapshot
     public DiscoveryNavigationSnapshot Navigation { get; init; } = new();
     public DiscoveryPlayerMovementSnapshot PlayerMovement { get; init; } = new();
     public DiscoveryPlayerNavigationSnapshot PlayerNavigation { get; init; } = new();
+    public DiscoveryVehicleNavigationSnapshot VehicleNavigation { get; init; } = new();
     public DiscoveryVisualAssetManifestSnapshot VisualAssets { get; set; } = new();
     public List<DiscoveryItemPresentationSnapshot> ItemPresentations { get; set; } = new();
     public List<DiscoveryEffectVisualSnapshot> EffectVisuals { get; set; } = new();
@@ -220,6 +221,153 @@ internal sealed class DiscoveryPlayerNavigationSnapshot : DiscoveryNavigationGra
     public float ControllerClearanceSampleSpacing { get; set; }
     public List<DiscoveryPlayerRouteProbeSnapshot> RouteProbes { get; set; } = new();
     public string RouteProbeError { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryVehicleNavigationSnapshot
+{
+    public string Method { get; set; } = string.Empty;
+    public string Applicability { get; set; } = string.Empty;
+    public string Limitation { get; set; } = string.Empty;
+    public string AgentProfileApplicability { get; set; } = string.Empty;
+    public string EndpointMappingMethod { get; set; } = string.Empty;
+    public string OwnerObjectPath { get; set; } = string.Empty;
+    public string OwnerSceneName { get; set; } = string.Empty;
+    public string VehicleGraphName { get; set; } = string.Empty;
+    public string RoadGraphName { get; set; } = string.Empty;
+    public VectorSnapshot3 MainGraphSamplePoint { get; set; } = new();
+    public float RoadPathCostMultiplier { get; set; }
+    public float OffroadPathCostMultiplier { get; set; }
+    public float MaximumDistanceFromPath { get; set; }
+    public float MaximumDistanceFromPathWhenReversing { get; set; }
+    public float MinimumRenavigationRate { get; set; }
+    public float DestinationSlowDistance { get; set; }
+    public float DestinationArrivalDistance { get; set; }
+    public float UnmarkedSpeed { get; set; }
+    public float ReverseSpeed { get; set; }
+    public float KinematicModeSpeedMultiplier { get; set; }
+    public float ObstacleMinimumRange { get; set; }
+    public float ObstacleMaximumRange { get; set; }
+    public List<string> TagNames { get; set; } = new();
+    public List<DiscoveryVehicleGraphSnapshot> Graphs { get; set; } = new();
+    public List<DiscoveryVehicleNodeLinkSnapshot> Links { get; set; } = new();
+    public List<DiscoveryVehicleAgentProfileSnapshot> AgentProfiles { get; set; } = new();
+    public List<DiscoveryVehicleEndpointMappingSnapshot> EndpointMappings { get; set; } = new();
+    public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryVehicleGraphSnapshot
+{
+    public string Role { get; init; } = string.Empty;
+    public int ArrayIndex { get; init; }
+    public uint RuntimeGraphIndex { get; init; }
+    public string Name { get; init; } = string.Empty;
+    public string RuntimeType { get; init; } = string.Empty;
+    public string Guid { get; init; } = string.Empty;
+    public uint InitialPenalty { get; init; }
+    public string RootObjectPath { get; init; } = string.Empty;
+    public string SceneName { get; init; } = string.Empty;
+    public int DeclaredNodeCount { get; set; }
+    public int UnresolvedConnectionCount { get; set; }
+    public List<DiscoveryVehicleGraphNodeSnapshot> Nodes { get; set; } = new();
+    public string Error { get; set; } = string.Empty;
+}
+
+internal sealed class DiscoveryVehicleGraphNodeSnapshot
+{
+    public int Index { get; init; }
+    public VectorSnapshot3 Position { get; init; } = new();
+    public bool Walkable { get; init; }
+    public uint Penalty { get; init; }
+    public uint Tag { get; init; }
+    public uint RuntimeGraphIndex { get; init; }
+    public List<DiscoveryVehicleGraphConnectionSnapshot> Connections { get; set; } = new();
+}
+
+internal sealed class DiscoveryVehicleGraphConnectionSnapshot
+{
+    public bool Loose { get; init; }
+    public int? TargetGraphArrayIndex { get; init; }
+    public int? TargetNodeIndex { get; init; }
+    public uint TargetRuntimeGraphIndex { get; init; }
+    public uint Cost { get; init; }
+    public byte ShapeEdge { get; init; }
+}
+
+internal sealed class DiscoveryVehicleNodeLinkSnapshot
+{
+    public string ObjectPath { get; init; } = string.Empty;
+    public string SceneName { get; init; } = string.Empty;
+    public bool Enabled { get; init; }
+    public bool ActiveInHierarchy { get; init; }
+    public VectorSnapshot3? StartPosition { get; init; }
+    public VectorSnapshot3? EndPosition { get; init; }
+    public float CostFactor { get; init; }
+    public bool OneWay { get; init; }
+    public bool DeleteConnection { get; init; }
+    public string Error { get; init; } = string.Empty;
+}
+
+internal sealed class DiscoveryVehicleAgentProfileSnapshot
+{
+    public string VehicleCode { get; init; } = string.Empty;
+    public string VehicleName { get; init; } = string.Empty;
+    public string Source { get; init; } = string.Empty;
+    public float TopSpeed { get; init; }
+    public float ReverseMultiplier { get; init; }
+    public VectorSnapshot3 BoundingBoxDimensions { get; init; } = new();
+    public float ActualMaximumSteeringAngle { get; init; }
+    public float VehicleLength { get; init; }
+    public float VehicleWidth { get; init; }
+    public float TurnRadius { get; init; }
+    public float MinimumSampleStepSize { get; init; }
+    public float MaximumSampleStepSize { get; init; }
+    public float MinimumTurningSpeed { get; init; }
+    public float MinimumThrottle { get; init; }
+    public float MaximumThrottle { get; init; }
+    public float TurnSpeedReductionMinimumRange { get; init; }
+    public float TurnSpeedReductionMaximumRange { get; init; }
+    public float TurnSpeedReductionDivisor { get; init; }
+    public float MinimumTurnSpeedReductionAngle { get; init; }
+    public DiscoveryVehicleDriveFlagsSnapshot? DriveFlags { get; init; }
+    public DiscoveryVehicleSeekerSnapshot GeneralSeeker { get; init; } = new();
+    public DiscoveryVehicleSeekerSnapshot RoadSeeker { get; init; } = new();
+    public string Error { get; init; } = string.Empty;
+}
+
+internal sealed class DiscoveryVehicleDriveFlagsSnapshot
+{
+    public bool OverrideSpeed { get; init; }
+    public float OverriddenSpeed { get; init; }
+    public float OverriddenReverseSpeed { get; init; }
+    public float SpeedLimitMultiplier { get; init; }
+    public bool UseRoads { get; init; }
+    public string ObstacleMode { get; init; } = string.Empty;
+    public bool AutoBrakeAtDestination { get; init; }
+    public bool TurnBasedSpeedReduction { get; init; }
+}
+
+internal sealed class DiscoveryVehicleSeekerSnapshot
+{
+    public bool Available { get; init; }
+    public int GraphMask { get; init; }
+    public int TraversableTags { get; init; }
+    public List<int> TagPenalties { get; init; } = new();
+}
+
+internal sealed class DiscoveryVehicleEndpointMappingSnapshot
+{
+    public string SubjectKind { get; init; } = string.Empty;
+    public string SubjectCode { get; init; } = string.Empty;
+    public string SubjectInstanceKey { get; init; } = string.Empty;
+    public int EndpointIndex { get; init; }
+    public VectorSnapshot3 Position { get; init; } = new();
+    public string GraphRole { get; init; } = string.Empty;
+    public string GraphName { get; init; } = string.Empty;
+    public int GraphArrayIndex { get; init; }
+    public int? NearestNodeIndex { get; init; }
+    public VectorSnapshot3? NearestNodePosition { get; init; }
+    public float? Distance { get; init; }
+    public string Error { get; init; } = string.Empty;
 }
 
 internal sealed class DiscoveryNavigationLinkSnapshot
