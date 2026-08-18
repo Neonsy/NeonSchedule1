@@ -275,12 +275,17 @@ internal sealed class DiscoveryVehicleGraphSnapshot
 internal sealed class DiscoveryVehicleGraphNodeSnapshot
 {
     public int Index { get; init; }
+    public string RuntimeType { get; init; } = string.Empty;
+    public string GeometryKind { get; init; } = string.Empty;
     public VectorSnapshot3 Position { get; init; } = new();
     public bool Walkable { get; init; }
     public uint Penalty { get; init; }
     public uint Tag { get; init; }
     public uint RuntimeGraphIndex { get; init; }
+    public int DeclaredVertexCount { get; set; }
+    public List<VectorSnapshot3> Vertices { get; set; } = new();
     public List<DiscoveryVehicleGraphConnectionSnapshot> Connections { get; set; } = new();
+    public string Error { get; set; } = string.Empty;
 }
 
 internal sealed class DiscoveryVehicleGraphConnectionSnapshot
@@ -366,7 +371,10 @@ internal sealed class DiscoveryVehicleEndpointMappingSnapshot
     public int GraphArrayIndex { get; init; }
     public int? NearestNodeIndex { get; init; }
     public VectorSnapshot3? NearestNodePosition { get; init; }
-    public float? Distance { get; init; }
+    public VectorSnapshot3? NearestGraphPosition { get; init; }
+    public string ProjectionMethod { get; init; } = string.Empty;
+    public float? NodeCenterDistance { get; init; }
+    public float? GraphDistance { get; init; }
     public string Error { get; init; } = string.Empty;
 }
 

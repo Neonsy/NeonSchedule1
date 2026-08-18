@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.29";
+    public const string ExporterVersion = "0.0.30";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();

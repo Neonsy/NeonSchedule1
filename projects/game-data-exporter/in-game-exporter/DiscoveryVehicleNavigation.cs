@@ -13,17 +13,19 @@ internal static partial class DiscoveryCollector
     {
         var navigation = result.VehicleNavigation;
         navigation.Method =
-            "native-astar-point-graphs-prefab-agent-profiles-and-endpoint-node-proximity";
+            "native-astar-generic-graphs-mesh-geometry-prefab-agent-profiles-and-endpoint-projection";
         navigation.Applicability =
             "static-vehicle-topology-configuration-and-guide-endpoint-evidence";
         navigation.Limitation =
             "Does not execute NavigationUtility.CalculatePath, VehicleAgent.Navigate, " +
             "collision avoidance, traffic, dynamic obstacles, teleport fallback, or live driving. " +
-            "NavigationSettings are supplied per call and are not one static vehicle profile.";
+            "NavigationSettings are supplied per call and are not one static vehicle profile. " +
+            "Endpoint projection uses captured triangle surfaces when available and node " +
+            "positions otherwise.";
         navigation.AgentProfileApplicability =
             "vehicle-manager-prefabs-without-initialize-vehicle-data-derived-fields-may-be-zero";
         navigation.EndpointMappingMethod =
-            "nearest-walkable-point-graph-node-by-euclidean-distance";
+            "nearest-walkable-captured-node-by-graph-geometry-distance";
 
         var errors = new List<string>();
         try
@@ -70,7 +72,7 @@ internal static partial class DiscoveryCollector
 
         try
         {
-            CollectVehicleEndpointMappings(result, navigation);
+            CollectVehicleEndpointMappings(result, navigation, capturedGraphs);
         }
         catch (Exception exception)
         {
@@ -175,8 +177,7 @@ internal static partial class DiscoveryCollector
                 continue;
             }
 
-            var pointGraph = graph.TryCast<PointGraph>();
-            var root = pointGraph?.root;
+            var root = graph.TryCast<PointGraph>()?.root;
             var graphSnapshot = new DiscoveryVehicleGraphSnapshot
             {
                 Role = role,
@@ -193,45 +194,26 @@ internal static partial class DiscoveryCollector
             };
             navigation.Graphs.Add(graphSnapshot);
 
-            if (pointGraph is null)
-            {
-                graphSnapshot.Error =
-                    $"Expected a PointGraph but found {graphSnapshot.RuntimeType}.";
-                continue;
-            }
-
             var capturedNodes = new List<CapturedVehicleNode>();
             capturedGraphs.Add(new CapturedVehicleGraph(
                 graphSnapshot,
-                pointGraph,
                 capturedNodes));
             try
             {
-                graphSnapshot.DeclaredNodeCount = pointGraph.nodeCount;
-                var nodes = pointGraph.nodes;
-                if (nodes is null)
+                graphSnapshot.DeclaredNodeCount = graph.CountNodes();
+                var nextNodeIndex = 0;
+                System.Action<GraphNode> captureNode = node =>
                 {
-                    graphSnapshot.Error = "PointGraph nodes are unavailable.";
-                    continue;
-                }
-
-                for (var nodeIndex = 0; nodeIndex < nodes.Length; nodeIndex++)
-                {
-                    var node = nodes[nodeIndex];
+                    var nodeIndex = nextNodeIndex++;
                     if (node is null)
                     {
-                        continue;
+                        graphSnapshot.Error = AppendVehicleError(
+                            graphSnapshot.Error,
+                            $"Node callback at index {nodeIndex} returned null.");
+                        return;
                     }
 
-                    var nodeSnapshot = new DiscoveryVehicleGraphNodeSnapshot
-                    {
-                        Index = nodeIndex,
-                        Position = VectorSnapshot3.FromVector((Vector3)node.position),
-                        Walkable = node.Walkable,
-                        Penalty = node.Penalty,
-                        Tag = node.Tag,
-                        RuntimeGraphIndex = node.GraphIndex,
-                    };
+                    var nodeSnapshot = SnapshotVehicleGraphNode(nodeIndex, node);
                     graphSnapshot.Nodes.Add(nodeSnapshot);
                     capturedNodes.Add(new CapturedVehicleNode(node, nodeSnapshot));
                     if (!nodeAddresses.TryAdd(
@@ -242,7 +224,10 @@ internal static partial class DiscoveryCollector
                             graphSnapshot.Error,
                             $"Node pointer at index {nodeIndex} is duplicated.");
                     }
-                }
+                };
+                Il2CppSystem.Action<GraphNode> nativeCaptureNode = captureNode;
+                graph.GetNodes(nativeCaptureNode);
+                GC.KeepAlive(nativeCaptureNode);
 
                 if (graphSnapshot.DeclaredNodeCount != graphSnapshot.Nodes.Count)
                 {
@@ -250,6 +235,12 @@ internal static partial class DiscoveryCollector
                         graphSnapshot.Error,
                         $"Declared {graphSnapshot.DeclaredNodeCount} nodes but captured " +
                         $"{graphSnapshot.Nodes.Count}.");
+                }
+                if (graphSnapshot.Nodes.Count == 0)
+                {
+                    graphSnapshot.Error = AppendVehicleError(
+                        graphSnapshot.Error,
+                        "Graph contains no captured nodes.");
                 }
             }
             catch (Exception exception)
@@ -279,6 +270,63 @@ internal static partial class DiscoveryCollector
                 $"Expected one general and one road vehicle graph but found " +
                 $"{generalCount} general and {roadCount} road graphs.");
         }
+        for (var graphIndex = 0; graphIndex < navigation.Graphs.Count; graphIndex++)
+        {
+            var graph = navigation.Graphs[graphIndex];
+            if (graph.Error.Length > 0)
+            {
+                errors.Add($"{graph.Role} vehicle graph: {graph.Error}");
+            }
+        }
+    }
+
+    private static DiscoveryVehicleGraphNodeSnapshot SnapshotVehicleGraphNode(
+        int nodeIndex,
+        GraphNode node)
+    {
+        var pointNode = node.TryCast<PointNode>();
+        var meshNode = node.TryCast<MeshNode>();
+        var triangleNode = node.TryCast<TriangleMeshNode>();
+        var snapshot = new DiscoveryVehicleGraphNodeSnapshot
+        {
+            Index = nodeIndex,
+            RuntimeType = DiscoveryReflection.RuntimeTypeName(node),
+            GeometryKind = triangleNode is not null
+                ? "triangle-mesh"
+                : meshNode is not null
+                    ? "mesh"
+                    : pointNode is not null
+                        ? "point"
+                        : "node-position",
+            Position = VectorSnapshot3.FromVector((Vector3)node.position),
+            Walkable = node.Walkable,
+            Penalty = node.Penalty,
+            Tag = node.Tag,
+            RuntimeGraphIndex = node.GraphIndex,
+        };
+        if (meshNode is null)
+        {
+            return snapshot;
+        }
+
+        try
+        {
+            snapshot.DeclaredVertexCount = meshNode.GetVertexCount();
+            for (var vertexIndex = 0;
+                 vertexIndex < snapshot.DeclaredVertexCount;
+                 vertexIndex++)
+            {
+                snapshot.Vertices.Add(
+                    VectorSnapshot3.FromVector((Vector3)meshNode.GetVertex(vertexIndex)));
+            }
+        }
+        catch (Exception exception)
+        {
+            snapshot.Error =
+                $"Geometry collection failed: {exception.GetType().Name}: " +
+                exception.Message;
+        }
+        return snapshot;
     }
 
     private static void CollectVehicleGraphConnections(
@@ -290,18 +338,38 @@ internal static partial class DiscoveryCollector
             var node = graph.Nodes[nodeIndex];
             try
             {
-                AddVehicleConnections(
-                    graph.Snapshot,
-                    node,
-                    node.Node.connections,
-                    loose: false,
-                    nodeAddresses);
-                AddVehicleConnections(
-                    graph.Snapshot,
-                    node,
-                    node.Node.looseConnections,
-                    loose: true,
-                    nodeAddresses);
+                var pointNode = node.Node.TryCast<PointNode>();
+                var meshNode = node.Node.TryCast<MeshNode>();
+                if (pointNode is not null)
+                {
+                    AddVehicleConnections(
+                        graph.Snapshot,
+                        node,
+                        pointNode.connections,
+                        loose: false,
+                        nodeAddresses);
+                    AddVehicleConnections(
+                        graph.Snapshot,
+                        node,
+                        pointNode.looseConnections,
+                        loose: true,
+                        nodeAddresses);
+                }
+                else if (meshNode is not null)
+                {
+                    AddVehicleConnections(
+                        graph.Snapshot,
+                        node,
+                        meshNode.connections,
+                        loose: false,
+                        nodeAddresses);
+                }
+                else
+                {
+                    node.Snapshot.Error = AppendVehicleError(
+                        node.Snapshot.Error,
+                        "Connection data are unavailable for this node type.");
+                }
                 node.Snapshot.Connections = node.Snapshot.Connections
                     .OrderBy(connection => connection.TargetGraphArrayIndex ?? int.MaxValue)
                     .ThenBy(connection => connection.TargetNodeIndex ?? int.MaxValue)
@@ -316,6 +384,13 @@ internal static partial class DiscoveryCollector
                     $"Connections for node {node.Snapshot.Index} failed: " +
                     $"{exception.GetType().Name}: {exception.Message}");
             }
+        }
+        var nodeErrorCount = graph.Nodes.Count(node => node.Snapshot.Error.Length > 0);
+        if (nodeErrorCount > 0)
+        {
+            graph.Snapshot.Error = AppendVehicleError(
+                graph.Snapshot.Error,
+                $"{nodeErrorCount} nodes have collection errors.");
         }
     }
 
@@ -546,11 +621,12 @@ internal static partial class DiscoveryCollector
 
     private static void CollectVehicleEndpointMappings(
         DiscoverySnapshot result,
-        DiscoveryVehicleNavigationSnapshot navigation)
+        DiscoveryVehicleNavigationSnapshot navigation,
+        IReadOnlyList<CapturedVehicleGraph> capturedGraphs)
     {
-        for (var graphIndex = 0; graphIndex < navigation.Graphs.Count; graphIndex++)
+        for (var graphIndex = 0; graphIndex < capturedGraphs.Count; graphIndex++)
         {
-            var graph = navigation.Graphs[graphIndex];
+            var graph = capturedGraphs[graphIndex];
             for (var propertyIndex = 0;
                  propertyIndex < result.PropertyLayouts.Count;
                  propertyIndex++)
@@ -602,25 +678,41 @@ internal static partial class DiscoveryCollector
 
     private static void AddVehicleEndpointMapping(
         DiscoveryVehicleNavigationSnapshot navigation,
-        DiscoveryVehicleGraphSnapshot graph,
+        CapturedVehicleGraph graph,
         string subjectKind,
         string subjectCode,
         string subjectInstanceKey,
         int endpointIndex,
         VectorSnapshot3 position)
     {
-        var nearest = graph.Nodes
-            .Where(node => node.Walkable)
-            .Select(node => new
+        var endpoint = ToVector(position);
+        VehicleEndpointCandidate? nearest = null;
+        for (var nodeIndex = 0; nodeIndex < graph.Nodes.Count; nodeIndex++)
+        {
+            var node = graph.Nodes[nodeIndex];
+            if (!node.Snapshot.Walkable)
             {
-                Node = node,
-                Distance = Vector3.Distance(
-                    ToVector(position),
-                    ToVector(node.Position)),
-            })
-            .OrderBy(candidate => candidate.Distance)
-            .ThenBy(candidate => candidate.Node.Index)
-            .FirstOrDefault();
+                continue;
+            }
+            var graphPosition = ClosestVehicleGraphPoint(
+                node.Snapshot,
+                endpoint,
+                out var projectionMethod);
+            var graphDistance = Vector3.Distance(endpoint, graphPosition);
+            if (nearest is not null &&
+                (graphDistance > nearest.GraphDistance ||
+                 (graphDistance == nearest.GraphDistance &&
+                  node.Snapshot.Index >= nearest.Node.Snapshot.Index)))
+            {
+                continue;
+            }
+            nearest = new VehicleEndpointCandidate(
+                node,
+                graphPosition,
+                projectionMethod,
+                Vector3.Distance(endpoint, ToVector(node.Snapshot.Position)),
+                graphDistance);
+        }
         navigation.EndpointMappings.Add(
             new DiscoveryVehicleEndpointMappingSnapshot
             {
@@ -629,14 +721,151 @@ internal static partial class DiscoveryCollector
                 SubjectInstanceKey = subjectInstanceKey,
                 EndpointIndex = endpointIndex,
                 Position = position,
-                GraphRole = graph.Role,
-                GraphName = graph.Name,
-                GraphArrayIndex = graph.ArrayIndex,
-                NearestNodeIndex = nearest?.Node.Index,
-                NearestNodePosition = nearest?.Node.Position,
-                Distance = nearest?.Distance,
+                GraphRole = graph.Snapshot.Role,
+                GraphName = graph.Snapshot.Name,
+                GraphArrayIndex = graph.Snapshot.ArrayIndex,
+                NearestNodeIndex = nearest?.Node.Snapshot.Index,
+                NearestNodePosition = nearest?.Node.Snapshot.Position,
+                NearestGraphPosition = nearest is null
+                    ? null
+                    : VectorSnapshot3.FromVector(nearest.GraphPosition),
+                ProjectionMethod = nearest?.ProjectionMethod ?? string.Empty,
+                NodeCenterDistance = nearest?.NodeCenterDistance,
+                GraphDistance = nearest?.GraphDistance,
                 Error = nearest is null ? "Graph has no walkable captured nodes." : string.Empty,
             });
+    }
+
+    private static Vector3 ClosestVehicleGraphPoint(
+        DiscoveryVehicleGraphNodeSnapshot node,
+        Vector3 point,
+        out string method)
+    {
+        if (node.GeometryKind != "triangle-mesh" || node.Vertices.Count != 3)
+        {
+            method = "node-position";
+            return ToVector(node.Position);
+        }
+
+        method = "triangle-surface";
+        return ClosestPointOnTriangle(
+            point,
+            ToVector(node.Vertices[0]),
+            ToVector(node.Vertices[1]),
+            ToVector(node.Vertices[2]));
+    }
+
+    private static Vector3 ClosestPointOnTriangle(
+        Vector3 point,
+        Vector3 first,
+        Vector3 second,
+        Vector3 third)
+    {
+        var firstSecond = second - first;
+        var firstThird = third - first;
+        var firstPoint = point - first;
+        var firstSecondProjection = Vector3.Dot(firstSecond, firstPoint);
+        var firstThirdProjection = Vector3.Dot(firstThird, firstPoint);
+        if (firstSecondProjection <= 0f && firstThirdProjection <= 0f)
+        {
+            return first;
+        }
+
+        var secondPoint = point - second;
+        var secondFirstProjection = Vector3.Dot(firstSecond, secondPoint);
+        var secondThirdProjection = Vector3.Dot(firstThird, secondPoint);
+        if (secondFirstProjection >= 0f &&
+            secondThirdProjection <= secondFirstProjection)
+        {
+            return second;
+        }
+
+        var firstSecondEdge =
+            firstSecondProjection * secondThirdProjection -
+            secondFirstProjection * firstThirdProjection;
+        if (firstSecondEdge <= 0f &&
+            firstSecondProjection >= 0f &&
+            secondFirstProjection <= 0f)
+        {
+            var weight = firstSecondProjection /
+                (firstSecondProjection - secondFirstProjection);
+            return first + weight * firstSecond;
+        }
+
+        var thirdPoint = point - third;
+        var thirdFirstProjection = Vector3.Dot(firstSecond, thirdPoint);
+        var thirdSecondProjection = Vector3.Dot(firstThird, thirdPoint);
+        if (thirdSecondProjection >= 0f &&
+            thirdFirstProjection <= thirdSecondProjection)
+        {
+            return third;
+        }
+
+        var firstThirdEdge =
+            thirdFirstProjection * firstThirdProjection -
+            firstSecondProjection * thirdSecondProjection;
+        if (firstThirdEdge <= 0f &&
+            firstThirdProjection >= 0f &&
+            thirdFirstProjection <= 0f)
+        {
+            var weight = firstThirdProjection /
+                (firstThirdProjection - thirdFirstProjection);
+            return first + weight * firstThird;
+        }
+
+        var secondThirdEdge =
+            secondFirstProjection * thirdSecondProjection -
+            thirdFirstProjection * secondThirdProjection;
+        if (secondThirdEdge <= 0f &&
+            secondThirdProjection - secondFirstProjection >= 0f &&
+            thirdFirstProjection - thirdSecondProjection >= 0f)
+        {
+            var weight =
+                (secondThirdProjection - secondFirstProjection) /
+                ((secondThirdProjection - secondFirstProjection) +
+                 (thirdFirstProjection - thirdSecondProjection));
+            return second + weight * (third - second);
+        }
+
+        var denominatorSum =
+            secondThirdEdge + firstThirdEdge + firstSecondEdge;
+        if (Mathf.Abs(denominatorSum) <= 0.000001f)
+        {
+            var firstSecondPoint = ClosestPointOnSegment(point, first, second);
+            var firstThirdPoint = ClosestPointOnSegment(point, first, third);
+            var secondThirdPoint = ClosestPointOnSegment(point, second, third);
+            var firstSecondDistance = (point - firstSecondPoint).sqrMagnitude;
+            var firstThirdDistance = (point - firstThirdPoint).sqrMagnitude;
+            var secondThirdDistance = (point - secondThirdPoint).sqrMagnitude;
+            if (firstSecondDistance <= firstThirdDistance &&
+                firstSecondDistance <= secondThirdDistance)
+            {
+                return firstSecondPoint;
+            }
+            return firstThirdDistance <= secondThirdDistance
+                ? firstThirdPoint
+                : secondThirdPoint;
+        }
+
+        var denominator = 1f / denominatorSum;
+        var secondWeight = firstThirdEdge * denominator;
+        var thirdWeight = firstSecondEdge * denominator;
+        return first + firstSecond * secondWeight + firstThird * thirdWeight;
+    }
+
+    private static Vector3 ClosestPointOnSegment(
+        Vector3 point,
+        Vector3 start,
+        Vector3 end)
+    {
+        var segment = end - start;
+        var lengthSquared = segment.sqrMagnitude;
+        if (lengthSquared <= 0.000001f)
+        {
+            return start;
+        }
+        var weight = Mathf.Clamp01(Vector3.Dot(point - start, segment) / lengthSquared);
+        return start + weight * segment;
     }
 
     private static string AppendVehicleError(string current, string addition) =>
@@ -644,12 +873,18 @@ internal static partial class DiscoveryCollector
 
     private sealed record CapturedVehicleGraph(
         DiscoveryVehicleGraphSnapshot Snapshot,
-        PointGraph Graph,
         List<CapturedVehicleNode> Nodes);
 
     private sealed record CapturedVehicleNode(
-        PointNode Node,
+        GraphNode Node,
         DiscoveryVehicleGraphNodeSnapshot Snapshot);
+
+    private sealed record VehicleEndpointCandidate(
+        CapturedVehicleNode Node,
+        Vector3 GraphPosition,
+        string ProjectionMethod,
+        float NodeCenterDistance,
+        float GraphDistance);
 
     private sealed record VehicleNodeAddress(
         int GraphArrayIndex,
