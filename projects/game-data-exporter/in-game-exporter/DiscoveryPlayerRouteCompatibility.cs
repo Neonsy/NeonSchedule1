@@ -15,7 +15,7 @@ internal static partial class DiscoveryCollector
         var probe = new DiscoveryPlayerControllerRouteCompatibilitySnapshot
         {
             Method =
-                "navmesh-boundary-margin-route-elevation-and-diagnostic-locations",
+                "navmesh-boundary-margin-spans-route-elevation-and-surface-gap-locations",
             Applicability =
                 "candidate-static-controller-geometry-not-charactercontroller-move-proof",
             Limitation =
@@ -63,6 +63,8 @@ internal static partial class DiscoveryCollector
             PlayerRouteSurfaceSample? lastBoundaryMarginFailure = null;
             var firstBoundaryMarginFailureDistance = 0f;
             var lastBoundaryMarginFailureDistance = 0f;
+            DiscoveryPlayerRouteBoundaryFailureSpanSnapshot?
+                currentBoundaryMarginFailureSpan = null;
             for (var index = 0; index < sampling.Samples.Count; index++)
             {
                 var sample = sampling.Samples[index];
@@ -89,12 +91,57 @@ internal static partial class DiscoveryCollector
                         }
                         lastBoundaryMarginFailure = sample;
                         lastBoundaryMarginFailureDistance = hit.distance;
+                        var boundarySample = BoundarySampleSnapshot(
+                            sample,
+                            sampling.RouteLength,
+                            hit.distance);
+                        if (currentBoundaryMarginFailureSpan is null)
+                        {
+                            currentBoundaryMarginFailureSpan =
+                                new DiscoveryPlayerRouteBoundaryFailureSpanSnapshot
+                                {
+                                    StartSample = boundarySample,
+                                    EndSample = boundarySample,
+                                    SampleCount = 1,
+                                    RouteSurfaceSampleFailureCount =
+                                        sample.SurfaceSampleSucceeded ? 0 : 1,
+                                    MinimumBoundarySample = boundarySample,
+                                };
+                        }
+                        else
+                        {
+                            currentBoundaryMarginFailureSpan.EndSample = boundarySample;
+                            currentBoundaryMarginFailureSpan.SampleCount++;
+                            if (!sample.SurfaceSampleSucceeded)
+                            {
+                                currentBoundaryMarginFailureSpan
+                                    .RouteSurfaceSampleFailureCount++;
+                            }
+                            if (hit.distance < currentBoundaryMarginFailureSpan
+                                    .MinimumBoundarySample.BoundaryDistance)
+                            {
+                                currentBoundaryMarginFailureSpan
+                                    .MinimumBoundarySample = boundarySample;
+                            }
+                        }
+                        continue;
                     }
                 }
                 else
                 {
                     probe.BoundaryQueryFailureCount++;
                 }
+                if (currentBoundaryMarginFailureSpan is not null)
+                {
+                    probe.BoundaryMarginFailureSpans.Add(
+                        currentBoundaryMarginFailureSpan);
+                    currentBoundaryMarginFailureSpan = null;
+                }
+            }
+            if (currentBoundaryMarginFailureSpan is not null)
+            {
+                probe.BoundaryMarginFailureSpans.Add(
+                    currentBoundaryMarginFailureSpan);
             }
             if (minimumBoundarySample is not null)
             {

@@ -290,6 +290,8 @@ internal sealed class DiscoveryPlayerControllerRouteCompatibilitySnapshot
     public int BoundarySampleCount { get; set; }
     public int BoundaryQueryFailureCount { get; set; }
     public int BoundaryMarginFailureSampleCount { get; set; }
+    public List<DiscoveryPlayerRouteBoundaryFailureSpanSnapshot>
+        BoundaryMarginFailureSpans { get; set; } = new();
     public int RouteSurfaceSampleFailureCount { get; set; }
     public List<DiscoveryPlayerRouteSurfaceFailureSpanSnapshot>
         RouteSurfaceFailureSpans { get; set; } = new();
@@ -317,6 +319,18 @@ internal sealed class DiscoveryPlayerRouteBoundarySampleSnapshot
     public float DistanceFromRouteEnd { get; init; }
     public float BoundaryDistance { get; init; }
     public bool RouteSurfaceSampleSucceeded { get; init; }
+}
+
+internal sealed class DiscoveryPlayerRouteBoundaryFailureSpanSnapshot
+{
+    public DiscoveryPlayerRouteBoundarySampleSnapshot
+        StartSample { get; init; } = new();
+    public DiscoveryPlayerRouteBoundarySampleSnapshot
+        EndSample { get; set; } = new();
+    public int SampleCount { get; set; }
+    public int RouteSurfaceSampleFailureCount { get; set; }
+    public DiscoveryPlayerRouteBoundarySampleSnapshot
+        MinimumBoundarySample { get; set; } = new();
 }
 
 internal sealed class DiscoveryPlayerRouteSurfaceFailureSpanSnapshot

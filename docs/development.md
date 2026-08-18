@@ -81,7 +81,7 @@ Use the [complete exporter manual](/projects/game-data-exporter/README.md) for b
 
 ## Compatibility
 
-Exporter `0.0.27` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.28` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 Normalizer `0.0.38` defines the current normalized output contract.
 A newer game or dependency version requires a new build and acquisition audit.
 
