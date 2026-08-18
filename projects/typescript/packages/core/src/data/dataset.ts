@@ -25,6 +25,10 @@ export const IntegrityCountsSchema = type({
     'timedAccessZones?': 'number',
     'navigationSamples?': 'number',
     'navigationEdges?': 'number',
+    'vehicleNavigationGraphs?': 'number',
+    'vehicleNavigationNodes?': 'number',
+    'vehicleNavigationConnections?': 'number',
+    'vehicleNavigationEndpointMappings?': 'number',
     'rankLevels?': 'number',
 });
 export type IntegrityCounts = typeof IntegrityCountsSchema.infer;

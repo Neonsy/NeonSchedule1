@@ -51,7 +51,7 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 | Customers and dealers | Partial | Demand, enjoyment, offers, recommendations, eligibility, assignment, shared-resource allocation, and conservative travel feasibility | Requires explicit progression, relationship, stock, cash, and timing state |
 | Production and inventory | Partial | Production plans, equipment, additives, packaging, inventory, transfers, purchases, shopping, lifecycle timing, and realized-profit evidence | Exact results require complete movement, sale, revenue, and cost inputs |
 | Property blueprints | Partial | Placement, construction order, cost, storage, collision, access, temperature, lighting, sprinklers, capacity, schedules, employee logistics, movement, and business assessment | Mutable storage, moisture, trash, task order, live positions, dynamic obstacles, and unsupported collider proof remain outside the static model |
-| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and native vehicle graph evidence | Static movement evidence does not prove executed routes or live traversal |
+| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and normalized vehicle graph evidence | Static movement evidence does not prove executed routes or live traversal |
 | Data pipeline | Tooling | Hash verification, schema checks, integrity checks, normalization, stable dataset identity, and corruption detection | Requires a private local acquisition |
 | Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
 | Website | Planned | Workspace ownership only | No source application or deployment exists |
@@ -59,10 +59,11 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 Exact and incomplete results are separate contracts.
 Code does not label a bounded or evidence-limited result as exact.
 
-## Vehicle navigation acquisition
+## Vehicle route boundary
 
-The exporter records separate native general and road vehicle graph evidence plus endpoint projections.
-This acquisition does not yet define a normalized route contract or prove endpoint traversal, graph-layer composition, native path selection, parking, traffic, or live driving.
+The normalized vehicle document contains separate directed general and road graph layers plus property and shop endpoint projections.
+It preserves native costs and independent geometric distances without claiming endpoint traversal or cross-layer composition.
+A deterministic route analyzer has not yet been introduced.
 
 ## TypeScript workflow
 
@@ -87,7 +88,7 @@ Use the [complete exporter manual](/projects/game-data-exporter/README.md) for b
 ## Compatibility
 
 Exporter `0.0.30` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
-Normalizer `0.0.38` defines the current normalized output contract.
+Normalizer `0.0.39` defines the current normalized output contract.
 A newer game or dependency version requires a new build and acquisition audit.
 
 NeonSchedule1 has no backward-compatibility commitment before version 1.

@@ -279,6 +279,10 @@ function parseReport(document: JsonObject): RawReport {
             visualMaterials: objectArray(visualAssets.materials, 'report.discovery.visualAssets.materials'),
             map: asObject(discovery.map, 'report.discovery.map'),
             navigation: asObject(discovery.navigation, 'report.discovery.navigation'),
+            vehicleNavigation: asObject(
+                discovery.vehicleNavigation,
+                'report.discovery.vehicleNavigation'
+            ),
             locations: objectArray(discovery.locations, 'report.discovery.locations'),
             mapServices: objectArray(discovery.mapServices, 'report.discovery.mapServices'),
             timedAccessZones: objectArray(

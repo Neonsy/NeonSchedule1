@@ -76,6 +76,7 @@ export interface RawReport {
         readonly visualMaterials: JsonObject[];
         readonly map: JsonObject;
         readonly navigation: JsonObject;
+        readonly vehicleNavigation: JsonObject;
         readonly locations: JsonObject[];
         readonly mapServices: JsonObject[];
         readonly timedAccessZones: JsonObject[];

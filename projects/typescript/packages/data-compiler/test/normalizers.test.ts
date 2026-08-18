@@ -651,6 +651,7 @@ function emptyReport(): RawReport {
             visualMaterials: [],
             map: {},
             navigation: {},
+            vehicleNavigation: {},
             locations: [],
             mapServices: [],
             timedAccessZones: [],

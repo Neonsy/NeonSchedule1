@@ -41,7 +41,9 @@ pnpm data:normalize -- --acquisition <directory> --output <directory>
 The compiler verifies report and asset hashes, parses required meshes, checks schemas and references, applies domain integrity rules, and writes a content-addressed dataset.
 If `--output` is omitted, the compiler infers a sibling `normalized` directory for acquisitions stored under an `acquisitions` directory.
 
-Normalizer `0.0.38` writes the current content-addressed normalized dataset contract.
+Normalizer `0.0.39` writes static vehicle graph and endpoint evidence to `world/vehicle-navigation.json`.
+The document preserves native costs and independent geometric edge distances.
+It does not claim that endpoint offsets are traversable or that the game composes the general and road layers.
 
 ## Run solver workflows
 

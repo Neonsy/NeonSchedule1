@@ -28,10 +28,11 @@ import { normalizePropertyLayouts } from '#data-compiler/normalize/property-layo
 import { normalizeShops } from '#data-compiler/normalize/shops';
 import { normalizeTrade } from '#data-compiler/normalize/trade';
 import { normalizeVisuals } from '#data-compiler/normalize/visuals';
+import { normalizeVehicleNavigation } from '#data-compiler/normalize/vehicle-navigation';
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.38';
+export const NORMALIZER_VERSION = '0.0.39';
 
 const deferredDomains = [] as const;
 
@@ -92,6 +93,12 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         new Set(shops.map((shop) => shop.code)),
         integrity
     );
+    const vehicleNavigation = normalizeVehicleNavigation(
+        acquisition.report,
+        new Set(properties.map((property) => property.code)),
+        new Set(shops.map((shop) => shop.code)),
+        integrity
+    );
     validateEmployeeRoutes(world.navigation, properties, propertyLayouts, integrity);
 
     integrity.throwIfInvalid();
@@ -121,6 +128,16 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
         timedAccessZones: world.locations.timedAccessZones.length,
         navigationSamples: world.navigation.samples.length,
         navigationEdges: world.navigation.edges.length,
+        vehicleNavigationGraphs: vehicleNavigation.graphs.length,
+        vehicleNavigationNodes: vehicleNavigation.graphs.reduce(
+            (total, graph) => total + graph.nodes.length,
+            0
+        ),
+        vehicleNavigationConnections: vehicleNavigation.graphs.reduce(
+            (total, graph) => total + graph.connections.length,
+            0
+        ),
+        vehicleNavigationEndpointMappings: vehicleNavigation.endpointMappings.length,
         rankLevels: ranks.levels.length,
     };
     const report = IntegrityReportSchema.assert({
@@ -163,6 +180,7 @@ export async function compileDataset(acquisitionPath: string, outputRoot?: strin
     documents.set('world/map.json', world.map);
     documents.set('world/locations.json', world.locations);
     documents.set('world/navigation.json', world.navigation);
+    documents.set('world/vehicle-navigation.json', vehicleNavigation);
     documents.set('reports/integrity.json', report);
 
     return writeDataset({

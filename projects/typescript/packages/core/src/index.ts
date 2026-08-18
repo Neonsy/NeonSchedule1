@@ -17,6 +17,7 @@ export * from '#core/data/production-logistics';
 export * from '#core/data/shop';
 export * from '#core/data/trade';
 export * from '#core/data/visual';
+export * from '#core/data/vehicle-navigation';
 export * from '#core/data/world';
 export * from '#core/customer/allocation';
 export * from '#core/customer/composition';
