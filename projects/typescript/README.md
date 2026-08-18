@@ -70,6 +70,9 @@ The solver returns exact results only when it completes the search or uses match
 Quick, Balanced, and Precise live searches can return valid best-found results with a recorded state, work, or time limit.
 Exhaustive mode returns an exact corpus result or a coverage miss.
 
+Static vehicle route analysis produces independent candidates inside each directed graph layer.
+It excludes endpoint offsets, cross-layer composition, native route selection, and live driving behavior.
+
 ## Local outputs
 
 Build output under `dist` is generated and ignored.

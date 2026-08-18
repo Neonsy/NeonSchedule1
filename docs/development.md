@@ -51,7 +51,7 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 | Customers and dealers | Partial | Demand, enjoyment, offers, recommendations, eligibility, assignment, shared-resource allocation, and conservative travel feasibility | Requires explicit progression, relationship, stock, cash, and timing state |
 | Production and inventory | Partial | Production plans, equipment, additives, packaging, inventory, transfers, purchases, shopping, lifecycle timing, and realized-profit evidence | Exact results require complete movement, sale, revenue, and cost inputs |
 | Property blueprints | Partial | Placement, construction order, cost, storage, collision, access, temperature, lighting, sprinklers, capacity, schedules, employee logistics, movement, and business assessment | Mutable storage, moisture, trash, task order, live positions, dynamic obstacles, and unsupported collider proof remain outside the static model |
-| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and normalized vehicle graph evidence | Static movement evidence does not prove executed routes or live traversal |
+| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and static vehicle graph candidates | Vehicle candidates exclude endpoint traversal, graph-layer composition, native route choice, traffic, parking, and live driving |
 | Data pipeline | Tooling | Hash verification, schema checks, integrity checks, normalization, stable dataset identity, and corruption detection | Requires a private local acquisition |
 | Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
 | Website | Planned | Workspace ownership only | No source application or deployment exists |
@@ -62,8 +62,11 @@ Code does not label a bounded or evidence-limited result as exact.
 ## Vehicle route boundary
 
 The normalized vehicle document contains separate directed general and road graph layers plus property and shop endpoint projections.
-It preserves native costs and independent geometric distances without claiming endpoint traversal or cross-layer composition.
-A deterministic route analyzer has not yet been introduced.
+`analyzeVehiclePropertyShopRoutes` finds deterministic minimum-geometric-distance candidates within each layer.
+
+These candidates are useful static evidence, not complete routes.
+The current data does not prove endpoint traversal, graph-layer composition, native path selection, parking, collision avoidance, traffic, dynamic obstacles, or live driving.
+Shopping and transfer calculations require caller-supplied movement evidence when they need an exact route claim.
 
 ## TypeScript workflow
 
