@@ -11,6 +11,7 @@ Read the [development overview](/docs/development.md) for repository architectur
 | --- | --- | --- |
 | `@neonschedule1/core` | Versioned schemas and deterministic calculations | Private library |
 | `@neonschedule1/data-compiler` | Acquisition verification and normalization | Private command-line tool |
+| `@neonschedule1/public-data` | Pre-website publication inputs and processed asset provenance | Private library and command-line tool |
 | `@neonschedule1/solver` | Search, allocation, precomputation, runtime queries, benchmarks, and verification | Private library and command-line tools |
 | `@neonschedule1/web` | Future player interface | Manifest-only placeholder |
 
@@ -27,7 +28,7 @@ pnpm build
 ```
 
 `pnpm check` runs every package type check.
-`pnpm test` runs the data-compiler and solver Vitest projects.
+`pnpm test` runs the data-compiler, public-data, and solver Vitest projects.
 `pnpm build` builds every package that defines a build script.
 
 ## Normalize an acquisition
@@ -84,10 +85,47 @@ Each document carries the game version and normalized dataset identity.
 `validatePlannerProfileBundleForDataset` also rejects a profile that does not match the loaded dataset.
 The latest observation is read-only, and the schema permits no retained raw save payload.
 
+`resolvePlannerCalculationContext` selects manual or observed state and an explicit inventory source without merging them.
+The progression, person, customer, and inventory projection helpers omit partial facts that an existing calculator would otherwise interpret as complete.
+`neonschedule1-planner-production-evidence-request-1` records current positions, transfer and shopping movement, lifecycle timing, realized revenue, and attributed costs with explicit unknown and coverage states.
+Its validator checks profile ownership, dataset compatibility, source references, canonical identities, movement endpoints, sale timing, and cost coverage before the evidence reaches production calculations.
+
 `pnpm data:observe prepare --game-directory <path>` stages a one-shot request for the existing local exporter mod.
 After the matching save loads, `pnpm data:observe compare --game-directory <path>` verifies the response hash, request identity, game version, strict schema, and explicit inventory coverage.
 
 The repository still has no browser persistence adapter or automatic synchronization loop.
+
+## Compile the map publication input
+
+`@neonschedule1/public-data` owns the replaceable inputs for a future interactive map.
+It does not choose a browser renderer or implement website behavior.
+
+The checked-in input contains 229 public markers, 235 state-specific positions, 6 regions, and 20 explicit filter labels for game `0.4.6f13`.
+Six recruitable dealers keep separate potential-dealer and dealer positions.
+The compiler omits runtime markers, private player markers, canonical-record mirrors, unpositioned shops, and visual-only pay phones.
+
+Run the deterministic OpenCV treatment before compiling the input:
+
+```powershell
+uv run --script packages/public-data/scripts/process-map.py `
+  --main-source <main-map.png> `
+  --tutorial-source <tutorial-map.png> `
+  --output-directory packages/public-data/assets/map `
+  --provenance packages/public-data/assets/map/provenance.json
+```
+
+The script verifies the approved source hashes, preserves alpha, writes lossless 4096 by 4096 PNG files, and records every operation and parameter.
+Then compile the private input from the matching normalized dataset:
+
+```powershell
+pnpm --filter @neonschedule1/core build
+pnpm --filter @neonschedule1/public-data build
+pnpm --filter @neonschedule1/public-data map:compile -- --dataset <normalized-dataset>
+```
+
+`packages/public-data/inputs/map.json` retains source references for joins and audits.
+It is not a browser-safe artifact.
+A later publication step must remove source references before website code can consume the data.
 
 ## Local outputs
 
@@ -95,4 +133,5 @@ Build output under `dist` is generated and ignored.
 The ignored `.local` directory contains acquisitions, normalized datasets, benchmarks, validation evidence, precomputed corpora, verification reports, and runtime packages.
 
 Do not commit raw game exports, normalized production data, or generated solver artifacts.
+The processed map files under `packages/public-data/assets/map` have checked-in provenance.
 The [development overview](/docs/development.md#local-and-public-files) defines the repository-wide publication boundary.

@@ -1,0 +1,29 @@
+{
+    "name": "@neonschedule1/public-data",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "license": "Apache-2.0",
+    "imports": {
+        "#public-data/*": {
+            "types": "./src/*.ts",
+            "default": "./dist/*.js"
+        }
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.build.json",
+        "check": "tsc -p tsconfig.json",
+        "test": "vitest run --config ../../vitest.config.mts --project public-data",
+        "map:compile": "node dist/map/cli.js"
+    },
+    "dependencies": {
+        "@neonschedule1/core": "workspace:*",
+        "arktype": "2.2.3"
+    }
+}

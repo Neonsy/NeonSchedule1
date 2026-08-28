@@ -1,0 +1,58 @@
+{
+  "assets": [
+    {
+      "height": 4096,
+      "mapId": "hyland-point",
+      "output": {
+        "alphaCoverage": 1.0,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "5028a21f77d865d9bd906f13346bff7098be4302afdbfc22fac39514538a44f2",
+      "path": "assets/map/hyland-point.png",
+      "source": {
+        "alphaCoverage": 1.0,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceSha256": "98fc63f5528f07a5ae651a9efa2cb6f443c1dc7c4059966d50413618275de7b9",
+      "treatmentId": "source-derived-map-grade-1",
+      "width": 4096
+    },
+    {
+      "height": 4096,
+      "mapId": "tutorial-area",
+      "output": {
+        "alphaCoverage": 1.0,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "5c00580231a5f0b37edfb5463d65da432d56f21c9f54638ee6d078bcdf87a34c",
+      "path": "assets/map/tutorial-area.png",
+      "source": {
+        "alphaCoverage": 1.0,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceSha256": "77378de150d94077d3f35add1575a2eee0b751fde7946ffe6216373b788d0f9a",
+      "treatmentId": "source-derived-map-grade-1",
+      "width": 4096
+    }
+  ],
+  "opencvVersion": "5.0.0",
+  "operations": [
+    "Load with IMREAD_UNCHANGED and preserve the source alpha channel.",
+    "Blend 75 percent source color with a luminance-mapped project palette.",
+    "Blend a low-opacity Canny edge accent into detected boundaries.",
+    "Encode a lossless PNG and verify every decoded output pixel."
+  ],
+  "parameters": {
+    "cannyHigh": 160,
+    "cannyLow": 64,
+    "edgeBlend": 0.12,
+    "pngCompression": 9,
+    "sourceBlend": 0.75,
+    "targetBlend": 0.25
+  },
+  "schema": "neonschedule1-processed-map-provenance-1"
+}

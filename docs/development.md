@@ -19,6 +19,7 @@ In this page, **implemented** means that source and tests exercise the named beh
 | --- | --- | --- |
 | [`projects/typescript/packages/core`](/projects/typescript/packages/core) | Versioned data contracts and deterministic calculations | Implemented private workspace package |
 | [`projects/typescript/packages/data-compiler`](/projects/typescript/packages/data-compiler) | Verification and normalization of local exporter acquisitions | Implemented command-line tool |
+| [`projects/typescript/packages/public-data`](/projects/typescript/packages/public-data) | Pre-website publication inputs and processed asset provenance | Implemented private package and command-line tool |
 | [`projects/typescript/packages/solver`](/projects/typescript/packages/solver) | Search, allocation, precomputation, runtime artifacts, benchmarks, and verification | Implemented private package and command-line tools |
 | [`projects/typescript/web`](/projects/typescript/web) | Future player-facing application | Manifest-only placeholder |
 | [`projects/game-data-exporter`](/projects/game-data-exporter) | In-game acquisition, native validation, and offline mesh extraction | Implemented source-only Windows tools |
@@ -33,7 +34,8 @@ No package is published to a registry.
 3. The data compiler verifies the acquisition and writes a normalized dataset identified by its content
 4. The core package applies deterministic calculations to normalized data and explicit caller state
 5. The solver searches recipes, allocates constrained resources, builds precomputed corpora, and verifies runtime packages
-6. A future web application can expose those operations as player workflows
+6. The public-data package maps approved facts and processed assets into private publication inputs
+7. A future web application can expose those operations as player workflows
 
 The exporter owns observations from the installed game.
 The data compiler is the trust boundary between those observations and portable calculations.
@@ -52,9 +54,10 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 | Production and inventory | Partial | Production plans, equipment, additives, packaging, inventory, transfers, purchases, shopping, lifecycle timing, and realized-profit evidence | Exact results require complete movement, sale, revenue, and cost inputs |
 | Property blueprints | Partial | Placement, construction order, cost, storage, collision, access, temperature, lighting, sprinklers, capacity, schedules, employee logistics, movement, and business assessment | Mutable storage, moisture, trash, task order, live positions, dynamic obstacles, and unsupported collider proof remain outside the static model |
 | People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and static vehicle route estimates | Route estimates exclude endpoint traversal, graph-layer composition, native route choice, traffic, parking, and live driving |
-| Local planner data | Implemented contract and tooling | Versioned profiles, manual state, inventories, checklists, blueprints, and one read-only observation with explicit unknowns and compatibility checks | No browser persistence adapter or automatic synchronization loop exists |
+| Local planner data | Implemented contract and tooling | Versioned profiles, manual state, inventories, checklists, blueprints, one read-only observation, explicit calculation-source selection, and production evidence requests | No browser persistence adapter or automatic synchronization loop exists |
 | Data pipeline | Tooling | Hash verification, schema checks, integrity checks, normalization, stable dataset identity, and corruption detection | Requires a private local acquisition |
 | Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, planner observation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
+| Publication inputs | Tooling | 229 map markers, 235 state-specific positions, 6 regions, explicit public labels, processed map images, and provenance for game `0.4.6f13` | The input retains private join references and no browser-safe artifact or map renderer exists |
 | Website | Planned | Workspace ownership only | No source application or deployment exists |
 
 Exact and incomplete results are separate contracts.
@@ -84,6 +87,12 @@ Applying observation values to manual state requires an explicit future action.
 The manifest encodes individual-document or full-profile export and optional-document or full-profile deletion as its lifecycle policy.
 The source-only exporter mod and TypeScript CLI implement one-shot, read-only, hash-verified planner observations.
 No browser persistence adapter, automatic synchronization loop, or migration implementation exists yet.
+
+Calculation requests select manual or observed state and a specific inventory source.
+The core does not merge those sources automatically.
+Profile projections pass only complete progression, relationship, and inventory collections into calculators that treat omission as known absence.
+The versioned production evidence request records current positions, transfer and shopping movement, lifecycle timing, realized revenue, and attributed costs.
+Unknown and partial evidence remains explicit.
 
 ## TypeScript workflow
 

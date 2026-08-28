@@ -1,0 +1,6453 @@
+{
+  "canvas": {
+    "height": 4096,
+    "width": 4096
+  },
+  "compatibility": {
+    "datasetSha256": "5ee8e697d8ba3eaad5e1eed7ddb2a2ebfa39bb591fc629290d0d05d609190a90",
+    "gameVersion": "0.4.6f13",
+    "normalizerVersion": "0.0.40"
+  },
+  "maps": [
+    {
+      "id": "hyland-point",
+      "image": {
+        "height": 4096,
+        "mapId": "hyland-point",
+        "outputSha256": "5028a21f77d865d9bd906f13346bff7098be4302afdbfc22fac39514538a44f2",
+        "path": "assets/map/hyland-point.png",
+        "sourceSha256": "98fc63f5528f07a5ae651a9efa2cb6f443c1dc7c4059966d50413618275de7b9",
+        "treatmentId": "source-derived-map-grade-1",
+        "width": 4096
+      },
+      "label": "Hyland Point",
+      "markerCoverage": "mapped"
+    },
+    {
+      "id": "tutorial-area",
+      "image": {
+        "height": 4096,
+        "mapId": "tutorial-area",
+        "outputSha256": "5c00580231a5f0b37edfb5463d65da432d56f21c9f54638ee6d078bcdf87a34c",
+        "path": "assets/map/tutorial-area.png",
+        "sourceSha256": "77378de150d94077d3f35add1575a2eee0b751fde7946ffe6216373b788d0f9a",
+        "treatmentId": "source-derived-map-grade-1",
+        "width": 4096
+      },
+      "label": "Tutorial area",
+      "markerCoverage": "none"
+    }
+  ],
+  "markerKinds": [
+    {
+      "kind": "property",
+      "label": "Properties"
+    },
+    {
+      "kind": "shop",
+      "label": "Shops"
+    },
+    {
+      "kind": "customer",
+      "label": "Customers"
+    },
+    {
+      "kind": "dealer",
+      "label": "Dealers"
+    },
+    {
+      "kind": "atm",
+      "label": "ATMs"
+    },
+    {
+      "kind": "barbershop",
+      "label": "Barbershops"
+    },
+    {
+      "kind": "blackjack-table",
+      "label": "Blackjack tables"
+    },
+    {
+      "kind": "cash-for-trash",
+      "label": "Cash for trash"
+    },
+    {
+      "kind": "dead-drop",
+      "label": "Dead drops"
+    },
+    {
+      "kind": "parking",
+      "label": "Parking"
+    },
+    {
+      "kind": "pawn-shop",
+      "label": "Pawn shops"
+    },
+    {
+      "kind": "pay-phone",
+      "label": "Pay phones"
+    },
+    {
+      "kind": "skateboard-seller",
+      "label": "Skateboard sellers"
+    },
+    {
+      "kind": "slot-machine",
+      "label": "Slot machines"
+    },
+    {
+      "kind": "supplier-meetup",
+      "label": "Supplier meetups"
+    },
+    {
+      "kind": "supplier-stash",
+      "label": "Supplier stashes"
+    },
+    {
+      "kind": "tattoo-shop",
+      "label": "Tattoo shops"
+    },
+    {
+      "kind": "vehicle-dealership",
+      "label": "Vehicle dealerships"
+    },
+    {
+      "kind": "vehicle-repaint",
+      "label": "Vehicle repainting"
+    },
+    {
+      "kind": "vending-machine",
+      "label": "Vending machines"
+    }
+  ],
+  "markers": [
+    {
+      "description": null,
+      "id": "marker-0abf178c8557adf7df98",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2212.388705616,
+            "y": 1404.683254
+          },
+          "regionId": null,
+          "state": "default",
+          "worldPosition": {
+            "x": 26.908,
+            "z": 60.56
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "ada29e98-396a-4c38-9391-a225ff839d8f"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-0f7683e28093c569108f",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1466.7620683999999,
+            "y": 1695.15202912
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -47.56,
+            "z": 31.55
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "7e11b3f0-9a8f-47e9-90b5-b61a09e0fb63"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3f69f644ef5cb47d8728",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1454.8469411199999,
+            "y": 1514.42257752
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -48.75,
+            "z": 49.6
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "9fcdabf8-6d3d-49be-9935-fa3b33ec359c"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-545b007d152b677337b1",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1834.07840812,
+            "y": 1317.7929392639999
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -10.875,
+            "z": 69.238
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "e9353c92-f7e7-4428-9d9c-f6157611a246"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5b56ff202dd0848e10d0",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2095.10980996,
+            "y": 2119.811170464
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 15.195,
+            "z": -10.862
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "44f58fb6-b48f-4604-9cb1-36dfe5c5a77c"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6c343948ea2aa4a7d966",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2803.929717864,
+            "y": 1610.554625432
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 85.987,
+            "z": 39.999
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "3a44af7b-19e1-424e-b47f-67ce575ae43b"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8476d45d7ee8af6cf91c",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3317.91226296,
+            "y": 1525.13617936
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 137.32,
+            "z": 48.53
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "e405902e-7d5c-4bf6-9c37-d923f3491863"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-89b49a55a693cb87a671",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1483.5031626606078,
+            "y": 2683.887313696
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -45.888016,
+            "z": -67.198
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "73959fcd-042c-4df5-8f90-aa9503c3a3c5"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8b39122555459ea294ef",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 756.320101152,
+            "y": 1353.778626192
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -118.514,
+            "z": 65.644
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "a3896eed-66ea-405b-a25f-1c86c36891ba"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-9e6829bd9eeac65231a6",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1361.548520742136,
+            "y": 1221.620840504
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -58.067997,
+            "z": 78.843
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "d7f65a05-a85c-4d26-af46-cd116795532d"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ab92a4520aa2cc4dd418",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1285.702197304,
+            "y": 1511.9193995199998
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -65.643,
+            "z": 49.85
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "2e949467-f0db-4298-bb03-3f9e2e565b29"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b6de3c8cbe21994beb92",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2092.416390432,
+            "y": 1113.0229661520002
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 14.926,
+            "z": 89.689
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "41b25e2c-5289-4eee-94dc-0dbe3380646d"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-df86112965711dddea37",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3027.9240980160002,
+            "y": 1732.9099660719999
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 108.358,
+            "z": 27.779
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "9530ed8d-26cb-4d0b-bc74-9c030d357ae8"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e888ba1810a6cb382c19",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1616.682405176,
+            "y": 757.6618045599998
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -32.587,
+            "z": 125.18
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "273b1b55-333a-4de5-ac0f-cab80b6d48f9"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f0ea789978440b0310ca",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2811.5694171200003,
+            "y": 2120.19165352
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 86.75,
+            "z": -10.9
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "072775b9-91df-4a29-bbcc-c1e9c4039041"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-fa45fe7bb1144011c36e",
+      "kind": "atm",
+      "label": "ATM",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1710.67173272,
+            "y": 1846.84461592
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -23.2,
+            "z": 16.4
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "69d0eabe-b90f-4e46-8fb6-684e21acddbf"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-79a606eeac6771dd381e",
+      "kind": "barbershop",
+      "label": "Barbershop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1665.61452872,
+            "y": 1690.64630872
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -27.7,
+            "z": 32
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Docks/Barbershop"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d8666c82c783de306d93",
+      "kind": "blackjack-table",
+      "label": "Blackjack table",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2118.1891111200002,
+            "y": 1060.5463425599999
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 17.5,
+            "z": 94.93
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Blackjack"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2b3af411fee5046c9576",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1602.5344431199999,
+            "y": 484.11451272
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -34,
+            "z": 152.5
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (1)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-37316b555bb8719749f9",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1479.42814908,
+            "y": 2529.170887872
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -46.295,
+            "z": -51.746
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (9)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3b3f6b1c72219b956acf",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1802.7891937683119,
+            "y": 1720.7841913569441
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -13.999949,
+            "z": 28.990038
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (3)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5ad79002884680bdde73",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3062.88848832,
+            "y": 1850.44919224
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 111.85,
+            "z": 16.04
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (7)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6170f1e9ce84249fea49",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3175.93245737204,
+            "y": 1341.05246924
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 123.140045,
+            "z": 66.915
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (13)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8525c9e90a0e0ee2d1f8",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1414.2954575200001,
+            "y": 1056.2408764
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -52.8,
+            "z": 95.36
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a8913f9119cff381b5c2",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2904.50751003112,
+            "y": 2922.770596592
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 96.03201,
+            "z": -91.056
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (11)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b58f001394eaa22634bb",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1417.339321968,
+            "y": 760.8057961279999
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -52.496,
+            "z": 124.866
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (2)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ca190bd50f723ded7db1",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 754.10168468128,
+            "y": 1142.72928087632
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -118.73556,
+            "z": 86.72214
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (4)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d905d208afe6460a6ba1",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2558.638299288,
+            "y": 1445.505080824
+          },
+          "regionId": null,
+          "state": "default",
+          "worldPosition": {
+            "x": 61.489,
+            "z": 56.483
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (6)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e10aca081de21e467702",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2212.35866748,
+            "y": 1276.160082768
+          },
+          "regionId": null,
+          "state": "default",
+          "worldPosition": {
+            "x": 26.905,
+            "z": 73.396
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (10)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-fc12cf09334eb6fd45eb",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 342.88520995999966,
+            "y": 1070.529016424
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -159.805,
+            "z": 93.933
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (5)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-fc298bafd83e2979bbca",
+      "kind": "cash-for-trash",
+      "label": "Cash for trash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2012.314694432,
+            "y": 2269.621367408
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 6.926,
+            "z": -25.824
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Recyclers/Recycler (8)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e86bbeab6cb7eb5942b4",
+      "kind": "customer",
+      "label": "Alison Knight",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2659.807982912288,
+            "y": 2035.34157904468
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 71.593124,
+            "z": -2.425765
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "alison_knight"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6405007929c64eccfad3",
+      "kind": "customer",
+      "label": "Anna Chesterfield",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1605.61395282272,
+            "y": 1630.314282017384
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -33.69244,
+            "z": 38.025543
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "anna_chesterfield"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3cb2492d91fb79448169",
+      "kind": "customer",
+      "label": "Austin Steiner",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 607.8078520645597,
+            "y": 616.70154337144
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -133.34637,
+            "z": 139.25813
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "austin_steiner"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-eff5ab3edada211343b3",
+      "kind": "customer",
+      "label": "Beth Penn",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1460.481724963256,
+            "y": 1395.6967648783038
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -48.187237,
+            "z": 61.457508
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "beth_penn"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-975e3d8ef809d445beac",
+      "kind": "customer",
+      "label": "Billy Kramer",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1361.06457633304,
+            "y": 2779.44232901544
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -58.11633,
+            "z": -76.74137
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "billy_kramer"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8e16b1c1d1edc9edc365",
+      "kind": "customer",
+      "label": "Bruce Norton",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2698.28999914528,
+            "y": 1517.572837045712
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 75.43644,
+            "z": 49.285374
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "bruce_norton"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f71dc3f7841761463745",
+      "kind": "customer",
+      "label": "Carl Bundy",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2517.289323202624,
+            "y": 3149.3749903810403
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 57.359352,
+            "z": -113.68767
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "carl_bundy"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ef29af8b85af8377c001",
+      "kind": "customer",
+      "label": "Charles Rowland",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 239.25834673463987,
+            "y": 1495.4775251448
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -170.15453,
+            "z": 51.4921
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "charles_rowland"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1aa7aa93af98836e4105",
+      "kind": "customer",
+      "label": "Chloe Bowers",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 697.035774594928,
+            "y": 1348.16209552272
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -124.434906,
+            "z": 66.20494
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "chloe_bowers"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-aafeaf2d3a60f6c1410d",
+      "kind": "customer",
+      "label": "Chris Sullivan",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3452.6873715648,
+            "y": 2982.77938291312
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 150.7804,
+            "z": -97.04926
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "chris_sullivan"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3abfc3a1a8f8432ac358",
+      "kind": "customer",
+      "label": "Cranky Frank",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 954.4611582844,
+            "y": 1308.65178378004
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -98.72505,
+            "z": 70.150955
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "cranky_frank"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a0f30432cc009de8cc17",
+      "kind": "customer",
+      "label": "Dean Webster",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 559.32279611136,
+            "y": 1282.5929999102
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -138.18872,
+            "z": 72.753525
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "dean_webster"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-9c9cd04dc9d6e893fe28",
+      "kind": "customer",
+      "label": "Dennis Kennedy",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2414.877041993712,
+            "y": 3046.26368169656
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 47.131126,
+            "z": -103.38963
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "dennis_kennedy"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ed3873eef59a2f970033",
+      "kind": "customer",
+      "label": "Donna Martin",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1288.226562202592,
+            "y": 1253.61355801352
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -65.390884,
+            "z": 75.64779
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "donna_martin"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-aba0ba57a4466b16d01f",
+      "kind": "customer",
+      "label": "Doris Lubbin",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1640.090934319272,
+            "y": 1956.6375745343703
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -30.249119,
+            "z": 5.4346433
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "doris_lubbin"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-64e3877cd4015198000f",
+      "kind": "customer",
+      "label": "Elizabeth Homley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1921.583167946948,
+            "y": 1359.8064790702401
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -2.1356335,
+            "z": 65.04198
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "elizabeth_homley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5b3efcd0e58748043957",
+      "kind": "customer",
+      "label": "Eugene Buckley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1981.9928722679888,
+            "y": 1676.631245390376
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 3.8976674,
+            "z": 33.399727
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "eugene_buckley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c7df7bf5c4528ccfc566",
+      "kind": "customer",
+      "label": "Fiona Hancock",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1755.128914940688,
+            "y": 1919.358999173184
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -18.759926,
+            "z": 9.157768
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "fiona_hancock"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a0a31cdc17f1e4c2277b",
+      "kind": "customer",
+      "label": "Genghis Barn",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1276.532715857792,
+            "y": 2520.48090519076
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -66.558784,
+            "z": -50.878105
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "genghis_barn"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f17545ec4a5de3b05ac8",
+      "kind": "customer",
+      "label": "George Greene",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 568.3863030137597,
+            "y": 977.4896949945598
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -137.28352,
+            "z": 103.22512
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "george_greene"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1cbbc2bd86818464f9d6",
+      "kind": "customer",
+      "label": "Geraldine Poon",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1699.034638426816,
+            "y": 306.65991883384004
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -24.362232,
+            "z": 170.22293
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "geraldine_poon"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-35aaf47c6e9a2c86580e",
+      "kind": "customer",
+      "label": "Greg Figgle",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2002.0795330133096,
+            "y": 1101.69117947312
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 5.9037833,
+            "z": 90.82074
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "greg_fliggle"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1b8f59f40dc948917cb9",
+      "kind": "customer",
+      "label": "Hank Stevenson",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3017.27047232088,
+            "y": 1722.0862244
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 107.29399,
+            "z": 28.86
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "hank_stevenson"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-dc54693987d6c6b6b461",
+      "kind": "customer",
+      "label": "Harold Colt",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2432.5599820086,
+            "y": 1008.95424194608
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 48.897175,
+            "z": 100.08266
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "harold_colt"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-595b867253f0b55418fb",
+      "kind": "customer",
+      "label": "Herbert Bleuball",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2703.57671108128,
+            "y": 2041.3149587645553
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 75.96444,
+            "z": -3.0223446
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "herbert_bleuball"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-10e688a7a74bf9625a74",
+      "kind": "customer",
+      "label": "Irene Meadows",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3073.74437079752,
+            "y": 1429.047366338416
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 112.93421,
+            "z": 58.126682
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "irene_meadows"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-333da46f341fa8560d5a",
+      "kind": "customer",
+      "label": "Jack Knight",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3138.43925652532,
+            "y": 2996.38615788552
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 119.395485,
+            "z": -98.40821
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jack_knight"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-0efebd967eb195ad2423",
+      "kind": "customer",
+      "label": "Jackie Stevenson",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3363.415032644,
+            "y": 3098.77414825512
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 141.8645,
+            "z": -108.63401
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jackie_stevenson"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b615d57f57993dd922fd",
+      "kind": "customer",
+      "label": "Javier Pérez",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1370.2099872196,
+            "y": 2748.19465740584
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -57.20295,
+            "z": -73.62057
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "javier_perez"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8ff0f13a7dd20f3a9838",
+      "kind": "customer",
+      "label": "Jeff Gilmore",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1489.47230099568,
+            "y": 814.27152547492
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -45.29186,
+            "z": 119.526215
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jeff_gilmore"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7fa5f3a7c28d9f782a2b",
+      "kind": "customer",
+      "label": "Jen Heard",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2637.9129452768,
+            "y": 1979.526687233744
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 69.4064,
+            "z": 3.148638
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jen_heard"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3ca4aa13df8e6d407abc",
+      "kind": "customer",
+      "label": "Jennifer Rivera",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1968.429948969064,
+            "y": 1736.611685723824
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 2.543097,
+            "z": 27.409298
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jennifer_rivera"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e82555b4de54fc831bdb",
+      "kind": "customer",
+      "label": "Jeremy Wilkinson",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2185.399049924232,
+            "y": 2351.2927963190878
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 24.212461,
+            "z": -33.980774
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jeremy_wilkinson"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7037f7249cd27be687ab",
+      "kind": "customer",
+      "label": "Jerry Montero",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1050.43810928752,
+            "y": 1341.682228773952
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -89.13954,
+            "z": 66.852104
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jerry_montero"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-10dab770656179803f08",
+      "kind": "customer",
+      "label": "Jessi Waters",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1342.426954267088,
+            "y": 989.3127053241599
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -59.977726,
+            "z": 102.04432
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jessi_waters"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-31f266e705e8f4f5c03d",
+      "kind": "customer",
+      "label": "Joyce Ball",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 955.082807521632,
+            "y": 1530.317597616608
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -98.662964,
+            "z": 48.012516
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "joyce_ball"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-dc87df11e925892d76ba",
+      "kind": "customer",
+      "label": "Karen Kennedy",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2702.22869966472,
+            "y": 3162.83527937688
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 75.82981,
+            "z": -115.03199
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "karen_kennedy"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-675ada556ffca72c68c5",
+      "kind": "customer",
+      "label": "Kathy Henderson",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 402.4470288174398,
+            "y": 1598.86758773136
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -153.85638,
+            "z": 41.16622
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "kathy_henderson"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ae7c38a09eec93ab8e11",
+      "kind": "customer",
+      "label": "Keith Wagner",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 444.37746311408,
+            "y": 1637.560681946024
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -149.66866,
+            "z": 37.301823
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "keith_wagner"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-79c75a652359af049953",
+      "kind": "customer",
+      "label": "Kelly Reynolds",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3010.77427483884,
+            "y": 3341.24188192
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 106.645195,
+            "z": -132.85
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "kelly_reynolds"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3e8198ede8ba519d45c6",
+      "kind": "customer",
+      "label": "Kevin Oakley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2267.45852148888,
+            "y": 1054.0198065606
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 32.40799,
+            "z": 95.581825
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "kevin_oakley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-cfbd5f07d77d55309b6f",
+      "kind": "customer",
+      "label": "Kim Delaney",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1243.47849067288,
+            "y": 510.1763004034399
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -69.86001,
+            "z": 149.89713
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "kim_delaney"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6972d399576429a0790c",
+      "kind": "customer",
+      "label": "Kyle Cooley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1666.020003505152,
+            "y": 1212.03146596736
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -27.659504,
+            "z": 79.80072
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "kyle_cooley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-989f481971511d1e88ac",
+      "kind": "customer",
+      "label": "Lily Turner",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2391.467081032624,
+            "y": 1724.916657879008
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 44.793102,
+            "z": 28.577316
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "lily_turner"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-3a4daf6b1421a22f9651",
+      "kind": "customer",
+      "label": "Lisa Gardener",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1415.073585420368,
+            "y": 2664.4786727552
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -52.722286,
+            "z": -65.2596
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "lisa_gardener"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8523e39789043370b459",
+      "kind": "customer",
+      "label": "Louis Fourier",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1874.861696015512,
+            "y": 1372.5025277972559
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -6.801849,
+            "z": 63.773987
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "louis_fourier"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-df14a07c1bda2b256954",
+      "kind": "customer",
+      "label": "Lucy Pennington",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1539.621810115488,
+            "y": 813.97059341576
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -40.283276,
+            "z": 119.55627
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "lucy_pennington"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a379a174de63602e18aa",
+      "kind": "customer",
+      "label": "Ludwig Meyer",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1968.2448209330823,
+            "y": 1747.740875188096
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 2.5246077,
+            "z": 26.297792
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "ludwig_meyer"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-bd02d34b510cdf9f4154",
+      "kind": "customer",
+      "label": "Mac Cooper",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1310.3129427643998,
+            "y": 2703.06335933704
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -63.18505,
+            "z": -69.11317
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "mac_cooper"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-325915744c4db58632d7",
+      "kind": "customer",
+      "label": "Marco Barone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1992.2868874065439,
+            "y": 2039.6851776170608
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 4.925762,
+            "z": -2.8595734
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "marco_baron"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ffa79cf97cca0ac9bae0",
+      "kind": "customer",
+      "label": "Meg Cooley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2136.305891933136,
+            "y": 1985.6048219491056
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 19.309378,
+            "z": 2.5415962
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "meg_cooley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c79a5303a5b907839866",
+      "kind": "customer",
+      "label": "Melissa Wood",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1675.1067398993919,
+            "y": 2756.51391942528
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -26.751984,
+            "z": -74.45144
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "melissa_wood"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-655813282f30e9bf4a7f",
+      "kind": "customer",
+      "label": "Michael Boog",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3263.7479967604004,
+            "y": 696.20507995656
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 131.91045,
+            "z": 131.31787
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "michael_boog"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d595a3d408904419a63e",
+      "kind": "customer",
+      "label": "Mick Lubbin",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1261.338325270672,
+            "y": 1522.79640881984
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -68.076294,
+            "z": 48.76368
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "mick_lubbin"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c151402daaeb70acde46",
+      "kind": "customer",
+      "label": "Mrs. Ming",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1329.6967922302879,
+            "y": 646.2516597885599
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -61.249126,
+            "z": 136.30687
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "ming"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ef5d64457ecdd15ac48d",
+      "kind": "customer",
+      "label": "Pearl Moore",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3249.0732659260802,
+            "y": 1389.710504805712
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 130.44484,
+            "z": 62.055374
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "pearl_moore"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b4ac10cb7a798948a232",
+      "kind": "customer",
+      "label": "Peggy Myers",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1324.5920713476,
+            "y": 535.48543252584
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -61.75895,
+            "z": 147.36943
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "peggy_myers"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b145898b7bb2bbdcaa72",
+      "kind": "customer",
+      "label": "Peter File",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1233.61687049696,
+            "y": 1131.201305118512
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -70.84492,
+            "z": 87.873474
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "peter_file"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-40b90f35e59824f1043a",
+      "kind": "customer",
+      "label": "Philip Wentworth",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2859.551474473168,
+            "y": 1149.28890888888
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 91.542114,
+            "z": 86.06701
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "philip_wentworth"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6b5969b710ca09dee9f1",
+      "kind": "customer",
+      "label": "Randy Caulfield",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1061.12923258908,
+            "y": 2235.924155896584
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -88.071785,
+            "z": -22.458557
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "randy_caulfield"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-bbdddda681fe4717f29e",
+      "kind": "customer",
+      "label": "Ray Hoffman",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2676.581678563168,
+            "y": 2132.392964134384
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 73.268364,
+            "z": -12.118582
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "ray_hoffman"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-79de5c1d4b015b5961f4",
+      "kind": "customer",
+      "label": "Sam Thompson",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3366.8363763344,
+            "y": 2961.16564240856
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 142.2062,
+            "z": -94.89063
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "sam_thompson"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d1689920004b03e48985",
+      "kind": "customer",
+      "label": "Sherman Giles",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1185.2226298415999,
+            "y": 2348.383793089016
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -75.6782,
+            "z": -33.690243
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "sherman_giles"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f751ed58845db060c7c1",
+      "kind": "customer",
+      "label": "Tobias Wentworth",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2834.8669954016,
+            "y": 1031.12288694968
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 89.0768,
+            "z": 97.86861
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "tobias_wentworth"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-caa8e6838d44882ed22b",
+      "kind": "customer",
+      "label": "Trent Sherman",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 708.48967630936,
+            "y": 1609.1407003323438
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -123.29097,
+            "z": 40.140213
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "trent_sherman"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1ba2e936917a92b6d9d8",
+      "kind": "customer",
+      "label": "Walter Cussler",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3308.9020236854403,
+            "y": 1621.31588778112
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 136.42012,
+            "z": 38.92424
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "walter_cussler"
+      }
+    },
+    {
+      "description": "in the alleyway behind the grocery store",
+      "id": "marker-cb3f4107d4795716c9a6",
+      "kind": "dead-drop",
+      "label": "Alleyway behind grocery store",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1995.0197369944,
+            "y": 1287.0368918136
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 5.1987,
+            "z": 72.3097
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "5aeef10c-955d-4fdb-9061-38f4ad7a6289"
+      }
+    },
+    {
+      "description": "in the alleyway behind Slop Shop (the diner)",
+      "id": "marker-ea0663223ecc4a2cbbb3",
+      "kind": "dead-drop",
+      "label": "Alleyway behind Slop Shop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1917.954896544,
+            "y": 1710.5836208544001
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -2.498,
+            "z": 30.0088
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "58ec86b5-647e-456d-9266-4cd77413e9c3"
+      }
+    },
+    {
+      "description": "in the alleyway behind the laundromat",
+      "id": "marker-b536b4d5ba197f707b42",
+      "kind": "dead-drop",
+      "label": "Alleyway behind the laundromat",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1619.8784628464,
+            "y": 1762.3903940136
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -32.2678,
+            "z": 24.8347
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "555e565d-2f65-4882-9edb-7167168b2e00"
+      }
+    },
+    {
+      "description": "in the alleyway behind top tattoo",
+      "id": "marker-116c3f45426232bc18bd",
+      "kind": "dead-drop",
+      "label": "Alleyway behind Top Tattoo",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 559.9848366287997,
+            "y": 1284.010048976
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -138.1226,
+            "z": 72.612
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "3ed706ba-458d-44b5-95cd-d65e4a699043"
+      }
+    },
+    {
+      "description": "behind the auto shop",
+      "id": "marker-6d4391d2377e1434c8ae",
+      "kind": "dead-drop",
+      "label": "Behind auto shop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1970.7909764967999,
+            "y": 2058.8457696384
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 2.7789,
+            "z": -4.7732
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "aaea12a7-ee38-47ba-aeb8-fb0d45a03957"
+      }
+    },
+    {
+      "description": "behind the bank",
+      "id": "marker-7b5220372943ed6a22a2",
+      "kind": "dead-drop",
+      "label": "Behind bank",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2704.4896701614402,
+            "y": 1640.2663470208
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 76.05562,
+            "z": 37.0316
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "e5399b56-22a5-4a2c-a254-cc81e3ab2f75"
+      }
+    },
+    {
+      "description": "behind the casino",
+      "id": "marker-b8df704e1ee6cc09f561",
+      "kind": "dead-drop",
+      "label": "Behind Casino",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2027.8874654056,
+            "y": 1143.8110542808
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 8.4813,
+            "z": 86.6141
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "f5614c42-2c74-42d5-bee2-025e84718792"
+      }
+    },
+    {
+      "description": "behind the Crimson Canary",
+      "id": "marker-6c6c9e68cd3030469c4c",
+      "kind": "dead-drop",
+      "label": "Behind Crimson Canary",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2398.2326505056,
+            "y": 1350.2911986024
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 45.4688,
+            "z": 65.9923
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "51e8f8ec-adcb-4800-8020-55cc24f9ba40"
+      }
+    },
+    {
+      "description": "behind the fire station",
+      "id": "marker-a1117ae3f547eccd116d",
+      "kind": "dead-drop",
+      "label": "Behind fire station",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3073.6000876176004,
+            "y": 1635.666507128
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 112.9198,
+            "z": 37.491
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "86835825-f5f8-454d-9c74-c31e257f9cc2"
+      }
+    },
+    {
+      "description": "behind the western Gas-Mart",
+      "id": "marker-9d473854c9b6203143c9",
+      "kind": "dead-drop",
+      "label": "Behind Gas-Mart",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 809.447551024,
+            "y": 1458.1100839608
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -113.208,
+            "z": 55.2241
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "64d10032-64a9-4cd9-8750-8048d71c5029"
+      }
+    },
+    {
+      "description": "behind the medical practice",
+      "id": "marker-6a0b8793b1bb4c7940d9",
+      "kind": "dead-drop",
+      "label": "Behind medical practice",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2928.547931416,
+            "y": 1299.9633030056
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 98.433,
+            "z": 71.0187
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "683fa5b9-c55d-4b3f-8026-6f29857d09d1"
+      }
+    },
+    {
+      "description": "behind the motel office",
+      "id": "marker-d9d8cf7caac2841efc66",
+      "kind": "dead-drop",
+      "label": "Behind motel office",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1286.9978422368,
+            "y": 1236.92026444
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -65.5136,
+            "z": 77.315
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "d66b3fd6-7b7f-4e98-b000-6d5a197f7437"
+      }
+    },
+    {
+      "description": "behind Randy's bait & tackle",
+      "id": "marker-3c3111bc7efba0b85a08",
+      "kind": "dead-drop",
+      "label": "Behind Randy's bait & tackle",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 972.5065684864,
+            "y": 2381.0808748496
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -96.9228,
+            "z": -36.9558
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "baf08ceb-a0e7-4e4a-baa8-6b4cc992cb15"
+      }
+    },
+    {
+      "description": "behind the supermarket",
+      "id": "marker-bcf689036d5a8c1bac62",
+      "kind": "dead-drop",
+      "label": "Behind the supermarket",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2190.140459552,
+            "y": 1330.0104504464
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 24.686,
+            "z": 68.0178
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "fe1782b0-64e5-4ae6-a3f9-56af509af104"
+      }
+    },
+    {
+      "description": "behind Thompson Construction",
+      "id": "marker-94c0be380acc25c54216",
+      "kind": "dead-drop",
+      "label": "Behind Thompson Construction",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1581.437658936,
+            "y": 888.19582874296
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -36.107,
+            "z": 112.14317
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "766389cd-b2e3-44ec-84fe-9c59eccfcdd7"
+      }
+    },
+    {
+      "description": "outside apartment 2 of the western apartment block",
+      "id": "marker-5568da6826d3e5577997",
+      "kind": "dead-drop",
+      "label": "Brown apartment block",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 231.70405591199983,
+            "y": 1074.9265995343999
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -170.909,
+            "z": 93.4938
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "b77ed1a0-c729-41d5-b8a2-81b480ca971f"
+      }
+    },
+    {
+      "description": "in the central canal",
+      "id": "marker-635b0f9562ae491863ce",
+      "kind": "dead-drop",
+      "label": "Central canal",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2205.820366544,
+            "y": 1875.440921392
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 26.252,
+            "z": 13.544
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "4ac50ff1-ad3c-415b-aa77-c80249dfa473"
+      }
+    },
+    {
+      "description": "in the gazebo in the residential park",
+      "id": "marker-606320ffa15040cafcd9",
+      "kind": "dead-drop",
+      "label": "Gazebo",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2885.773625752,
+            "y": 3302.732991568
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 94.161,
+            "z": -129.004
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "94eef741-d688-4380-ac64-cf190e812b10"
+      }
+    },
+    {
+      "description": "at the grey building in the docks",
+      "id": "marker-159128e10d141201e269",
+      "kind": "dead-drop",
+      "label": "Grey docks building",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1472.779708312,
+            "y": 2740.3399852232
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -46.959,
+            "z": -72.8361
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "eff8fff2-0f89-4936-aef5-c4d383ea4f50"
+      }
+    },
+    {
+      "description": "on the north exterior wall of the arcade",
+      "id": "marker-a2ddeaeccc4d0468798e",
+      "kind": "dead-drop",
+      "label": "North arcade wall",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1462.166233592,
+            "y": 535.019140528
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -48.019,
+            "z": 147.416
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "dd3d22f1-da56-4673-9203-640eeaf915fc"
+      }
+    },
+    {
+      "description": "on the pawn shop west wall",
+      "id": "marker-783b8db7e453b7904388",
+      "kind": "dead-drop",
+      "label": "Pawn shop west wall",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1279.6625294256,
+            "y": 1490.852653472
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -66.2462,
+            "z": 51.954
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "fde97bca-d21a-476c-bf03-b00768a45030"
+      }
+    },
+    {
+      "description": "at the skate park",
+      "id": "marker-c4cb739dd027975aa313",
+      "kind": "dead-drop",
+      "label": "Skate park",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1537.45181512,
+            "y": 1148.5480683279998
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -40.5,
+            "z": 86.141
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "eda8c6a4-07be-4d8f-97f4-ddd6dfca19df"
+      }
+    },
+    {
+      "description": "on the east-exterior wall of Taco Ticklers",
+      "id": "marker-26b3ba5c5de819bba2db",
+      "kind": "dead-drop",
+      "label": "Taco Ticklers exterior wall",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1687.8257277496,
+            "y": 1190.000696008
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -25.4817,
+            "z": 82.001
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "79200bb6-7d39-44d9-ab22-c63f136d8cdf"
+      }
+    },
+    {
+      "description": "on the fountain outside town hall",
+      "id": "marker-c0e9aff00c3944f38150",
+      "kind": "dead-drop",
+      "label": "Town hall fountain",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2412.5067727328,
+            "y": 1694.481177416
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 46.8944,
+            "z": 31.617
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "d28c727e-5175-4989-8c33-2a36c159c817"
+      }
+    },
+    {
+      "description": "under the west bridge",
+      "id": "marker-24d4c9d291fc6b6b42db",
+      "kind": "dead-drop",
+      "label": "Under west bridge",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1033.7923760959998,
+            "y": 1336.376532736
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -90.802,
+            "z": 67.382
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "0fd91cf3-ac6a-41ce-968f-1f356f996a83"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b9331f89dfc99c3ec2df",
+      "kind": "dealer",
+      "label": "Benji Coleman",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 1268.02905973416,
+            "y": 1124.2642379144
+          },
+          "regionId": "northtown",
+          "state": "dealer",
+          "worldPosition": {
+            "x": -67.40807,
+            "z": 88.5663
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 1199.8596728279522,
+            "y": 1092.764286013248
+          },
+          "regionId": "northtown",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": -74.216354,
+            "z": 91.712296
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "benji_coleman"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e062acc1672ef0b38d61",
+      "kind": "dealer",
+      "label": "Brad Crosby",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 1969.530376056,
+            "y": 1173.8802296879999
+          },
+          "regionId": "downtown",
+          "state": "dealer",
+          "worldPosition": {
+            "x": 2.653,
+            "z": 83.611
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 1930.8063655904937,
+            "y": 1127.9497169473598
+          },
+          "regionId": "downtown",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": -1.2144847,
+            "z": 88.19822
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "brad_crosby"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-9bf634847f2fdcfaf13b",
+      "kind": "dealer",
+      "label": "Jane Lucero",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 1667.187655940456,
+            "y": 2839.209148138368
+          },
+          "regionId": "docks",
+          "state": "dealer",
+          "worldPosition": {
+            "x": -27.542887,
+            "z": -82.710464
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 1650.02578747076,
+            "y": 2896.781941757008
+          },
+          "regionId": "docks",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": -29.256895,
+            "z": -88.460434
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "jane_lucero"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-36870e7fabfd33baa12a",
+      "kind": "dealer",
+      "label": "Leo Rivers",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 3436.25390786768,
+            "y": 1357.6060854811199
+          },
+          "regionId": "uptown",
+          "state": "dealer",
+          "worldPosition": {
+            "x": 149.13914,
+            "z": 65.26174
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 3481.30430322352,
+            "y": 1356.82128911456
+          },
+          "regionId": "uptown",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": 153.63846,
+            "z": 65.34012
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "leo_rivers"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6935960c2f7ac3c8c5a8",
+      "kind": "dealer",
+      "label": "Molly Presley",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 282.3183150719997,
+            "y": 1070.5790799840001
+          },
+          "regionId": "westville",
+          "state": "dealer",
+          "worldPosition": {
+            "x": -165.854,
+            "z": 93.928
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 289.32270775159986,
+            "y": 1145.3471044287198
+          },
+          "regionId": "westville",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": -165.15445,
+            "z": 86.46069
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "molly_presley"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-56f62cee291187aaf55a",
+      "kind": "dealer",
+      "label": "Wei Long",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": "Dealer",
+          "position": {
+            "x": 2592.35790923616,
+            "y": 2683.9775282311202
+          },
+          "regionId": "suburbia",
+          "state": "dealer",
+          "worldPosition": {
+            "x": 64.85668,
+            "z": -67.20701
+          }
+        },
+        {
+          "label": "Potential dealer",
+          "position": {
+            "x": 2548.689628593952,
+            "y": 2695.0785218984
+          },
+          "regionId": "suburbia",
+          "state": "potential-dealer",
+          "worldPosition": {
+            "x": 60.495396,
+            "z": -68.3157
+          }
+        }
+      ],
+      "source": {
+        "family": "person",
+        "key": "wei_long"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-035a0c7ac12f0ec067b1",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 730.256971765152,
+            "y": 1556.97660352
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -121.117004,
+            "z": 45.35
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "f08dd2ce-d139-44c5-aef3-caaa4c4a98cd"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-035c666b18a730fa84bc",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1098.22938442624,
+            "y": 2667.47517707544
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -84.36648,
+            "z": -65.55887
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "383747c2-a280-4a74-bb39-87de7aa0fdd5"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1652f3a05ba46bc65ae7",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3325.902407136,
+            "y": 953.030001307392
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 138.118,
+            "z": 105.667984
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "72ebf77a-5fd0-43ba-a8e5-843aebf7fe56"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-21c0f24b14bbe34e2909",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1910.42533712,
+            "y": 1190.01070872
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -3.25,
+            "z": 82
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "85b2ee6d-1843-4ec7-b614-1c995f50a76f"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2548f90dfee14577ca11",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 280.25559627287976,
+            "y": 916.16303552
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -166.06001,
+            "z": 109.35
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "9b592d5c-0db4-4eb0-83f5-7cc0073625aa"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-26d9248ceaad3cc7e89b",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2494.877409348272,
+            "y": 2966.125639552
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 55.121006,
+            "z": -95.386
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "8a1bdb1b-2151-4a55-93ea-4c9821ca2b9f"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2c42e6f234c45b5942d5",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1505.91177232,
+            "y": 1358.27433388
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -43.65,
+            "z": 65.195
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "7214f9ac-51ad-40a7-be77-552622bfb91b"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-311ff10fe3c41fb29738",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 881.6191791199999,
+            "y": 1039.82002872
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -106,
+            "z": 97
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "545e0ee0-20d8-47f7-8f6f-c942ef3754d7"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-36ab99b51bd271212a92",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1362.58350474344,
+            "y": 2776.860711429632
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -57.96463,
+            "z": -76.483536
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "e5f26066-ae54-4bcb-9a2b-3df4735a4dfd"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5631f669209ee369734b",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 256.96532727104,
+            "y": 1164.3501304064
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -168.38608,
+            "z": 84.5628
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "f3022531-3ed0-4634-acbb-e8c770ee9b5b"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5ecef27aedfe11943308",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3302.55857012496,
+            "y": 2937.18750009232
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 135.78658,
+            "z": -92.49586
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "f0ef5a2e-7fbe-47bf-954e-9d11f9fb5920"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6321405f239c9537e620",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2101.668156345424,
+            "y": 1733.1002076
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 15.850002,
+            "z": 27.76
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "cc043bfc-6e98-4d6b-9909-b33c09272e5d"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6f13fdb2bc060dd103d6",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3394.00887416,
+            "y": 3162.9154812
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 144.92,
+            "z": -115.04
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "96bf9b26-e2ab-4ae2-b2fd-0fad6df632bc"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-72dfd09a8f375991fd2c",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2944.23785112,
+            "y": 1755.72893672
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 100,
+            "z": 25.5
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "72bf71c4-96f2-4ac3-98b7-c3f2029b94d6"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7bd753aecc1640054e49",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 539.1844287199999,
+            "y": 1468.3641023199998
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -140.2,
+            "z": 54.2
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "fa23a16d-f6ac-4bfd-a531-9c1eeeaad762"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8518bb61099b44a4a390",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3141.98891312,
+            "y": 1408.28783032
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 119.75,
+            "z": 60.2
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "ec5f338f-e46e-4442-a035-d33c9ac81df6"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8733386f64f3cb28fccf",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 730.256971765152,
+            "y": 1556.97660352
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -121.117004,
+            "z": 45.35
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "59cdee60-eedf-46ea-a3f0-fe6d51675deb"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-8abef234bf1264274a10",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2368.50691112,
+            "y": 2136.21199272
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 42.5,
+            "z": -12.5
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "ae955736-8639-4813-be16-cd45eb76339f"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-96aaa8ec9125983d0877",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3580.04506312,
+            "y": 2581.7776767200003
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 163.5,
+            "z": -57
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "475be428-60a1-4f30-8d6a-8a1d5760431d"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a4ad64f825179b13e6b3",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3487.42747712,
+            "y": 2736.97461259288
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 154.25,
+            "z": -72.49999
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "394d4783-5e00-4eb2-b890-42294a350173"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ae8c0bf077a04077451e",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3721.42455656,
+            "y": 2024.890660704
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 177.62,
+            "z": -1.382
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "ca6cc60a-7da7-44b3-a0fa-d655712248a0"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b034becf52ba52d46166",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1875.3807930538976,
+            "y": 1004.7754365928799
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -6.7500052,
+            "z": 100.50001
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "80357421-ef76-49f0-b104-fb9d2d5b1654"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c41087651b0394783046",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3672.66264912,
+            "y": 2736.9749129742404
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 172.75,
+            "z": -72.50002
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "af3d8b58-40b9-4fa9-836e-d9b19304b322"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c4756fd1d646e412f888",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1467.2626839745758,
+            "y": 1288.0852227599999
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -47.510002,
+            "z": 72.205
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "7f383e5c-f679-4cca-bde3-b18dca3b050d"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-c683d18907bcd2e97f82",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1662.61071512,
+            "y": 649.8247961928801
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -28,
+            "z": 135.95001
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "53b1079b-eee2-4c0a-bfeb-45019c987d64"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-cec18585ccb4958fb688",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1507.0932723360002,
+            "y": 979.954023672
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -43.532,
+            "z": 102.979
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "8134d1f4-f6d1-4288-a6e0-42ab9a6a49cf"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d87928642cb2f7f1d40a",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1118.25480842624,
+            "y": 2702.16031284176
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -82.36648,
+            "z": -69.02298
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "37c3bfe4-c999-4077-90cd-81bc342273db"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-dad66f026f611e2cfa31",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2598.79938724712,
+            "y": 3230.60141432
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 65.50001,
+            "z": -121.8
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "f334e454-eb69-4afe-9cdc-6a4523151fe3"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-db8f619a0c1424809d68",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3487.4276773742404,
+            "y": 2691.91740859288
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 154.25002,
+            "z": -67.99999
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "cdbae5fb-b8f2-49de-a8c2-675601f7d22b"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e0806bb71a5f26fdbd78",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2561.25161712,
+            "y": 1220.04874459288
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 61.75,
+            "z": 79.00001
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "6504c6ea-9b5b-4ad6-a713-d719de3e90d8"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e952fb2e33dd098e1d41",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3220.8891838071204,
+            "y": 3175.53149832
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 127.63001,
+            "z": -116.3
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "913282d2-4ef4-4041-ac40-9ba7c6502372"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f237425212bcb36339e3",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2964.76401084712,
+            "y": 2846.033231900272
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 102.05001,
+            "z": -83.392006
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "c12ac132-ee3d-47f8-8f22-361cdc1ba992"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f437f45dfea1d1fbf075",
+      "kind": "parking",
+      "label": "Parking",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3721.42455656,
+            "y": 2215.993281936
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 177.62,
+            "z": -20.468
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "a9be19f3-ef9b-4c64-a7c0-e54e549f972a"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-273ada2cc818e497c7b5",
+      "kind": "pawn-shop",
+      "label": "Pawn shop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1321.237312192,
+            "y": 1527.409064984
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -62.094,
+            "z": 48.303
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Mick"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-02176948ecc479d0fba2",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1710.4834937343999,
+            "y": 2283.39885912
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -23.2188,
+            "z": -27.2
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (15)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1ed2271eac00515f7819",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3059.5342298,
+            "y": 3109.337459288
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 111.515,
+            "z": -109.689
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (14)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-26ff542f105096e38481",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2652.056902248,
+            "y": 1190.06077228
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 70.819,
+            "z": 81.995
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (5)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-497aafd4019a581ebede",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2152.78303108,
+            "y": 1173.249428832
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 20.955,
+            "z": 83.674
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (4)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-554eb5d8e1fe5a1fa9a0",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2097.923382032,
+            "y": 2220.058443008
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 15.476,
+            "z": -20.874
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (7)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5a40383c4a366dd071fd",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1479.798619424,
+            "y": 757.8820842239998
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -46.258,
+            "z": 125.158
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (9)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5e180d0fb1bb7f515db2",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1511.098357136,
+            "y": 383.7170494960001
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -43.132,
+            "z": 162.527
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (11)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-65eaaa24481f59961491",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 532.0253396399999,
+            "y": 1415.136525328
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -140.915,
+            "z": 59.516
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (1)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-72222857e9823c50bf71",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2817.8774256799998,
+            "y": 1438.62634768
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 87.38,
+            "z": 57.17
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (12)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7c7371a3207e4a0b425e",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1858.1299436152,
+            "y": 1929.2832789008
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -8.4729,
+            "z": 8.1666
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (13)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-807b0999e0cbc97375dc",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2698.0753266,
+            "y": 1849.738289688
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 75.415,
+            "z": 16.111
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (6)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-84addb33ce61a73b61e9",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 490.30236873599983,
+            "y": 1046.969105088
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -145.082,
+            "z": 96.286
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b0807d4b5a5226e63624",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3198.7810155839998,
+            "y": 1191.8430350160002
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 125.422,
+            "z": 81.817
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (16)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-b4f9a86c6a4a0d5b561b",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1711.062228488,
+            "y": 1040.060333808
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -23.161,
+            "z": 96.976
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (10)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-cc4a5f1b413654c07d5f",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2416.91837364,
+            "y": 1550.808772928
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 47.335,
+            "z": 45.966
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (3)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d0ff49c46439a9f1c776",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1390.905762288,
+            "y": 2594.64401164
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -55.136,
+            "z": -58.285
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (8)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-f2d12441b774e5c5617d",
+      "kind": "pay-phone",
+      "label": "Pay phone",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1422.295614408,
+            "y": 1271.384019144
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -52.001,
+            "z": 73.873
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Payphones/PayPhone (2)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5b12be272d4b8cbd2db1",
+      "kind": "property",
+      "label": "Barn",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3746.75671792,
+            "y": 2121.19292472
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 180.15,
+            "z": -11
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "barn"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a5d7df009c6cb9febbd3",
+      "kind": "property",
+      "label": "Bungalow",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 359.9468712079997,
+            "y": 872.6779674819679
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -158.101,
+            "z": 113.692986
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "bungalow"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-6e985955d109e6643949",
+      "kind": "property",
+      "label": "Car Wash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1838.497027938312,
+            "y": 2221.16940346796
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -10.433699,
+            "z": -20.984955
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "carwash"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e7e8f2ce57a3f8c7e832",
+      "kind": "property",
+      "label": "Docks Warehouse",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1176.03366365784,
+            "y": 2610.99316830208
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -76.59593,
+            "z": -59.91784
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "dockswarehouse"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-70c255ca807e2a951232",
+      "kind": "property",
+      "label": "Hyland Manor",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3580.04486286576,
+            "y": 2677.49920344
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 163.49998,
+            "z": -66.56
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "manor"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-38450c36f1cd53b707af",
+      "kind": "property",
+      "label": "Laundromat",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1718.18126672,
+            "y": 1760.7353527962719
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -22.45,
+            "z": 24.999994
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "laundromat"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-5086cc16e27d3230fd92",
+      "kind": "property",
+      "label": "Motel Room",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1308.32096377556,
+            "y": 1192.2433432417602
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -63.383995,
+            "z": 81.77702
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "motelroom"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-be454721189e9cb71801",
+      "kind": "property",
+      "label": "Post Office",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2418.570511170848,
+            "y": 1935.95775272
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 47.500004,
+            "z": 7.5
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "postoffice"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-fbf9e5d128fc50187abe",
+      "kind": "property",
+      "label": "RV",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2085.647807132712,
+            "y": 2806.462934
+          },
+          "regionId": "suburbia",
+          "state": "default",
+          "worldPosition": {
+            "x": 14.250001,
+            "z": -79.44
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "rv"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-16f76536f9878956ab85",
+      "kind": "property",
+      "label": "Sewer Office",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2425.038683072,
+            "y": 1348.4118125599998
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 48.146,
+            "z": 66.18
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "seweroffice"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d4ce5bc111e1d11ac3e4",
+      "kind": "property",
+      "label": "Storage Unit",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1905.058523488,
+            "y": 999.2585324080001
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -3.786,
+            "z": 101.051
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "storageunit"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-4072fa4a34ebe31afedf",
+      "kind": "property",
+      "label": "Sweatshop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1299.6499051199999,
+            "y": 586.74481072
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -64.25,
+            "z": 142.25
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "sweatshop"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-46ed9c0fe400c3b5a2ff",
+      "kind": "property",
+      "label": "Taco Ticklers",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1637.864317437424,
+            "y": 1426.31041153864
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -30.471498,
+            "z": 58.40003
+          }
+        }
+      ],
+      "source": {
+        "family": "property",
+        "key": "tacoticklers"
+      }
+    },
+    {
+      "description": "Guns and ammo",
+      "id": "marker-68a62f3d7dabda32025e",
+      "kind": "shop",
+      "label": "Arms Dealer",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1555.67495096,
+            "y": 1724.18889392
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -38.68,
+            "z": 28.65
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "armsdealer"
+      }
+    },
+    {
+      "description": "General illegal supplies",
+      "id": "marker-99316eb5846e8ec2e1c3",
+      "kind": "shop",
+      "label": "Bleuball's Boutique",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2678.1295036604,
+            "y": 2138.154458848
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 73.42295,
+            "z": -12.694
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "boutique"
+      }
+    },
+    {
+      "description": "General legal supplies",
+      "id": "marker-5bdfe1f56ab1109c7134",
+      "kind": "shop",
+      "label": "Dan's Hardware",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1789.742124390356,
+            "y": 625.984629048
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -15.3029995,
+            "z": 138.331
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "dans_hardware"
+      }
+    },
+    {
+      "description": "Ingredients and packaging",
+      "id": "marker-a632323fd33c6ac07d2f",
+      "kind": "shop",
+      "label": "Gas-Mart (Central)",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2155.61247330052,
+            "y": 2018.29456138798
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 21.237585,
+            "z": -0.7232275
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "gas_mart_central"
+      }
+    },
+    {
+      "description": "Ingredients and packaging",
+      "id": "marker-c1f772cdf74b6546a3bc",
+      "kind": "shop",
+      "label": "Gas-Mart (West)",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 854.044170272,
+            "y": 1348.456869764
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -108.754,
+            "z": 66.1755
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "gas_mart_west"
+      }
+    },
+    {
+      "description": "General legal supplies",
+      "id": "marker-44322d4ada584954eee0",
+      "kind": "shop",
+      "label": "Handy Hank's Hardware",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3017.270572448,
+            "y": 1781.71192436
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 107.294,
+            "z": 22.905
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "handy_hanks"
+      }
+    },
+    {
+      "description": "General illegal supplies",
+      "id": "marker-8c48416d404eb81b0942",
+      "kind": "shop",
+      "label": "Oscar's Store",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1342.334096376,
+            "y": 1741.621025512
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -59.987,
+            "z": 26.909
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "shop"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-761f4554e778c7836da8",
+      "kind": "shop",
+      "label": "Thrifty Threads",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1681.2744102880001,
+            "y": 1932.082833176
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -26.136,
+            "z": 7.887
+          }
+        }
+      ],
+      "source": {
+        "family": "shop",
+        "key": "thrifty_threads"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ee0378375539050eba41",
+      "kind": "skateboard-seller",
+      "label": "Skateboard seller",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1548.5559127279998,
+            "y": 825.1474834400001
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -39.391,
+            "z": 118.44
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Jeff/Dialogue"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-12a6a1128e364feff429",
+      "kind": "slot-machine",
+      "label": "Slot machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2163.056063579288,
+            "y": 1044.656168616
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 21.980999,
+            "z": 96.517
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Slot Machine"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-18454e2cf44526bd5c67",
+      "kind": "slot-machine",
+      "label": "Slot machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2178.075111553864,
+            "y": 1044.6562687431199
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 23.480997,
+            "z": 96.51699
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Slot Machine (1)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2eb49a6a59bab2db70d4",
+      "kind": "slot-machine",
+      "label": "Slot machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2203.497437385424,
+            "y": 1074.053491048
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 26.020002,
+            "z": 93.581
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Slot Machine (4)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2ffa8e8f0fccd1d0aefa",
+      "kind": "slot-machine",
+      "label": "Slot machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2203.497437385424,
+            "y": 1059.034423048
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 26.020002,
+            "z": 95.081
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Slot Machine (3)"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-d6b1a81ae59c8c7814b2",
+      "kind": "slot-machine",
+      "label": "Slot machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2193.094389820816,
+            "y": 1044.6562687431199
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 24.981018,
+            "z": 96.51699
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Casino/Slot Machine (2)"
+      }
+    },
+    {
+      "description": "in the west construction site",
+      "id": "marker-dd6f6d4c7f103dc10638",
+      "kind": "supplier-meetup",
+      "label": "In the west construction site",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 543.4898948799998,
+            "y": 907.5521031999999
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -139.77,
+            "z": 110.21
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Locations/Construction site"
+      }
+    },
+    {
+      "description": "next to the mayor's house",
+      "id": "marker-b6422e1bc1123f2c0ec6",
+      "kind": "supplier-meetup",
+      "label": "Next to the mayor's house",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2819.07895112,
+            "y": 1002.77299432
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 87.5,
+            "z": 100.7
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Locations/Next to the mayor's house"
+      }
+    },
+    {
+      "description": "under the north end of the overpass",
+      "id": "marker-303b40a9319f1be8f943",
+      "kind": "supplier-meetup",
+      "label": "Under the north end of the overpass",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1840.53660736,
+            "y": 880.838187584
+          },
+          "regionId": null,
+          "state": "default",
+          "worldPosition": {
+            "x": -10.23,
+            "z": 112.878
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Locations/Under the north end of the overpass"
+      }
+    },
+    {
+      "description": "under the west bridge",
+      "id": "marker-029a9c26143285cb7886",
+      "kind": "supplier-meetup",
+      "label": "Under the west bridge",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1079.67072260712,
+            "y": 1293.101591472
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -86.21999,
+            "z": 71.704
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Locations/Under west bridge"
+      }
+    },
+    {
+      "description": "behind Dan's Hardware",
+      "id": "marker-3dfbfefc2c08928b8bea",
+      "kind": "supplier-stash",
+      "label": "Albert's stash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1763.29339044532,
+            "y": 549.036937328
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -17.944515,
+            "z": 146.016
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Stashes/Albert's stash"
+      }
+    },
+    {
+      "description": "behind the downtown Gas-Mart",
+      "id": "marker-0dd6c2f6a795d370ab12",
+      "kind": "supplier-stash",
+      "label": "Phil's Stash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2078.1502783744,
+            "y": 2014.4464008168
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 13.5012,
+            "z": -0.3389
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Stashes/Phil's Stash"
+      }
+    },
+    {
+      "description": "behind the Church",
+      "id": "marker-00d4d647712d5c8a210c",
+      "kind": "supplier-stash",
+      "label": "Salvador's Stash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3420.2368728626398,
+            "y": 1652.517901424
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 147.53947,
+            "z": 35.808
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Stashes/Salvador's Stash"
+      }
+    },
+    {
+      "description": "on the west face of the warehouse",
+      "id": "marker-eebcd72388589ef00b32",
+      "kind": "supplier-stash",
+      "label": "Shirley's Stash",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1290.99371534176,
+            "y": 1695.2922371261361
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -65.11452,
+            "z": 31.535997
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Supplier Stashes/Shirley's Stash"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-0695a322f09c78bbb1e1",
+      "kind": "tattoo-shop",
+      "label": "Tattoo shop",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 595.2155650719997,
+            "y": 1316.37113416
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -134.604,
+            "z": 69.38
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Westville/Tattoo Parlour New"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-e71f123478460139fa02",
+      "kind": "vehicle-dealership",
+      "label": "Vehicle dealership",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2171.056220467288,
+            "y": 2398.044351443728
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 22.779999,
+            "z": -38.649994
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Dealership/Dealership"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a0ec218bd8fbe7721083",
+      "kind": "vehicle-repaint",
+      "label": "Vehicle repainting",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1970.8733941330856,
+            "y": 2125.237920190032
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 2.7871313,
+            "z": -11.403986
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "Map/Hyland Point/Region_Downtown/Gas Station/gas station/Bodyshop/Vehicle position"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-12b93ed73aefab60cdd6",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1483.6034499839998,
+            "y": 1693.960516392
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -45.878,
+            "z": 31.669
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "66eaa502-686a-4bf5-bb93-39ea5d62d7b0"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1b9280ed7ade23e492c5",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 443.9034613279998,
+            "y": 1285.441866792
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -149.716,
+            "z": 72.469
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "77a4bf83-4f53-4c22-adc8-46585a1148b6"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-1bbb8b53a3ded41f6f0e",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 3049.37132712,
+            "y": 1850.34906512
+          },
+          "regionId": "uptown",
+          "state": "default",
+          "worldPosition": {
+            "x": 110.5,
+            "z": 16.05
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "9427e7a5-587c-4924-bef8-f6de9c4367b6"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-2f1b95aeffd49c5e6a60",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2201.735180048,
+            "y": 1089.823512448
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 25.844,
+            "z": 92.006
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "b46dec4d-4b1f-4090-ac2c-3f7b850ec792"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-52cdc3e22f9c66f4651b",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1356.431994872,
+            "y": 1260.940760528
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -58.579,
+            "z": 74.916
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "e6b8274c-b439-4e0a-ad09-e9f50c8e0b49"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-597d44922ee5c221dce0",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1980.5142089776257,
+            "y": 1447.317381696
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 3.7499888,
+            "z": 56.302
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "033326c2-0cdb-4991-80ff-da291a3fbd89"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7485d18d42d5bc244b2c",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 870.0144459119999,
+            "y": 1371.99174932
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -107.159,
+            "z": 63.825
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "da2741fa-d0dc-46cc-84ee-39ea0b57aa05"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-7cf8cdc58006b463033f",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1462.35647512,
+            "y": 658.3357015199999
+          },
+          "regionId": "northtown",
+          "state": "default",
+          "worldPosition": {
+            "x": -48,
+            "z": 135.1
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "0d6b6b90-8b67-43d6-ac3c-57915a00d882"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-992c2126c02960a55653",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 2151.08087004,
+            "y": 2053.016368712
+          },
+          "regionId": "downtown",
+          "state": "default",
+          "worldPosition": {
+            "x": 20.785,
+            "z": -4.191
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "5d3fa536-5a27-496c-b357-af5fb595d2a4"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-a8129c2092bbae26e8a1",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1445.87144595608,
+            "y": 2750.992449443728
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -49.64641,
+            "z": -73.899994
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "a99b07c3-f314-4ffc-9cfe-9e19b58e57a4"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ab75173820e4de854324",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 1285.211574416,
+            "y": 1542.80861604
+          },
+          "regionId": "docks",
+          "state": "default",
+          "worldPosition": {
+            "x": -65.692,
+            "z": 46.765
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "15466ce2-3a3d-4fe1-bd40-d33306c5cfe7"
+      }
+    },
+    {
+      "description": null,
+      "id": "marker-ea8fb12ed0eb29d16bed",
+      "kind": "vending-machine",
+      "label": "Vending machine",
+      "mapId": "hyland-point",
+      "positions": [
+        {
+          "label": null,
+          "position": {
+            "x": 635.1562732399998,
+            "y": 1241.546137384
+          },
+          "regionId": "westville",
+          "state": "default",
+          "worldPosition": {
+            "x": -130.615,
+            "z": 76.853
+          }
+        }
+      ],
+      "source": {
+        "family": "service",
+        "key": "46417863-5606-431e-bb75-7d6001c99c5a"
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "count": 121,
+      "reason": "Runtime, task, vehicle, and private player markers are not public map facts.",
+      "sourceFamily": "world.locations.poi"
+    },
+    {
+      "count": 13,
+      "reason": "Property locations duplicate the canonical property records.",
+      "sourceFamily": "world.locations.property-mirror"
+    },
+    {
+      "count": 12,
+      "reason": "Shop locations duplicate the canonical shop records.",
+      "sourceFamily": "world.locations.shop-mirror"
+    },
+    {
+      "count": 138,
+      "reason": "Service mirror locations duplicate the canonical service records.",
+      "sourceFamily": "world.locations.service-mirror"
+    },
+    {
+      "count": 4,
+      "reason": "These shop records have no verified map position.",
+      "sourceFamily": "shops.unpositioned"
+    },
+    {
+      "count": 2,
+      "reason": "Visual-only pay phone models do not prove a working service.",
+      "sourceFamily": "world.services.visual-only"
+    }
+  ],
+  "projection": {
+    "conversionFactor": 5.006356,
+    "edge": {
+      "x": 10.49,
+      "z": -208.23
+    },
+    "mapDimensions": 2048,
+    "mapId": "hyland-point",
+    "origin": {
+      "x": 10.49,
+      "z": -3.69
+    }
+  },
+  "regions": [
+    {
+      "id": "docks",
+      "label": "Docks",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 1118.9204535200001,
+          "y": 1285.1314727200001
+        },
+        {
+          "x": 1112.91282632,
+          "y": 1573.49757832
+        },
+        {
+          "x": 897.63951832,
+          "y": 2428.5831831200003
+        },
+        {
+          "x": 1256.09460792,
+          "y": 3007.31793672
+        },
+        {
+          "x": 1691.64757992,
+          "y": 3013.32556392
+        },
+        {
+          "x": 1694.65139352,
+          "y": 2646.86030472
+        },
+        {
+          "x": 1682.6361391199998,
+          "y": 1430.31579672
+        }
+      ],
+      "rankRequirement": "Enforcer I",
+      "source": {
+        "regionId": "Docks"
+      },
+      "unlockedByDefault": false
+    },
+    {
+      "id": "downtown",
+      "label": "Downtown",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 1698.65647832,
+          "y": 1445.33486472
+        },
+        {
+          "x": 1696.6539359199999,
+          "y": 2639.85140632
+        },
+        {
+          "x": 2107.17512792,
+          "y": 2639.85140632
+        },
+        {
+          "x": 2818.0776799200003,
+          "y": 2223.32258712
+        },
+        {
+          "x": 2811.06878152,
+          "y": 1460.35393272
+        },
+        {
+          "x": 2207.30224792,
+          "y": 1451.3424919200002
+        },
+        {
+          "x": 2207.30224792,
+          "y": 877.61409432
+        },
+        {
+          "x": 1819.81029352,
+          "y": 883.6217215199999
+        },
+        {
+          "x": 1828.82173432,
+          "y": 1465.36028872
+        }
+      ],
+      "rankRequirement": "Hustler I",
+      "source": {
+        "regionId": "Downtown"
+      },
+      "unlockedByDefault": false
+    },
+    {
+      "id": "northtown",
+      "label": "Northtown",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 1111.91155512,
+          "y": 1267.10859112
+        },
+        {
+          "x": 1818.80902232,
+          "y": 1454.34630552
+        },
+        {
+          "x": 1818.80902232,
+          "y": 877.41384008
+        },
+        {
+          "x": 2011.05309272,
+          "y": 877.41384008
+        },
+        {
+          "x": 1941.96537992,
+          "y": 208.76493271999993
+        },
+        {
+          "x": 1109.90901272,
+          "y": 202.75730552000005
+        }
+      ],
+      "rankRequirement": "Street Rat I",
+      "source": {
+        "regionId": "Northtown"
+      },
+      "unlockedByDefault": true
+    },
+    {
+      "id": "suburbia",
+      "label": "Suburbia",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 1700.65902072,
+          "y": 2660.87810152
+        },
+        {
+          "x": 1694.65139352,
+          "y": 3180.53785432
+        },
+        {
+          "x": 1866.87003992,
+          "y": 3545.00057112
+        },
+        {
+          "x": 3935.49633912,
+          "y": 3549.00565592
+        },
+        {
+          "x": 3830.36286312,
+          "y": 2410.56030152
+        },
+        {
+          "x": 2824.08530712,
+          "y": 2246.35182472
+        },
+        {
+          "x": 2122.19419592,
+          "y": 2650.86538952
+        }
+      ],
+      "rankRequirement": "Block Boss I",
+      "source": {
+        "regionId": "Suburbia"
+      },
+      "unlockedByDefault": false
+    },
+    {
+      "id": "uptown",
+      "label": "Uptown",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 2830.09293432,
+          "y": 2239.34292632
+        },
+        {
+          "x": 4049.64125592,
+          "y": 2419.57174232
+        },
+        {
+          "x": 4084.68574792,
+          "y": 2015.05817752
+        },
+        {
+          "x": 3636.11625032,
+          "y": 1414.2954575200001
+        },
+        {
+          "x": 3559.01836792,
+          "y": 666.3458711199999
+        },
+        {
+          "x": 2906.18954552,
+          "y": 728.4246855199999
+        },
+        {
+          "x": 2213.30987512,
+          "y": 884.62299272
+        },
+        {
+          "x": 2217.31495992,
+          "y": 1435.3221527199998
+        },
+        {
+          "x": 2824.08530712,
+          "y": 1448.3386783199999
+        }
+      ],
+      "rankRequirement": "Baron I",
+      "source": {
+        "regionId": "Uptown"
+      },
+      "unlockedByDefault": false
+    },
+    {
+      "id": "westville",
+      "label": "Westville",
+      "mapId": "hyland-point",
+      "polygon": [
+        {
+          "x": 1112.91282632,
+          "y": 1505.4111367199998
+        },
+        {
+          "x": 814.53400872,
+          "y": 1878.88529432
+        },
+        {
+          "x": 205.76111911999988,
+          "y": 1838.83444632
+        },
+        {
+          "x": -107.63676648000046,
+          "y": 611.2759551199999
+        },
+        {
+          "x": 401.00900311999976,
+          "y": 345.93908711999984
+        },
+        {
+          "x": 1100.89757192,
+          "y": 430.04586791999986
+        }
+      ],
+      "rankRequirement": "Hoodlum I",
+      "source": {
+        "regionId": "Westville"
+      },
+      "unlockedByDefault": false
+    }
+  ],
+  "schema": "neonschedule1-map-publication-input-1"
+}

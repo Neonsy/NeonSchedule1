@@ -235,6 +235,15 @@ importers:
         specifier: 2.2.3
         version: 2.2.3
 
+  packages/public-data:
+    dependencies:
+      '@neonschedule1/core':
+        specifier: workspace:*
+        version: link:../core
+      arktype:
+        specifier: 2.2.3
+        version: 2.2.3
+
   packages/solver:
     dependencies:
       '@neonschedule1/core':

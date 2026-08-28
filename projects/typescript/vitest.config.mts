@@ -28,6 +28,24 @@ export default defineConfig({
             },
             {
                 extends: true,
+                root: fileURLToPath(new URL('packages/public-data', import.meta.url)),
+                test: { name: 'public-data' },
+                resolve: {
+                    alias: {
+                        '#core': fileURLToPath(new URL('packages/core/src', import.meta.url)),
+                        '#public-data': fileURLToPath(new URL(
+                            'packages/public-data/src',
+                            import.meta.url
+                        )),
+                        '@neonschedule1/core': fileURLToPath(new URL(
+                            'packages/core/src/index.ts',
+                            import.meta.url
+                        )),
+                    },
+                },
+            },
+            {
+                extends: true,
                 root: fileURLToPath(new URL('packages/solver', import.meta.url)),
                 test: { name: 'solver' },
                 resolve: {
