@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     analyzeVehiclePropertyShopRoutes,
+    planStaticVehiclePropertyShopRoutes,
     type VehicleNavigation,
     type VehicleNavigationConnection,
     type VehicleNavigationEndpointMapping,
@@ -145,6 +146,102 @@ describe('vehicle property-to-shop route analysis', () => {
         expect(() => analyzeVehiclePropertyShopRoutes(input)).toThrow(
             'Vehicle general connection 0 references a missing node'
         );
+    });
+});
+
+describe('static vehicle property-to-shop route planning', () => {
+    it('selects one deterministic estimate inside the caller-selected layer', () => {
+        const report = planStaticVehiclePropertyShopRoutes(navigation(), 'general');
+
+        expect(report).toMatchObject({
+            schema: 'neonschedule1-static-vehicle-property-shop-route-plans-1',
+            sourceSchema: 'neonschedule1-vehicle-property-shop-routes-1',
+            sourceNavigationSchema: 'neonschedule1-vehicle-navigation-1',
+            pairBasis: 'every-mapped-property-by-every-mapped-shop',
+            routeKind: 'static-planning-estimate',
+            graphRoleSelection: 'caller-selected',
+            graphRole: 'general',
+            pathDirection: 'directed',
+            estimateSelection:
+                'minimum-network-distance-then-endpoint-order-within-selected-layer',
+            distanceMethod: 'node-center-euclidean-3d',
+            distanceScope: 'directed-graph-edges-only',
+            rawCostStatus: 'preserved-not-used',
+            nativePathChoiceStatus: 'unproven',
+            endpointAccessStatus: 'unproven',
+            layerCompositionStatus: 'excluded-selected-layer-only',
+            routeProofStatus: 'incomplete',
+            excludedBehavior: [
+                'endpoint-access-unproven',
+                'graph-layer-composition-excluded',
+                'native-path-selection-unproven',
+                'parking-not-modeled',
+                'collision-avoidance-not-modeled',
+                'traffic-not-modeled',
+                'dynamic-obstacles-not-modeled',
+                'live-driving-not-modeled',
+            ],
+        });
+        expect(report.pairs).toEqual([
+            expect.objectContaining({
+                propertyCode: 'barn',
+                shopCode: 'hardware',
+                graphRole: 'general',
+                planningStatus: 'estimate-available',
+                unavailableReason: null,
+                routeProofStatus: 'incomplete',
+                selectedEstimate: expect.objectContaining({
+                    graphRole: 'general',
+                    networkDistance: 2,
+                    destination: expect.objectContaining({ subjectKind: 'shop-position' }),
+                }),
+            }),
+        ]);
+    });
+
+    it('does not compare or combine graph layers when selecting an estimate', () => {
+        const input = navigation();
+        input.graphs[0]!.connections = [connection(0, 3, 0, 4)];
+
+        const general = planStaticVehiclePropertyShopRoutes(input, 'general').pairs[0]!;
+        const road = planStaticVehiclePropertyShopRoutes(input, 'road').pairs[0]!;
+
+        expect(general).toMatchObject({
+            graphRole: 'general',
+            planningStatus: 'estimate-available',
+            selectedEstimate: { networkDistance: 4 },
+        });
+        expect(road).toMatchObject({
+            graphRole: 'road',
+            planningStatus: 'estimate-available',
+            selectedEstimate: { networkDistance: 2 },
+        });
+    });
+
+    it('keeps a selected-layer disconnection visible instead of borrowing another layer', () => {
+        const input = navigation();
+        input.endpointMappings = input.endpointMappings.map((mapping) =>
+            mapping.graphRole === 'general' && mapping.subjectKind === 'property-spawn'
+                ? { ...mapping, nodeIndex: 4 }
+                : mapping
+        );
+
+        expect(planStaticVehiclePropertyShopRoutes(input, 'general').pairs[0]).toEqual({
+            propertyCode: 'barn',
+            shopCode: 'hardware',
+            graphRole: 'general',
+            planningStatus: 'estimate-unavailable',
+            unavailableReason: 'directed-disconnection',
+            routeProofStatus: 'incomplete',
+            selectedEstimate: null,
+        });
+    });
+
+    it('rejects an unsupported graph role at the public boundary', () => {
+        expect(() => planStaticVehiclePropertyShopRoutes(
+            navigation(),
+            'water' as VehicleNavigationGraphRole
+        )).toThrow('Vehicle route planning received unsupported graph role "water"');
     });
 });
 

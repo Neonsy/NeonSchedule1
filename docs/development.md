@@ -51,9 +51,10 @@ Versioned schemas and content identities prevent incompatible acquisitions, data
 | Customers and dealers | Partial | Demand, enjoyment, offers, recommendations, eligibility, assignment, shared-resource allocation, and conservative travel feasibility | Requires explicit progression, relationship, stock, cash, and timing state |
 | Production and inventory | Partial | Production plans, equipment, additives, packaging, inventory, transfers, purchases, shopping, lifecycle timing, and realized-profit evidence | Exact results require complete movement, sale, revenue, and cost inputs |
 | Property blueprints | Partial | Placement, construction order, cost, storage, collision, access, temperature, lighting, sprinklers, capacity, schedules, employee logistics, movement, and business assessment | Mutable storage, moisture, trash, task order, live positions, dynamic obstacles, and unsupported collider proof remain outside the static model |
-| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and static vehicle graph candidates | Vehicle candidates exclude endpoint traversal, graph-layer composition, native route choice, traffic, parking, and live driving |
+| People and world | Partial | People, relationships, schedules, map projection, shops, properties, services, employee navigation, and static vehicle route estimates | Route estimates exclude endpoint traversal, graph-layer composition, native route choice, traffic, parking, and live driving |
+| Local planner data | Implemented contract and tooling | Versioned profiles, manual state, inventories, checklists, blueprints, and one read-only observation with explicit unknowns and compatibility checks | No browser persistence adapter or automatic synchronization loop exists |
 | Data pipeline | Tooling | Hash verification, schema checks, integrity checks, normalization, stable dataset identity, and corruption detection | Requires a private local acquisition |
-| Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
+| Game-data tools | Tooling | In-game export, recipe validation, convex-collider validation, planner observation, direct asset export, and offline mesh extraction | Requires Windows, the game, and third-party prerequisites |
 | Website | Planned | Workspace ownership only | No source application or deployment exists |
 
 Exact and incomplete results are separate contracts.
@@ -63,10 +64,26 @@ Code does not label a bounded or evidence-limited result as exact.
 
 The normalized vehicle document contains separate directed general and road graph layers plus property and shop endpoint projections.
 `analyzeVehiclePropertyShopRoutes` finds deterministic minimum-geometric-distance candidates within each layer.
+`planStaticVehiclePropertyShopRoutes` selects the minimum-distance candidate within a caller-selected graph layer and labels it as a static planning estimate.
 
-These candidates are useful static evidence, not complete routes.
+These estimates are useful for route planning, not complete or native routes.
 The current data does not prove endpoint traversal, graph-layer composition, native path selection, parking, collision avoidance, traffic, dynamic obstacles, or live driving.
 Shopping and transfer calculations require caller-supplied movement evidence when they need an exact route claim.
+
+## Local planner data boundary
+
+The core package defines a versioned local profile manifest that references separate manual-state, inventory, checklist, and blueprint documents.
+Known collections record whether their coverage is complete or partial, so an empty complete collection is different from an unknown collection.
+Every profile document records its game version and normalized dataset identity.
+The validator rejects incompatible documents, missing or unreferenced documents, and undeclared stored fields.
+
+Manual state is the source of truth.
+A profile can retain one latest read-only save or mod observation, but it cannot retain a raw payload.
+Applying observation values to manual state requires an explicit future action.
+
+The manifest encodes individual-document or full-profile export and optional-document or full-profile deletion as its lifecycle policy.
+The source-only exporter mod and TypeScript CLI implement one-shot, read-only, hash-verified planner observations.
+No browser persistence adapter, automatic synchronization loop, or migration implementation exists yet.
 
 ## TypeScript workflow
 
@@ -90,7 +107,7 @@ Use the [complete exporter manual](/projects/game-data-exporter/README.md) for b
 
 ## Compatibility
 
-Exporter `0.0.31` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.32` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 Normalizer `0.0.40` defines the current normalized output contract.
 A newer game or dependency version requires a new build and acquisition audit.
 

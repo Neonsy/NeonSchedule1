@@ -16,7 +16,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.31` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.32` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -117,16 +117,17 @@ Navigation evidence records the agent configuration used for each graph.
 Static graph and path observations do not prove live traversal through doors, scripts, traffic, dynamic obstacles, or collision behavior.
 Vehicle layers, endpoint offsets, native costs, and geometric distances remain distinct evidence.
 
-## Run native validation
+## Run request modes
 
 The DLL performs one operation when a save finishes loading:
 
-- With no validation request, it performs a full export
+- With no request, it performs a full export
 - With `native-recipe-validation-request.json`, it evaluates requested recipes in the game
 - With `native-convex-validation-request.json`, it raycasts requested convex surface colliders
+- With `planner-observation-request.json`, it reads the allowlisted planner state from the loaded save
 
-Place exactly one request file in the configured exporter output directory before the save loads.
-If both request files exist, the exporter reports an error and performs neither operation.
+Place at most one request file in the configured exporter output directory before the save loads.
+If multiple request files exist, the exporter reports an error and performs no operation.
 
 The TypeScript commands create requests, verify response hashes and dataset identity, retain local evidence, and remove staged files after a successful comparison.
 
@@ -156,6 +157,23 @@ pnpm data:validate-convex compare --game-directory 'C:\Program Files (x86)\Steam
 
 The validation schemas contain only the requested cases and their evidence.
 They do not expose an unrestricted Unity object graph or save dump.
+
+### Observe planner state
+
+Run these commands from `projects/typescript`:
+
+```powershell
+pnpm data:observe prepare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+# Start the game and load the matching save.
+pnpm data:observe compare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+```
+
+The request targets the normalized dataset's game version.
+The mod rejects a loaded game with another version.
+
+The response contains the active mixing profile, rank, relationships, unlocks, customer and dealer state, cash, game time, property ownership and placed items, employee state, and planner-relevant inventories.
+Collection and inventory coverage stays explicit when the game does not expose a complete value.
+The response contains no raw save, player name, organization name, Steam identifier, or unrestricted object data.
 
 ## Build the offline extractor
 

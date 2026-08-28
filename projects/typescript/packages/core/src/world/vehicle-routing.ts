@@ -76,6 +76,65 @@ export interface VehiclePropertyShopRouteReport {
     readonly pairs: readonly VehiclePropertyShopRouteAnalysis[];
 }
 
+export type VehicleRoutePlanExclusion =
+    | 'endpoint-access-unproven'
+    | 'graph-layer-composition-excluded'
+    | 'native-path-selection-unproven'
+    | 'parking-not-modeled'
+    | 'collision-avoidance-not-modeled'
+    | 'traffic-not-modeled'
+    | 'dynamic-obstacles-not-modeled'
+    | 'live-driving-not-modeled';
+
+interface VehiclePropertyShopRoutePlanBase {
+    readonly propertyCode: string;
+    readonly shopCode: string;
+    readonly graphRole: VehicleNavigationGraphRole;
+    readonly routeProofStatus: 'incomplete';
+}
+
+export interface AvailableVehiclePropertyShopRoutePlan
+    extends VehiclePropertyShopRoutePlanBase {
+    readonly planningStatus: 'estimate-available';
+    readonly unavailableReason: null;
+    readonly selectedEstimate: VehicleGraphRouteCandidate;
+}
+
+export interface UnavailableVehiclePropertyShopRoutePlan
+    extends VehiclePropertyShopRoutePlanBase {
+    readonly planningStatus: 'estimate-unavailable';
+    readonly unavailableReason: 'unmapped-endpoint' | 'directed-disconnection';
+    readonly selectedEstimate: null;
+}
+
+export type VehiclePropertyShopRoutePlan =
+    | AvailableVehiclePropertyShopRoutePlan
+    | UnavailableVehiclePropertyShopRoutePlan;
+
+export interface VehiclePropertyShopRoutePlanReport {
+    readonly schema: 'neonschedule1-static-vehicle-property-shop-route-plans-1';
+    readonly sourceSchema: 'neonschedule1-vehicle-property-shop-routes-1';
+    readonly sourceNavigationSchema: 'neonschedule1-vehicle-navigation-1';
+    readonly pairBasis: 'every-mapped-property-by-every-mapped-shop';
+    readonly routeKind: 'static-planning-estimate';
+    readonly graphRoleSelection: 'caller-selected';
+    readonly graphRole: VehicleNavigationGraphRole;
+    readonly pathDirection: 'directed';
+    readonly estimateSelection:
+        'minimum-network-distance-then-endpoint-order-within-selected-layer';
+    readonly distanceMethod: 'node-center-euclidean-3d';
+    readonly distanceScope: 'directed-graph-edges-only';
+    readonly rawCostStatus: 'preserved-not-used';
+    readonly nativePathChoiceStatus: 'unproven';
+    readonly endpointAccessStatus: 'unproven';
+    readonly layerCompositionStatus: 'excluded-selected-layer-only';
+    readonly routeProofStatus: 'incomplete';
+    readonly excludedBehavior: readonly VehicleRoutePlanExclusion[];
+    readonly propertyCodes: readonly string[];
+    readonly shopCodes: readonly string[];
+    readonly pairs: readonly VehiclePropertyShopRoutePlan[];
+}
+
 interface IndexedGraph {
     readonly nodeIndices: ReadonlySet<number>;
     readonly nodePositionByIndex: ReadonlyMap<number, Vector3>;
@@ -103,6 +162,16 @@ const routeLimitations = [
     'endpoint-access-unproven',
     'layer-composition-unproven',
 ] as const satisfies readonly VehicleRouteEvidenceLimitation[];
+const routePlanExclusions = [
+    'endpoint-access-unproven',
+    'graph-layer-composition-excluded',
+    'native-path-selection-unproven',
+    'parking-not-modeled',
+    'collision-avoidance-not-modeled',
+    'traffic-not-modeled',
+    'dynamic-obstacles-not-modeled',
+    'live-driving-not-modeled',
+] as const satisfies readonly VehicleRoutePlanExclusion[];
 
 export function analyzeVehiclePropertyShopRoutes(
     input: VehicleNavigation
@@ -152,6 +221,68 @@ export function analyzeVehiclePropertyShopRoutes(
         routeProofStatus: 'incomplete',
         propertyCodes,
         shopCodes,
+        pairs,
+    };
+}
+
+export function planStaticVehiclePropertyShopRoutes(
+    input: VehicleNavigation,
+    graphRole: VehicleNavigationGraphRole
+): VehiclePropertyShopRoutePlanReport {
+    if (!graphRoles.includes(graphRole)) {
+        throw new Error(`Vehicle route planning received unsupported graph role ${JSON.stringify(
+            graphRole
+        )}`);
+    }
+    const evidence = analyzeVehiclePropertyShopRoutes(input);
+    const pairs = evidence.pairs.map((pair) => {
+        const layer = pair.layers.find(({ graphRole: role }) => role === graphRole)!;
+        const selectedEstimate = layer.candidates[0];
+        const base = {
+            propertyCode: pair.propertyCode,
+            shopCode: pair.shopCode,
+            graphRole,
+            routeProofStatus: 'incomplete',
+        } as const;
+        if (selectedEstimate === undefined) {
+            if (layer.reason === 'route-candidates-found') {
+                throw new Error('Vehicle route layer reports candidates but contains none');
+            }
+            return {
+                ...base,
+                planningStatus: 'estimate-unavailable',
+                unavailableReason: layer.reason,
+                selectedEstimate: null,
+            } satisfies UnavailableVehiclePropertyShopRoutePlan;
+        }
+        return {
+            ...base,
+            planningStatus: 'estimate-available',
+            unavailableReason: null,
+            selectedEstimate,
+        } satisfies AvailableVehiclePropertyShopRoutePlan;
+    });
+
+    return {
+        schema: 'neonschedule1-static-vehicle-property-shop-route-plans-1',
+        sourceSchema: evidence.schema,
+        sourceNavigationSchema: evidence.sourceSchema,
+        pairBasis: evidence.pairBasis,
+        routeKind: 'static-planning-estimate',
+        graphRoleSelection: 'caller-selected',
+        graphRole,
+        pathDirection: evidence.pathDirection,
+        estimateSelection: 'minimum-network-distance-then-endpoint-order-within-selected-layer',
+        distanceMethod: 'node-center-euclidean-3d',
+        distanceScope: 'directed-graph-edges-only',
+        rawCostStatus: evidence.rawCostStatus,
+        nativePathChoiceStatus: evidence.nativePathChoiceStatus,
+        endpointAccessStatus: evidence.endpointAccessStatus,
+        layerCompositionStatus: 'excluded-selected-layer-only',
+        routeProofStatus: evidence.routeProofStatus,
+        excludedBehavior: routePlanExclusions,
+        propertyCodes: evidence.propertyCodes,
+        shopCodes: evidence.shopCodes,
         pairs,
     };
 }

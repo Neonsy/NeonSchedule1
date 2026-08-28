@@ -59,6 +59,7 @@ It does not claim that endpoint offsets are traversable or that the game compose
 | Verify a corpus | `pnpm solver:precompute:verify` |
 | Package a verified runtime artifact | `pnpm solver:precompute:package` |
 | Prepare or compare convex-collider validation | `pnpm data:validate-convex` |
+| Prepare or compare a read-only planner observation | `pnpm data:observe` |
 
 The workspace scripts build the required packages before they run a command-line tool.
 Most solver commands select a normalized dataset from `.local/normalized` unless you pass another path.
@@ -70,8 +71,23 @@ The solver returns exact results only when it completes the search or uses match
 Quick, Balanced, and Precise live searches can return valid best-found results with a recorded state, work, or time limit.
 Exhaustive mode returns an exact corpus result or a coverage miss.
 
-Static vehicle route analysis produces independent candidates inside each directed graph layer.
-It excludes endpoint offsets, cross-layer composition, native route selection, and live driving behavior.
+Static vehicle route planning selects one minimum-distance estimate inside a caller-selected directed graph layer.
+The result excludes endpoint offsets, cross-layer composition, native route selection, parking, collision avoidance, traffic, dynamic obstacles, and live driving behavior.
+
+## Validate local planner data
+
+`@neonschedule1/core` defines versioned schemas for a local profile manifest and separate manual-state, inventory, checklist, blueprint, and latest-observation documents.
+Unknown values stay explicit, and known collections declare complete or partial coverage.
+Each document carries the game version and normalized dataset identity.
+
+`validatePlannerProfileBundle` rejects incompatible ownership, references, timestamps, ranges, and undeclared fields.
+`validatePlannerProfileBundleForDataset` also rejects a profile that does not match the loaded dataset.
+The latest observation is read-only, and the schema permits no retained raw save payload.
+
+`pnpm data:observe prepare --game-directory <path>` stages a one-shot request for the existing local exporter mod.
+After the matching save loads, `pnpm data:observe compare --game-directory <path>` verifies the response hash, request identity, game version, strict schema, and explicit inventory coverage.
+
+The repository still has no browser persistence adapter or automatic synchronization loop.
 
 ## Local outputs
 
