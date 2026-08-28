@@ -32,7 +32,7 @@ import { normalizeVehicleNavigation } from '#data-compiler/normalize/vehicle-nav
 import { normalizeWorld } from '#data-compiler/normalize/world';
 import { writeDataset, type WrittenDataset } from '#data-compiler/output';
 
-export const NORMALIZER_VERSION = '0.0.39';
+export const NORMALIZER_VERSION = '0.0.40';
 
 const deferredDomains = [] as const;
 
