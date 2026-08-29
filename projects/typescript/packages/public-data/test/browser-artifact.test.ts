@@ -32,6 +32,152 @@ describe('browser data artifact', () => {
             .toThrow();
     });
 
+    it('publishes the controls, proof, and limitations for every calculation family', async () => {
+        const { calculations } = await readArtifact();
+
+        expect(calculations.requestPolicy).toEqual({
+            compatibility: 'matching-game-and-dataset-required',
+            persistence: 'request-local-not-stored',
+            sourceSelection: 'explicit-no-automatic-merge',
+            unknownValues: 'preserved-not-assumed',
+            invalidRequests: 'rejected-before-calculation',
+            identifiers: 'opaque-public-keys-only',
+            applicationTransport: 'not-defined',
+        });
+        expect(calculations.counts).toEqual({
+            proofClasses: 6,
+            searchModes: 4,
+            recipeObjectives: 5,
+            stateSources: 2,
+            inventorySources: 3,
+            families: 10,
+            requestInputs: 46,
+            outcomes: 52,
+            gaps: 74,
+            limits: 16,
+        });
+        expect(calculations.proofClasses.map(({ key, resultUse }) => [key, resultUse]))
+            .toEqual([
+                ['exact', 'complete'],
+                ['conditional', 'condition-dependent'],
+                ['incomplete', 'partial-only'],
+                ['unsupported', 'none'],
+                ['unavailable', 'none'],
+                ['not-applicable', 'none'],
+            ]);
+        expect(calculations.controls.searchModes.map((mode) => ({
+            key: mode.key,
+            execution: mode.execution,
+            maximumIngredients: mode.maximumIngredients,
+            advisoryDuration: mode.advisoryDuration,
+            possibleOutcomeKeys: mode.possibleOutcomeKeys,
+        }))).toEqual([
+            {
+                key: 'quick',
+                execution: 'live-bounded-after-coverage-miss',
+                maximumIngredients: 3,
+                advisoryDuration: {
+                    minimumMs: 5,
+                    maximumMs: 100,
+                    scope: 'per-product-search',
+                },
+                possibleOutcomeKeys: ['precomputed-exact', 'live-exact', 'live-incomplete'],
+            },
+            {
+                key: 'balanced',
+                execution: 'live-bounded-after-coverage-miss',
+                maximumIngredients: 4,
+                advisoryDuration: {
+                    minimumMs: 50,
+                    maximumMs: 500,
+                    scope: 'per-product-search',
+                },
+                possibleOutcomeKeys: ['precomputed-exact', 'live-exact', 'live-incomplete'],
+            },
+            {
+                key: 'precise',
+                execution: 'live-bounded-after-coverage-miss',
+                maximumIngredients: 5,
+                advisoryDuration: {
+                    minimumMs: 550,
+                    maximumMs: 4_000,
+                    scope: 'per-product-search',
+                },
+                possibleOutcomeKeys: ['precomputed-exact', 'live-exact', 'live-incomplete'],
+            },
+            {
+                key: 'exhaustive',
+                execution: 'verified-precomputed-only',
+                maximumIngredients: null,
+                advisoryDuration: null,
+                possibleOutcomeKeys: ['precomputed-exact', 'coverage-miss'],
+            },
+        ]);
+        expect(calculations.controls.recipeObjectives.map(({ key, direction }) => [
+            key,
+            direction,
+        ])).toEqual([
+            ['product-value', 'highest-first'],
+            ['net-value', 'highest-first'],
+            ['fewest-steps', 'lowest-first'],
+            ['lowest-cost', 'lowest-first'],
+            ['return-on-cost', 'highest-first'],
+        ]);
+        expect(calculations.controls.stateSources.map(({ key }) => key)).toEqual([
+            'manual-state',
+            'latest-observation',
+        ]);
+        expect(calculations.controls.inventorySources.map(({ key }) => key)).toEqual([
+            'no-inventory',
+            'selected-manual-inventories',
+            'latest-observation-inventories',
+        ]);
+        expect(calculations.families.map(({ key }) => key)).toEqual([
+            'recipe-search',
+            'customer-planner',
+            'dealer-planner',
+            'progression-eligibility',
+            'production-planner',
+            'inventory-logistics',
+            'property-business',
+            'blueprint-builder',
+            'route-travel',
+            'evidence-compatibility',
+        ]);
+
+        const proofKeys = new Set(calculations.proofClasses.map(({ key }) => key));
+        const controlKeys = new Set([
+            'search-mode',
+            'recipe-objective',
+            'state-source',
+            'inventory-source',
+        ]);
+        const coveredFeatureKeys = calculations.families.flatMap(({ featureKeys }) => featureKeys);
+        expect(coveredFeatureKeys).toEqual([
+            'recipe-calculator-search',
+            'customer-planner',
+            'dealer-planner',
+            'relationships-progression',
+            'production-planner',
+            'inventory-logistics',
+            'properties-businesses',
+            'blueprint-builder',
+            'routes-travel',
+            'evidence-compatibility',
+        ]);
+        for (const family of calculations.families) {
+            expect(family.requestInputs.length).toBeGreaterThan(0);
+            expect(family.outcomes.length).toBeGreaterThan(0);
+            expect(family.limits.length).toBeGreaterThan(0);
+            expect(family.controlKeys.every((key) => controlKeys.has(key))).toBe(true);
+            expect(family.outcomes.every(({ proofKey }) => proofKeys.has(proofKey))).toBe(true);
+            expect(family.gaps.every(({ proofKey }) => proofKeys.has(proofKey))).toBe(true);
+        }
+        for (const value of stringValues(calculations)) {
+            expect(value.trim()).not.toBe('');
+        }
+    });
+
     it('contains the complete selected static catalogs', async () => {
         const artifact = await readArtifact();
 
@@ -56,6 +202,13 @@ describe('browser data artifact', () => {
             properties: 13,
             shops: 12,
             mapMarkers: 229,
+            dealerHomes: 6,
+            deliveryLocations: 45,
+            routeEndpoints: 58,
+            routeLayerResults: 208,
+            routeEstimates: 200,
+            unavailableRouteResults: 8,
+            routePoints: 12_968,
         });
         expect(artifact.map.regions).toHaveLength(6);
         expect(artifact.map.markers).toHaveLength(229);
@@ -138,6 +291,16 @@ describe('browser data artifact', () => {
             artifact.blueprintGeometry.properties.map((property) => property.propertyKey),
             propertyKeys
         );
+        expectReferences(
+            artifact.travel.dealer.homes.map((home) => home.personKey),
+            personKeys
+        );
+        for (const result of artifact.travel.vehiclePropertyShop.layers.flatMap(
+            (layer) => layer.results
+        )) {
+            expect(propertyKeys.has(result.propertyKey)).toBe(true);
+            expect(shopKeys.has(result.shopKey)).toBe(true);
+        }
         for (const property of artifact.blueprintGeometry.properties) {
             const meshKeys = new Set(property.surfaceMeshes.map((mesh) => mesh.key));
             expectReferences(
@@ -303,6 +466,103 @@ describe('browser data artifact', () => {
         });
     });
 
+    it('publishes bounded route estimates and dealer travel inputs', async () => {
+        const artifact = await readArtifact();
+        const travel = artifact.travel;
+
+        expect(travel.dealer).toMatchObject({
+            method: 'native-straight-line-walk-speed',
+            feasibilityPolicy: 'worst-case-regional-delivery-location',
+            currentOriginInput: 'caller-supplied-current-position',
+            staticHomeUsage: 'reference-only-not-current-position',
+            proof: {
+                staticGameData: 'complete',
+                liveState: 'runtime-input-required',
+                resultContract: 'published-in-calculation-contract-catalog',
+            },
+            counts: {
+                dealerHomes: 6,
+                regions: 6,
+                distinctDeliveryLocations: 45,
+                regionalDeliveryLocationAssignments: 47,
+            },
+        });
+        expect(travel.dealer.regions.map((region) => [
+            region.regionKey,
+            region.deliveryLocations.length,
+        ])).toEqual([
+            ['docks', 5],
+            ['downtown', 8],
+            ['northtown', 11],
+            ['suburbia', 8],
+            ['uptown', 6],
+            ['westville', 9],
+        ]);
+        const deliveryLocationKeys = new Set(travel.dealer.regions.flatMap((region) =>
+            region.deliveryLocations.map((location) => location.key)));
+        expect(deliveryLocationKeys.size).toBe(45);
+
+        const vehicle = travel.vehiclePropertyShop;
+        expect(vehicle).toMatchObject({
+            routeKind: 'static-planning-estimate',
+            graphRoleSelection: 'caller-selected',
+            pathDirection: 'directed',
+            routeProofStatus: 'incomplete',
+            proof: {
+                selectedEstimates: 'published',
+                unavailableResults: 'published',
+                endpointAccess: 'unproven',
+                layerComposition: 'excluded-selected-layer-only',
+                nativePathChoice: 'unproven',
+                rawCosts: 'not-used',
+                rawNavigationGraphs: 'not-published',
+                liveNavigation: 'not-published',
+                resultContract: 'published-in-calculation-contract-catalog',
+            },
+            counts: {
+                properties: 13,
+                shops: 8,
+                endpoints: 58,
+                layerResults: 208,
+                availableEstimates: 200,
+                unavailableResults: 8,
+                routePoints: 12_968,
+            },
+        });
+        expect(vehicle.layers.map((layer) => [layer.graphRole, layer.counts])).toEqual([
+            ['general', { results: 104, available: 96, unavailable: 8, routePoints: 10_875 }],
+            ['road', { results: 104, available: 104, unavailable: 0, routePoints: 2_093 }],
+        ]);
+        const endpointKeys = new Set(vehicle.endpoints.map((endpoint) => endpoint.key));
+        expect(endpointKeys.size).toBe(58);
+        expect([...endpointKeys].every((key) => /^routeendpoint-[0-9a-f]{20}$/u.test(key)))
+            .toBe(true);
+        const results = vehicle.layers.flatMap((layer) => layer.results);
+        const unavailable = results.filter((result) =>
+            result.planningStatus === 'estimate-unavailable');
+        expect(unavailable).toHaveLength(8);
+        expect(unavailable.every((result) =>
+            result.unavailableReason === 'directed-disconnection' && result.estimate === null
+        )).toBe(true);
+        for (const result of results.filter((entry) => entry.estimate !== null)) {
+            expect(result.unavailableReason).toBeNull();
+            expect(endpointKeys.has(result.estimate!.sourceEndpointKey)).toBe(true);
+            expect(endpointKeys.has(result.estimate!.destinationEndpointKey)).toBe(true);
+            expect(result.estimate!.networkDistance).toBeGreaterThanOrEqual(0);
+            expect(result.estimate!.points.length).toBeGreaterThan(0);
+        }
+        expect(vehicle.exclusions.map(({ code }) => code)).toEqual([
+            'endpoint-access-unproven',
+            'graph-layer-composition-excluded',
+            'native-path-selection-unproven',
+            'parking-not-modeled',
+            'collision-avoidance-not-modeled',
+            'traffic-not-modeled',
+            'dynamic-obstacles-not-modeled',
+            'live-driving-not-modeled',
+        ]);
+    });
+
     it('contains no source references, runtime types, or machine paths', async () => {
         const artifact = await readArtifact();
         const forbiddenKeys = new Set([
@@ -325,6 +585,8 @@ describe('browser data artifact', () => {
             'fileId',
             'meshId',
             'materialId',
+            'nodeIndex',
+            'guid',
             'steamId',
             'playerId',
             'userId',
@@ -351,14 +613,14 @@ describe('browser data artifact', () => {
         ]))).toMatchObject({
             'recipe-calculator-search': 'included',
             'customer-planner': 'included',
-            'dealer-planner': 'partial',
+            'dealer-planner': 'included',
             'relationships-progression': 'included',
-            'production-planner': 'partial',
-            'inventory-logistics': 'partial',
+            'production-planner': 'included',
+            'inventory-logistics': 'included',
             'properties-businesses': 'partial',
             'blueprint-builder': 'partial',
             'interactive-map': 'included',
-            'routes-travel': 'not-included',
+            'routes-travel': 'included',
             'evidence-compatibility': 'included',
             'saved-plans': 'not-game-data',
             'sharing-exports': 'not-game-data',

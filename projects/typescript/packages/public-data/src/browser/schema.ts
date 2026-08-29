@@ -1,8 +1,10 @@
 import { type } from 'arktype';
 
+import { PublicCalculationContractsSchema } from '#public-data/browser/calculation-contracts-schema';
 import { PublicKeySchema, SlugSchema } from '#public-data/browser/common-schema';
 import { PublicBlueprintGeometrySchema } from '#public-data/browser/geometry-schema';
 import { PublicProductionBundleSchema } from '#public-data/browser/production-schema';
+import { PublicTravelSchema } from '#public-data/browser/travel-schema';
 
 const Sha256Schema = type(/^[0-9a-f]{64}$/u);
 const HtmlRgbaSchema = type(/^#[0-9A-F]{8}$/u);
@@ -333,6 +335,7 @@ export const BrowserDataArtifactSchema = type({
         unsupportedVersionMessage: 'string',
     },
     coverage: PublicFeatureCoverageSchema.array(),
+    calculations: PublicCalculationContractsSchema,
     effects: PublicEffectSchema.array(),
     items: PublicItemSchema.array(),
     mixing: PublicMixingRulesSchema,
@@ -344,6 +347,7 @@ export const BrowserDataArtifactSchema = type({
     ranks: PublicRankLevelSchema.array(),
     production: PublicProductionBundleSchema,
     blueprintGeometry: PublicBlueprintGeometrySchema,
+    travel: PublicTravelSchema,
     properties: PublicPropertySchema.array(),
     shops: PublicShopSchema.array(),
     map: BrowserMapSchema,
@@ -368,6 +372,13 @@ export const BrowserDataArtifactSchema = type({
         properties: 'number',
         shops: 'number',
         mapMarkers: 'number',
+        dealerHomes: 'number',
+        deliveryLocations: 'number',
+        routeEndpoints: 'number',
+        routeLayerResults: 'number',
+        routeEstimates: 'number',
+        unavailableRouteResults: 'number',
+        routePoints: 'number',
     },
 }).onDeepUndeclaredKey('reject');
 export type BrowserDataArtifact = typeof BrowserDataArtifactSchema.infer;

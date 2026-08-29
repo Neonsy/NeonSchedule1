@@ -10,6 +10,12 @@
       "default": "./dist/*.js"
     }
   },
+  "exports": {
+    "./search-policy": {
+      "types": "./dist/search-policy.d.ts",
+      "default": "./dist/search-policy.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "tsc -p tsconfig.json",

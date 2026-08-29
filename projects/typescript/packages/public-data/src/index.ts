@@ -1,3 +1,5 @@
+export * from '#public-data/browser/calculation-contracts';
+export * from '#public-data/browser/calculation-contracts-schema';
 export * from '#public-data/browser/compile';
 export * from '#public-data/browser/dataset';
 export * from '#public-data/browser/geometry';
@@ -5,6 +7,8 @@ export * from '#public-data/browser/geometry-schema';
 export * from '#public-data/browser/production';
 export * from '#public-data/browser/production-schema';
 export * from '#public-data/browser/schema';
+export * from '#public-data/browser/travel';
+export * from '#public-data/browser/travel-schema';
 export * from '#public-data/map/compile';
 export * from '#public-data/map/dataset';
 export * from '#public-data/map/input';

@@ -14,6 +14,9 @@ import {
     RelationshipCatalogSchema,
     ShopSchema,
     TradeCatalogSchema,
+    VehicleNavigationSchema,
+    WorldLocationCatalogSchema,
+    WorldMapSchema,
     type Buildable,
     type Customer,
     type CustomerCatalog,
@@ -30,6 +33,9 @@ import {
     type RelationshipCatalog,
     type Shop,
     type TradeCatalog,
+    type VehicleNavigation,
+    type WorldLocationCatalog,
+    type WorldMap,
 } from '@neonschedule1/core';
 
 import { openNormalizedDataset } from '#public-data/normalized-dataset';
@@ -44,6 +50,9 @@ export interface BrowserPublicationSource {
     readonly people: readonly Person[];
     readonly relationships: RelationshipCatalog;
     readonly trade: TradeCatalog;
+    readonly vehicleNavigation: VehicleNavigation;
+    readonly worldLocations: WorldLocationCatalog;
+    readonly worldMap: WorldMap;
     readonly ranks: RankCatalog;
     readonly production: ProductionCatalog;
     readonly logistics: ProductionLogisticsCatalog;
@@ -95,6 +104,13 @@ export async function loadBrowserPublicationSource(
         await dataset.readDocument('people/relationships.json')
     );
     const trade = TradeCatalogSchema.assert(await dataset.readDocument('people/trade.json'));
+    const vehicleNavigation = VehicleNavigationSchema.assert(
+        await dataset.readDocument('world/vehicle-navigation.json')
+    );
+    const worldLocations = WorldLocationCatalogSchema.assert(
+        await dataset.readDocument('world/locations.json')
+    );
+    const worldMap = WorldMapSchema.assert(await dataset.readDocument('world/map.json'));
     const ranks = RankCatalogSchema.assert(await dataset.readDocument('progression/ranks.json'));
     const production = ProductionCatalogSchema.assert(
         await dataset.readDocument('production/catalog.json')
@@ -114,6 +130,36 @@ export async function loadBrowserPublicationSource(
         dataset.manifest.counts.propertyLayouts ?? 0
     );
     requireCount('shops', shops.length, dataset.manifest.counts.shops);
+    requireCount(
+        'vehicle navigation graphs',
+        vehicleNavigation.graphs.length,
+        dataset.manifest.counts.vehicleNavigationGraphs ?? 0
+    );
+    requireCount(
+        'vehicle navigation nodes',
+        vehicleNavigation.graphs.reduce((count, graph) => count + graph.nodes.length, 0),
+        dataset.manifest.counts.vehicleNavigationNodes ?? 0
+    );
+    requireCount(
+        'vehicle navigation connections',
+        vehicleNavigation.graphs.reduce((count, graph) => count + graph.connections.length, 0),
+        dataset.manifest.counts.vehicleNavigationConnections ?? 0
+    );
+    requireCount(
+        'vehicle navigation endpoint mappings',
+        vehicleNavigation.endpointMappings.length,
+        dataset.manifest.counts.vehicleNavigationEndpointMappings ?? 0
+    );
+    requireCount(
+        'world locations',
+        worldLocations.locations.length,
+        dataset.manifest.counts.worldLocations ?? 0
+    );
+    requireCount(
+        'world regions',
+        worldMap.regions.length,
+        dataset.manifest.counts.worldRegions ?? 0
+    );
     requireCount('rank levels', ranks.levels.length, dataset.manifest.counts.rankLevels ?? 0);
     requireCount('seeds', production.seeds.length, dataset.manifest.counts.seeds);
     requireCount('shroom spawns', production.shrooms.length, dataset.manifest.counts.shroomSpawns);
@@ -158,6 +204,9 @@ export async function loadBrowserPublicationSource(
         people,
         relationships,
         trade,
+        vehicleNavigation,
+        worldLocations,
+        worldMap,
         ranks,
         production,
         logistics,

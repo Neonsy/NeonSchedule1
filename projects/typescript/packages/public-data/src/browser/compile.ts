@@ -8,12 +8,14 @@ import type {
 } from '@neonschedule1/core';
 
 import type { BrowserPublicationSource } from '#public-data/browser/dataset';
+import { compilePublicCalculationContracts } from '#public-data/browser/calculation-contracts';
 import { compilePublicBlueprintGeometry } from '#public-data/browser/geometry';
 import {
     createPublicKeyResolver,
     requireUnique,
 } from '#public-data/browser/public-key';
 import { compilePublicProductionBundle } from '#public-data/browser/production';
+import { compilePublicTravel } from '#public-data/browser/travel';
 import {
     BrowserDataArtifactSchema,
     type BrowserDataArtifact,
@@ -94,6 +96,21 @@ export function compileBrowserDataArtifact(
         itemKey,
         propertyKey
     );
+    const travel = compilePublicTravel(source, {
+        person: personKey,
+        property: propertyKey,
+        shop: shopKey,
+    });
+    const calculations = compilePublicCalculationContracts();
+    const coverageKeys = new Set<string>(featureCoverage.map(({ key }) => key));
+    const unknownCalculationFeature = calculations.families
+        .flatMap(({ featureKeys }) => featureKeys)
+        .find((key) => !coverageKeys.has(key));
+    if (unknownCalculationFeature !== undefined) {
+        throw new Error(
+            `Calculation catalog references unknown feature ${unknownCalculationFeature}`
+        );
+    }
 
     sortBy(effects, (effect) => effect.label);
     sortBy(items, (item) => `${item.label ?? ''}\0${item.key}`);
@@ -140,6 +157,7 @@ export function compileBrowserDataArtifact(
                 'Choose a matching data version before using calculations or plans.',
         },
         coverage: featureCoverage,
+        calculations,
         effects,
         items,
         mixing: {
@@ -203,6 +221,7 @@ export function compileBrowserDataArtifact(
         })),
         production,
         blueprintGeometry,
+        travel,
         properties,
         shops,
         map: compileBrowserMap(mapInput),
@@ -227,6 +246,13 @@ export function compileBrowserDataArtifact(
             properties: properties.length,
             shops: shops.length,
             mapMarkers: mapInput.markers.length,
+            dealerHomes: travel.dealer.counts.dealerHomes,
+            deliveryLocations: travel.dealer.counts.distinctDeliveryLocations,
+            routeEndpoints: travel.vehiclePropertyShop.counts.endpoints,
+            routeLayerResults: travel.vehiclePropertyShop.counts.layerResults,
+            routeEstimates: travel.vehiclePropertyShop.counts.availableEstimates,
+            unavailableRouteResults: travel.vehiclePropertyShop.counts.unavailableResults,
+            routePoints: travel.vehiclePropertyShop.counts.routePoints,
         },
     };
     return BrowserDataArtifactSchema.assert(artifact);
@@ -540,49 +566,49 @@ const featureCoverage = [
         key: 'recipe-calculator-search',
         label: 'Recipe calculator and search',
         artifactStatus: 'included',
-        note: 'Item, effect, mixing, value, and customer-evaluation facts are included.',
+        note: 'Inputs, search controls, results, proof classes, and limitations are included.',
     },
     {
         key: 'customer-planner',
         label: 'Customer planner',
         artifactStatus: 'included',
-        note: 'All 66 customer profiles and shared evaluation constants are included.',
+        note: 'All 66 profiles, shared evaluation constants, and result proof are included.',
     },
     {
         key: 'dealer-planner',
         label: 'Dealer planner',
-        artifactStatus: 'partial',
-        note: 'Recruitable dealer mechanics are included. Public travel inputs are not.',
+        artifactStatus: 'included',
+        note: 'Recruitable dealer mechanics, travel inputs, and result proof are included.',
     },
     {
         key: 'relationships-progression',
         label: 'Relationships and progression',
         artifactStatus: 'included',
-        note: 'The person graph, relationship thresholds, and rank levels are included.',
+        note: 'The person graph, thresholds, rank levels, eligibility results, and proof are included.',
     },
     {
         key: 'production-planner',
         label: 'Production planner',
-        artifactStatus: 'partial',
-        note: 'Recipes, cycles, stations, and operation rules are included. Result proof is not.',
+        artifactStatus: 'included',
+        note: 'Recipes, cycles, stations, operation rules, results, and proof are included.',
     },
     {
         key: 'inventory-logistics',
         label: 'Inventory and logistics',
-        artifactStatus: 'partial',
-        note: 'Slots, filters, roles, priorities, and scheduling rules are included. Routes are not.',
+        artifactStatus: 'included',
+        note: 'Slots, filters, roles, priorities, scheduling, routes, results, and proof are included.',
     },
     {
         key: 'properties-businesses',
         label: 'Properties and businesses',
         artifactStatus: 'partial',
-        note: 'Property and shop facts plus calculation-safe layouts are included. Result proof is not.',
+        note: 'Facts, calculation-safe layouts, results, and proof are included. Approved visual coverage remains incomplete.',
     },
     {
         key: 'blueprint-builder',
         label: 'Blueprint builder',
         artifactStatus: 'partial',
-        note: 'Placement, collision, surface, storage, temperature, and access inputs are included. Application and result contracts are not.',
+        note: 'Calculation inputs, results, proof, and limitations are included. Application save and interchange contracts are not.',
     },
     {
         key: 'interactive-map',
@@ -593,14 +619,14 @@ const featureCoverage = [
     {
         key: 'routes-travel',
         label: 'Routes and travel',
-        artifactStatus: 'not-included',
-        note: 'Navigation graphs still need a bounded public representation.',
+        artifactStatus: 'included',
+        note: 'Bounded estimates, dealer inputs, results, proof, and exclusions are included; raw graphs and live navigation are not.',
     },
     {
         key: 'evidence-compatibility',
         label: 'Evidence and compatibility',
         artifactStatus: 'included',
-        note: 'Game version, normalizer version, and dataset identity are explicit.',
+        note: 'Version, dataset, request, proof, coverage, and incompatibility results are explicit.',
     },
     {
         key: 'saved-plans',

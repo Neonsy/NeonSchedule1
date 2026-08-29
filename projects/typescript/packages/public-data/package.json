@@ -25,6 +25,7 @@
     },
     "dependencies": {
         "@neonschedule1/core": "workspace:*",
+        "@neonschedule1/solver": "workspace:*",
         "arktype": "2.2.3"
     }
 }
