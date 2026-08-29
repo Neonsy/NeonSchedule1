@@ -98,7 +98,7 @@ const namedServiceKinds: Readonly<Record<string, PublicMapMarkerKind>> = {
     'supplier-stash': 'supplier-stash',
 };
 
-const propertyPublicForms: Readonly<Record<string, string>> = {
+export const propertyPublicForms: Readonly<Record<string, string>> = {
     barn: 'Barn',
     bungalow: 'Bungalow',
     carwash: 'Car Wash',
@@ -114,12 +114,13 @@ const propertyPublicForms: Readonly<Record<string, string>> = {
     tacoticklers: 'Taco Ticklers',
 };
 
-const shopPublicForms: Readonly<Record<string, {
+export const shopPublicForms: Readonly<Record<string, {
     readonly label: string;
     readonly description: string | null;
 }>> = {
     armsdealer: { label: 'Arms Dealer', description: 'Guns and ammo' },
     boutique: { label: "Bleuball's Boutique", description: 'General illegal supplies' },
+    coke_shop: { label: 'Salvador Moreno', description: 'Coca seeds' },
     dans_hardware: { label: "Dan's Hardware", description: 'General legal supplies' },
     gas_mart_central: {
         label: 'Gas-Mart (Central)',
@@ -130,8 +131,11 @@ const shopPublicForms: Readonly<Record<string, {
         description: 'Ingredients and packaging',
     },
     handy_hanks: { label: "Handy Hank's Hardware", description: 'General legal supplies' },
+    meth_shop: { label: 'Shirley Watts', description: 'Pseudo' },
     shop: { label: "Oscar's Store", description: 'General illegal supplies' },
+    shrooms_shop: { label: 'Fungal Phil', description: 'Shroom supplies' },
     thrifty_threads: { label: 'Thrifty Threads', description: null },
+    weed_shop: { label: 'Albert Hoover', description: 'Weed seeds' },
 };
 
 export function compileMapPublicationInput(

@@ -18,6 +18,7 @@
     },
     "scripts": {
         "build": "tsc -p tsconfig.build.json",
+        "browser:compile": "node dist/browser/cli.js",
         "check": "tsc -p tsconfig.json",
         "test": "vitest run --config ../../vitest.config.mts --project public-data",
         "map:compile": "node dist/map/cli.js"
