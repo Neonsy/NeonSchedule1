@@ -1,4 +1,5 @@
 export * from '#core/data/canonical-json';
+export * from '#core/data/application';
 export * from '#core/data/blueprint';
 export * from '#core/data/common';
 export * from '#core/data/buildable';
@@ -72,6 +73,7 @@ export * from '#core/world/person-schedule';
 export * from '#core/world/shop-routing';
 export * from '#core/world/vehicle-routing';
 export * from '#core/planner-profile/validation';
+export * from '#core/application/validation';
 export * from '#core/planner-observation/validation';
 export * from '#core/planner-calculation/validation';
 export * from '#core/blueprint/collision';

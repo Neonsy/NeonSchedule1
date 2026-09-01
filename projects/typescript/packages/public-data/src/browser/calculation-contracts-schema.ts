@@ -98,7 +98,7 @@ export const PublicCalculationContractsSchema = type({
         unknownValues: "'preserved-not-assumed'",
         invalidRequests: "'rejected-before-calculation'",
         identifiers: "'opaque-public-keys-only'",
-        applicationTransport: "'not-defined'",
+        applicationTransport: "'versioned-application-contracts'",
     },
     proofClasses: PublicCalculationProofClassSchema.array(),
     controls: {

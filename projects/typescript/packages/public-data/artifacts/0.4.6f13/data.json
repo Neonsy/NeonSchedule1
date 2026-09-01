@@ -1,4 +1,89 @@
 {
+  "applicationData": {
+    "accounts": {
+      "authentication": "external-provider",
+      "authorization": "account-owns-community-and-sync-records",
+      "credentials": "never-stored-in-application-contracts",
+      "deletion": "remove-private-data-and-anonymize-retained-public-authorship",
+      "export": "account-community-and-sync-records",
+      "identity": "opaque-account-id",
+      "recovery": "external-provider",
+      "retention": "until-explicit-account-deletion"
+    },
+    "community": {
+      "authorship": "account-or-anonymized-after-account-deletion",
+      "deduplication": "canonical-content-sha256",
+      "deletion": "remove-content-retain-minimal-tombstone",
+      "moderation": "report-and-action-history",
+      "owner": "submitting-account",
+      "retention": "until-author-deletion-or-moderation-removal",
+      "visibility": "public-or-unlisted"
+    },
+    "exports": {
+      "access": "private-holder-controlled",
+      "deletion": "delete-held-copy",
+      "encoding": "canonical-json",
+      "import": "as-new-or-explicit-replace",
+      "merge": "never-automatic",
+      "owner": "local-user",
+      "retention": "until-holder-deletes-copy",
+      "snapshot": "validated-profile-or-document"
+    },
+    "forbiddenFields": [
+      "credentials",
+      "machinePath",
+      "organizationName",
+      "playerName",
+      "rawPayload",
+      "rawSave",
+      "recoverySecret",
+      "steamId",
+      "teamId"
+    ],
+    "limits": {
+      "accountExportBytes": 67108864,
+      "blueprintShareBytes": 1048576,
+      "communityModerationActionCount": 500,
+      "communityReportCount": 500,
+      "displayNameCharacters": 80,
+      "profileExportBytes": 33554432,
+      "recipeShareBytes": 65536
+    },
+    "liveState": {
+      "access": "read-only-observation",
+      "collectionCoverage": "preserve-source-coverage",
+      "consent": "explicit-user-reviewed-apply",
+      "gameWrites": "forbidden",
+      "retry": "new-request-after-conflict",
+      "selectedValues": "replace-without-coercion",
+      "staleState": "reject-profile-content-mismatch",
+      "target": "manual-profile-documents-only",
+      "unselectedValues": "preserve"
+    },
+    "profiles": {
+      "conflict": "reject-base-content-mismatch",
+      "deletion": "optional-documents-or-full-profile",
+      "migration": "reject-until-explicit-migration",
+      "owner": "local-user",
+      "persistence": "application-adapter",
+      "retention": "until-explicit-profile-deletion",
+      "sourceOfTruth": "manual-state",
+      "synchronization": "optional-explicit-account-sync"
+    },
+    "schema": "neonschedule1-application-data-policy-1",
+    "sharing": {
+      "access": "holder-controlled-copy",
+      "compatibility": "matching-game-and-dataset-required",
+      "content": "recipe-or-blueprint-only",
+      "deletion": "delete-held-copy",
+      "encoding": "canonical-json",
+      "identifiers": "opaque-public-keys",
+      "mutation": "immutable-content-addressed-copy",
+      "owner": "creator",
+      "retention": "until-holder-deletes-copy",
+      "revocation": "not-supported-after-copy"
+    }
+  },
   "blueprintGeometry": {
     "buildables": [
       {
@@ -543592,7 +543677,7 @@
       }
     ],
     "requestPolicy": {
-      "applicationTransport": "not-defined",
+      "applicationTransport": "versioned-application-contracts",
       "compatibility": "matching-game-and-dataset-required",
       "identifiers": "opaque-public-keys-only",
       "invalidRequests": "rejected-before-calculation",
@@ -543683,10 +543768,10 @@
       "note": "Facts, calculation-safe layouts, processed property visuals, results, and proof are included."
     },
     {
-      "artifactStatus": "partial",
+      "artifactStatus": "included",
       "key": "blueprint-builder",
       "label": "Blueprint builder",
-      "note": "Calculation inputs, results, proof, and limitations are included. Application save and interchange contracts are not."
+      "note": "Calculation inputs, results, proof, local save rules, and public blueprint interchange are included."
     },
     {
       "artifactStatus": "included",
@@ -543710,31 +543795,31 @@
       "artifactStatus": "not-game-data",
       "key": "saved-plans",
       "label": "Saved inventories, progression, checklists, and blueprints",
-      "note": "This needs a product-owned storage contract, not more game extraction."
+      "note": "Versioned local profiles, private exports, optional explicit account sync, and deletion rules are included. User records are created by the application."
     },
     {
       "artifactStatus": "not-game-data",
       "key": "sharing-exports",
       "label": "Shareable recipes, blueprints, and exports",
-      "note": "This needs a product-owned interchange contract."
+      "note": "Versioned content-addressed recipe and blueprint shares and private profile exports are included."
     },
     {
       "artifactStatus": "not-game-data",
       "key": "community-content",
       "label": "Community recipes and blueprints",
-      "note": "This needs product, moderation, and ownership contracts."
+      "note": "Authorship, visibility, deduplication, reporting, moderation, retention, and deletion contracts are included."
     },
     {
       "artifactStatus": "not-game-data",
-      "key": "accounts-teams",
-      "label": "Accounts and teams",
-      "note": "This needs identity and access contracts."
+      "key": "accounts",
+      "label": "Accounts",
+      "note": "Opaque identity, external authentication and recovery, ownership, export, optional sync, and deletion contracts are included."
     },
     {
       "artifactStatus": "not-game-data",
       "key": "live-save-sync",
       "label": "Live save sync and mod connectivity",
-      "note": "This needs a runtime integration and data-lifecycle contract."
+      "note": "Read-only observation, explicit reviewed apply, stale-state rejection, retry, retention, and deletion rules are included."
     }
   ],
   "customerModel": {

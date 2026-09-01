@@ -1,10 +1,11 @@
-import type {
-    Customer,
-    Effect,
-    Item,
-    Person,
-    Property,
-    Shop,
+import {
+    applicationDataPolicy,
+    type Customer,
+    type Effect,
+    type Item,
+    type Person,
+    type Property,
+    type Shop,
 } from '@neonschedule1/core';
 
 import type { BrowserPublicationSource } from '#public-data/browser/dataset';
@@ -163,6 +164,7 @@ export function compileBrowserDataArtifact(
                 'Choose a matching data version before using calculations or plans.',
         },
         coverage: featureCoverage,
+        applicationData: applicationDataPolicy,
         calculations,
         effects,
         items,
@@ -656,8 +658,8 @@ const featureCoverage = [
     {
         key: 'blueprint-builder',
         label: 'Blueprint builder',
-        artifactStatus: 'partial',
-        note: 'Calculation inputs, results, proof, and limitations are included. Application save and interchange contracts are not.',
+        artifactStatus: 'included',
+        note: 'Calculation inputs, results, proof, local save rules, and public blueprint interchange are included.',
     },
     {
         key: 'interactive-map',
@@ -681,30 +683,30 @@ const featureCoverage = [
         key: 'saved-plans',
         label: 'Saved inventories, progression, checklists, and blueprints',
         artifactStatus: 'not-game-data',
-        note: 'This needs a product-owned storage contract, not more game extraction.',
+        note: 'Versioned local profiles, private exports, optional explicit account sync, and deletion rules are included. User records are created by the application.',
     },
     {
         key: 'sharing-exports',
         label: 'Shareable recipes, blueprints, and exports',
         artifactStatus: 'not-game-data',
-        note: 'This needs a product-owned interchange contract.',
+        note: 'Versioned content-addressed recipe and blueprint shares and private profile exports are included.',
     },
     {
         key: 'community-content',
         label: 'Community recipes and blueprints',
         artifactStatus: 'not-game-data',
-        note: 'This needs product, moderation, and ownership contracts.',
+        note: 'Authorship, visibility, deduplication, reporting, moderation, retention, and deletion contracts are included.',
     },
     {
-        key: 'accounts-teams',
-        label: 'Accounts and teams',
+        key: 'accounts',
+        label: 'Accounts',
         artifactStatus: 'not-game-data',
-        note: 'This needs identity and access contracts.',
+        note: 'Opaque identity, external authentication and recovery, ownership, export, optional sync, and deletion contracts are included.',
     },
     {
         key: 'live-save-sync',
         label: 'Live save sync and mod connectivity',
         artifactStatus: 'not-game-data',
-        note: 'This needs a runtime integration and data-lifecycle contract.',
+        note: 'Read-only observation, explicit reviewed apply, stale-state rejection, retry, retention, and deletion rules are included.',
     },
 ] as const;

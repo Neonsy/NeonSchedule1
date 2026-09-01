@@ -28,6 +28,25 @@ describe('browser data artifact', () => {
                 'This data supports Schedule I 0.4.6f13. Choose a matching data version before ' +
                 'using calculations or plans.',
         });
+        expect(artifact.applicationData).toMatchObject({
+            schema: 'neonschedule1-application-data-policy-1',
+            profiles: {
+                owner: 'local-user',
+                synchronization: 'optional-explicit-account-sync',
+            },
+            sharing: {
+                content: 'recipe-or-blueprint-only',
+                identifiers: 'opaque-public-keys',
+            },
+            accounts: {
+                credentials: 'never-stored-in-application-contracts',
+            },
+            liveState: {
+                consent: 'explicit-user-reviewed-apply',
+                gameWrites: 'forbidden',
+            },
+        });
+        expect(canonicalJson(artifact.applicationData)).not.toContain('teams');
         expect(() => BrowserDataArtifactSchema.assert({ ...artifact, unexpected: true }))
             .toThrow();
     });
@@ -42,7 +61,7 @@ describe('browser data artifact', () => {
             unknownValues: 'preserved-not-assumed',
             invalidRequests: 'rejected-before-calculation',
             identifiers: 'opaque-public-keys-only',
-            applicationTransport: 'not-defined',
+            applicationTransport: 'versioned-application-contracts',
         });
         expect(calculations.counts).toEqual({
             proofClasses: 6,
@@ -634,14 +653,14 @@ describe('browser data artifact', () => {
             'production-planner': 'included',
             'inventory-logistics': 'included',
             'properties-businesses': 'included',
-            'blueprint-builder': 'partial',
+            'blueprint-builder': 'included',
             'interactive-map': 'included',
             'routes-travel': 'included',
             'evidence-compatibility': 'included',
             'saved-plans': 'not-game-data',
             'sharing-exports': 'not-game-data',
             'community-content': 'not-game-data',
-            'accounts-teams': 'not-game-data',
+            'accounts': 'not-game-data',
             'live-save-sync': 'not-game-data',
         });
     });

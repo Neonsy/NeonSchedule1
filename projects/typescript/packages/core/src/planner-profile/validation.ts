@@ -33,11 +33,13 @@ const sha256Pattern = /^[a-f0-9]{64}$/u;
 export function validatePlannerProfileBundle(input: unknown): PlannerProfileBundle {
     const bundle = PlannerProfileBundleSchema.assert(input);
     validateManifest(bundle.manifest);
-    validateManualState(bundle);
-    bundle.inventories.forEach(validateInventoryDocument);
-    bundle.checklists.forEach(validateChecklistDocument);
-    bundle.blueprints.forEach(validateBlueprintDocument);
-    if (bundle.observation !== null) validateObservationDocument(bundle.observation);
+    validatePlannerManualStateDocument(bundle.manualState);
+    bundle.inventories.forEach(validatePlannerInventoryDocument);
+    bundle.checklists.forEach(validatePlannerChecklistDocument);
+    bundle.blueprints.forEach(validatePlannerBlueprintDocument);
+    if (bundle.observation !== null) {
+        validatePlannerObservationDocument(bundle.observation);
+    }
     validateOwnership(bundle);
     return bundle;
 }
@@ -73,17 +75,19 @@ function validateManifest(manifest: PlannerProfileManifest): void {
     }
 }
 
-function validateManualState(bundle: PlannerProfileBundle): void {
-    validateMetadata(bundle.manualState.metadata, 'Manual state document');
-    validatePlannerStateSnapshot(bundle.manualState.state, 'Manual state');
+export function validatePlannerManualStateDocument(
+    document: PlannerProfileBundle['manualState']
+): void {
+    validateMetadata(document.metadata, 'Manual state document');
+    validatePlannerStateSnapshot(document.state, 'Manual state');
 }
 
-function validateInventoryDocument(document: PlannerInventoryDocument): void {
+export function validatePlannerInventoryDocument(document: PlannerInventoryDocument): void {
     validateMetadata(document.metadata, 'Inventory document');
     validatePlannerInventorySnapshot(document.inventory, 'Inventory document');
 }
 
-function validateChecklistDocument(document: PlannerChecklistDocument): void {
+export function validatePlannerChecklistDocument(document: PlannerChecklistDocument): void {
     validateMetadata(document.metadata, 'Checklist document');
     requireNonBlank(document.title, 'Checklist title');
     requireUnique(
@@ -97,7 +101,7 @@ function validateChecklistDocument(document: PlannerChecklistDocument): void {
     document.items.forEach(({ label }) => requireNonBlank(label, 'Checklist item label'));
 }
 
-function validateBlueprintDocument(document: PlannerBlueprintDocument): void {
+export function validatePlannerBlueprintDocument(document: PlannerBlueprintDocument): void {
     validateMetadata(document.metadata, 'Blueprint document');
     requireNonBlank(document.title, 'Blueprint title');
     requireNonBlank(document.blueprint.gameVersion, 'Blueprint game version');
@@ -107,7 +111,7 @@ function validateBlueprintDocument(document: PlannerBlueprintDocument): void {
     }
 }
 
-function validateObservationDocument(document: PlannerObservationDocument): void {
+export function validatePlannerObservationDocument(document: PlannerObservationDocument): void {
     validateMetadata(document.metadata, 'Observation document');
     validateTimestamp(document.source.observedAt, 'Observation observedAt');
     requireNonBlank(document.source.connectorVersion, 'Observation connector version');

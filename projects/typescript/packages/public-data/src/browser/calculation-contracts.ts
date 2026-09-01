@@ -184,7 +184,7 @@ export function compilePublicCalculationContracts(): PublicCalculationContracts 
             unknownValues: 'preserved-not-assumed' as const,
             invalidRequests: 'rejected-before-calculation' as const,
             identifiers: 'opaque-public-keys-only' as const,
-            applicationTransport: 'not-defined' as const,
+            applicationTransport: 'versioned-application-contracts' as const,
         },
         proofClasses,
         controls: { searchModes, recipeObjectives, stateSources, inventorySources },

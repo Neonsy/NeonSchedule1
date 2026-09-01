@@ -95,6 +95,20 @@ After the matching save loads, `pnpm data:observe compare --game-directory <path
 
 The repository still has no browser persistence adapter or automatic synchronization loop.
 
+## Validate application data
+
+`@neonschedule1/core` defines `neonschedule1-application-data-policy-1` and strict versioned contracts for private profile exports, recipe and blueprint shares, community entries, accounts, optional explicit profile synchronization, complete account exports, and observation application.
+Private exports contain validated local profile data and require a canonical payload SHA-256.
+Public shares contain only recipe or blueprint data through opaque public keys.
+They are immutable copies with explicit compatibility and size limits.
+
+`applyPlannerObservation` requires a user-reviewed request and the SHA-256 of the unchanged profile bundle.
+It updates only selected state fields and inventory documents.
+It rejects stale, incompatible, automatic, missing, and cross-owner application attempts.
+
+These are portable schemas and pure validators.
+The repository does not contain an account provider integration, community service, browser persistence adapter, hosted synchronization service, or automatic observation apply loop.
+
 ## Compile the map publication input
 
 `@neonschedule1/public-data` owns the replaceable inputs for a future interactive map.

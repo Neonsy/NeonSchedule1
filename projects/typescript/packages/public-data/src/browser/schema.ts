@@ -1,5 +1,7 @@
 import { type } from 'arktype';
 
+import { ApplicationDataPolicySchema } from '@neonschedule1/core';
+
 import { PublicCalculationContractsSchema } from '#public-data/browser/calculation-contracts-schema';
 import { PublicKeySchema, SlugSchema } from '#public-data/browser/common-schema';
 import { PublicBlueprintGeometrySchema } from '#public-data/browser/geometry-schema';
@@ -342,6 +344,7 @@ export const BrowserDataArtifactSchema = type({
         unsupportedVersionMessage: 'string',
     },
     coverage: PublicFeatureCoverageSchema.array(),
+    applicationData: ApplicationDataPolicySchema,
     calculations: PublicCalculationContractsSchema,
     effects: PublicEffectSchema.array(),
     items: PublicItemSchema.array(),
