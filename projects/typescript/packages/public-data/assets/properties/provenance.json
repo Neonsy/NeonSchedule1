@@ -1,0 +1,372 @@
+{
+  "assets": [
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.304211516,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "697fcaa9c9ec18ea058f7e3c6c568b550fa86125537d2f488736d91db29476b0",
+      "path": "assets/properties/barn.png",
+      "propertyCode": "barn",
+      "source": {
+        "alphaCoverage": 0.346308594,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 854,
+        "left": 0,
+        "top": 106,
+        "width": 1242
+      },
+      "sourceSha256": "3915f89ab3ea43791fdaabfb279021206756119cd51e5dc7eaf2705f41eb08f6",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.299518229,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "e4240b035a8e6bdf13a04444f8b9dac3b3771e7e15bdcf6be6f7b64101129aaf",
+      "path": "assets/properties/bungalow.png",
+      "propertyCode": "bungalow",
+      "source": {
+        "alphaCoverage": 0.354908854,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 834,
+        "left": 20,
+        "top": 126,
+        "width": 1260
+      },
+      "sourceSha256": "d266d7db3a0229fe0b108d45912c9b53fea9e0de08b47ca7e68e6a216033b22a",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-west",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.688184317,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "6cccc2282d3a03fb5332a0900d8644deddc80eed7f90295520f30d88339bd61c",
+      "path": "assets/properties/carwash.png",
+      "propertyCode": "carwash",
+      "source": {
+        "alphaCoverage": 0.915249837,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 960,
+        "left": 0,
+        "top": 0,
+        "width": 1280
+      },
+      "sourceSha256": "19aa71b283f2c78e7484efa127b6ab6dd940ec3724c7a0ad68c0f85fbe92c1ad",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.389910301,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "b069ef6fb193003776701a0fc3eff874828425ff45898a44e1d55d2ec3c7c5f1",
+      "path": "assets/properties/dockswarehouse.png",
+      "propertyCode": "dockswarehouse",
+      "source": {
+        "alphaCoverage": 0.369117839,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 811,
+        "left": 161,
+        "top": 149,
+        "width": 932
+      },
+      "sourceSha256": "0a2c90c24fa3abe3ac0e4ca644aabcd89e6f7b559098efb0dee228f38d64e30b",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "north-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.344728009,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "bcd826158207ef80824f8fee6ab0a80d5e91ba35d099e87f9ef629b93e051fb3",
+      "path": "assets/properties/laundromat.png",
+      "propertyCode": "laundromat",
+      "source": {
+        "alphaCoverage": 0.415119629,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 915,
+        "left": 146,
+        "top": 29,
+        "width": 963
+      },
+      "sourceSha256": "c51a0de2365dfde544c77e0c63470a26a6603f420671e4f87c1f672e4f55c736",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.389048032,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "3cb2d304b9fe7721cbdf151134c0945a8f336351741f6af4c4e1aff1417c8e8f",
+      "path": "assets/properties/manor.png",
+      "propertyCode": "manor",
+      "source": {
+        "alphaCoverage": 0.42543457,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 873,
+        "left": 0,
+        "top": 87,
+        "width": 1107
+      },
+      "sourceSha256": "17f6db088754c9ebee1046fa6be6d8a8956a2a3d5a8d32497d15ab44e8a60387",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "north-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.373424479,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "9d770939d133395e9cc2d391aa238381ed3573301f88e21653f2ffb8df63d64d",
+      "path": "assets/properties/motelroom.png",
+      "propertyCode": "motelroom",
+      "source": {
+        "alphaCoverage": 0.365851237,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 826,
+        "left": 57,
+        "top": 134,
+        "width": 1053
+      },
+      "sourceSha256": "4aa9fe6b0dda93be06b91bf96259c5b3ddb90e7d7b10791383bc900b4b80d453",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "north-west",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.401948785,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "503596d6c34bd9976edee4fb92de569b7b7b6a39ebd9799e6387e6eaaec8fa30",
+      "path": "assets/properties/postoffice.png",
+      "propertyCode": "postoffice",
+      "source": {
+        "alphaCoverage": 0.413428548,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 847,
+        "left": 118,
+        "top": 92,
+        "width": 1162
+      },
+      "sourceSha256": "dc449e93ac06fe95a21179801e01039c1b247f26928ec40c44b04a7d3345ed1f",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-west",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.316585648,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "6eacdcb9d4968a8b12a27357e7e50ed99a9c53a87abc15204d5bfac0a2a156b8",
+      "path": "assets/properties/rv.png",
+      "propertyCode": "rv",
+      "source": {
+        "alphaCoverage": 0.100139974,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 472,
+        "left": 340,
+        "top": 263,
+        "width": 586
+      },
+      "sourceSha256": "41e027c7b5e7ffee86855641419e4574837c05a5d3f2463fd4aea6dc259e4ec9",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.359131944,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "4bce99928f9733179a6e559954eb8b4f9fc5d993115e7b8bac9c6fd2488c9034",
+      "path": "assets/properties/seweroffice.png",
+      "propertyCode": "seweroffice",
+      "source": {
+        "alphaCoverage": 0.400394694,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 881,
+        "left": 0,
+        "top": 79,
+        "width": 1142
+      },
+      "sourceSha256": "2a3c662f4b9128790c3f6f2572fb856817656ded763d32345519cd0960f7377e",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.127320602,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "092d695eb4145146ca57fb915f4a25f3f6816b88ce89188f9116c26a8943ddef",
+      "path": "assets/properties/storageunit.png",
+      "propertyCode": "storageunit",
+      "source": {
+        "alphaCoverage": 0.011419271,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 261,
+        "left": 239,
+        "top": 525,
+        "width": 312
+      },
+      "sourceSha256": "fec280c09e8e21a81be692bddfa07b1861fa7f83370de819bc08c9106695eaea",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.317624421,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "501c679cbd78c9ff2ecbf0643594204597bdee7986c8d7d8943917618e0259e6",
+      "path": "assets/properties/sweatshop.png",
+      "propertyCode": "sweatshop",
+      "source": {
+        "alphaCoverage": 0.382645671,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 916,
+        "left": 22,
+        "top": 37,
+        "width": 1258
+      },
+      "sourceSha256": "60c1f84e4d1e82368e995c82c448854889ba6aa02e130c6d58062f1854ebb9e5",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    },
+    {
+      "captureView": "south-east",
+      "height": 720,
+      "output": {
+        "alphaCoverage": 0.3455136,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "outputSha256": "b5fc7feeb50fc79fb13bbaa98307416f41c05d3db16ec19fe6342f4532cb2282",
+      "path": "assets/properties/tacoticklers.png",
+      "propertyCode": "tacoticklers",
+      "source": {
+        "alphaCoverage": 0.423361003,
+        "channels": 4,
+        "dtype": "uint8"
+      },
+      "sourceCrop": {
+        "height": 863,
+        "left": 0,
+        "top": 97,
+        "width": 1280
+      },
+      "sourceSha256": "c9cfa3d58b60103213df9f02b0bb7bb38e71a1a084f6d625c6f0983f0e4e697c",
+      "treatmentId": "source-derived-property-grade-1",
+      "width": 960
+    }
+  ],
+  "opencvVersion": "5.0.0",
+  "operations": [
+    "Load verified private capture PNGs with IMREAD_UNCHANGED.",
+    "Blend 75 percent source color with a luminance-mapped project palette.",
+    "Blend a low-opacity Canny edge accent inside the source alpha mask.",
+    "Crop to the visible subject with proportional transparent padding.",
+    "Resize premultiplied color and alpha onto a consistent transparent canvas.",
+    "Encode a lossless PNG and verify every decoded output pixel."
+  ],
+  "parameters": {
+    "cannyHigh": 160,
+    "cannyLow": 64,
+    "canvasMargin": 48,
+    "cropPaddingRatio": 0.05,
+    "edgeBlend": 0.12,
+    "outputHeight": 720,
+    "outputWidth": 960,
+    "pngCompression": 9,
+    "sourceBlend": 0.75,
+    "targetBlend": 0.25
+  },
+  "schema": "neonschedule1-processed-property-provenance-1",
+  "source": {
+    "datasetSha256": "5ee8e697d8ba3eaad5e1eed7ddb2a2ebfa39bb591fc629290d0d05d609190a90",
+    "exporterVersion": "0.0.33",
+    "gameVersion": "0.4.6f13",
+    "requestId": "adc77824-c63a-485a-90a8-470d00596621",
+    "requestSha256": "fce511386f4c2b334abaebf738e3684dcab5223c1c19f1da22810146414dc2dc",
+    "responseSha256": "4448dcb7ef244de47e75877100cc2526ef419ca4943bf1d55abc3f7f3ec88ec4"
+  }
+}

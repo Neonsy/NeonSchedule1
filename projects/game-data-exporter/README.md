@@ -16,7 +16,7 @@ This directory contains two source-only C# tools:
 Contributors build both tools locally and provide their own game, mod loader, API, .NET, and AssetRipper installations.
 NeonSchedule1 does not publish compiled copies of either tool.
 
-Exporter `0.0.32` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
+Exporter `0.0.33` targets *Schedule I* `0.4.6f13`, MelonLoader `0.7.3`, S1API `3.1.6`, and AssetRipper `1.3.14`.
 A newer game or dependency version requires a new build and acquisition audit.
 
 ## Requirements
@@ -125,11 +125,28 @@ The DLL performs one operation when a save finishes loading:
 - With `native-recipe-validation-request.json`, it evaluates requested recipes in the game
 - With `native-convex-validation-request.json`, it raycasts requested convex surface colliders
 - With `planner-observation-request.json`, it reads the allowlisted planner state from the loaded save
+- With `property-visual-capture-request.json`, it captures isolated property views as private local evidence
 
 Place at most one request file in the configured exporter output directory before the save loads.
 If multiple request files exist, the exporter reports an error and performs no operation.
 
 The TypeScript commands create requests, verify response hashes and dataset identity, retain local evidence, and remove staged files after a successful comparison.
+
+### Capture property visuals
+
+Run these commands from `projects/typescript`:
+
+```powershell
+pnpm data:capture-properties prepare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+# Start the game and load a save.
+pnpm data:capture-properties compare --game-directory 'C:\Program Files (x86)\Steam\steamapps\common\Schedule I'
+```
+
+The capture response and its PNG files remain private local evidence.
+Only separately processed derivatives with recorded provenance may enter `@neonschedule1/public-data`.
+The local operator owns these captures; the verified response and PNG hashes identify the source of truth.
+Retain them while their public derivatives remain current, delete them only as an explicit local cleanup,
+and never copy raw captures, unrestricted scene data, or machine paths into the public package.
 
 ### Validate recipes
 

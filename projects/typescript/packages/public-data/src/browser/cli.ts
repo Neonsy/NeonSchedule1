@@ -8,10 +8,12 @@ import { canonicalJson } from '@neonschedule1/core';
 import { compileBrowserDataArtifact } from '#public-data/browser/compile';
 import { loadBrowserPublicationSource } from '#public-data/browser/dataset';
 import { MapPublicationInputSchema } from '#public-data/map/input';
+import { ProcessedPropertyProvenanceSchema } from '#public-data/property/input';
 
 interface CliOptions {
     readonly dataset: string;
     readonly map: string;
+    readonly properties: string;
     readonly output: string | null;
 }
 
@@ -21,8 +23,12 @@ async function main(): Promise<void> {
     const mapInput = MapPublicationInputSchema.assert(JSON.parse(
         await readFile(options.map, 'utf8')
     ) as unknown);
-    await verifyMapAssets(mapInput.maps.map((map) => map.image));
-    const artifact = compileBrowserDataArtifact(source, mapInput);
+    const propertyVisuals = ProcessedPropertyProvenanceSchema.assert(JSON.parse(
+        await readFile(options.properties, 'utf8')
+    ) as unknown);
+    await verifyAssets(mapInput.maps.map((map) => map.image), 'map');
+    await verifyAssets(propertyVisuals.assets, 'property');
+    const artifact = compileBrowserDataArtifact(source, mapInput, propertyVisuals);
     const packageRoot = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
     const output = options.output ?? path.join(
         packageRoot,
@@ -39,8 +45,9 @@ async function main(): Promise<void> {
     );
 }
 
-async function verifyMapAssets(
-    assets: readonly { readonly path: string; readonly outputSha256: string }[]
+async function verifyAssets(
+    assets: readonly { readonly path: string; readonly outputSha256: string }[],
+    kind: 'map' | 'property'
 ): Promise<void> {
     const packageRoot = path.resolve(fileURLToPath(new URL('../../', import.meta.url)));
     for (const asset of assets) {
@@ -52,19 +59,19 @@ async function verifyMapAssets(
             normalized.startsWith('/') ||
             /^[a-zA-Z]:/u.test(normalized)
         ) {
-            throw new Error(`Unsafe processed map asset path: ${asset.path}`);
+            throw new Error(`Unsafe processed ${kind} asset path: ${asset.path}`);
         }
         const resolved = path.resolve(packageRoot, ...normalized.split('/'));
         if (!resolved.startsWith(`${packageRoot}${path.sep}`)) {
-            throw new Error(`Processed map asset escapes its package: ${asset.path}`);
+            throw new Error(`Processed ${kind} asset escapes its package: ${asset.path}`);
         }
         if (!(await stat(resolved).catch(() => null))?.isFile()) {
-            throw new Error(`Processed map asset does not exist: ${asset.path}`);
+            throw new Error(`Processed ${kind} asset does not exist: ${asset.path}`);
         }
         const actualSha256 = createHash('sha256').update(await readFile(resolved)).digest('hex');
         if (actualSha256 !== asset.outputSha256) {
             throw new Error(
-                `Processed map asset hash mismatch for ${asset.path}: expected ` +
+                `Processed ${kind} asset hash mismatch for ${asset.path}: expected ` +
                     `${asset.outputSha256}, computed ${actualSha256}`
             );
         }
@@ -90,6 +97,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
     }
     let dataset: string | undefined;
     let mapInput: string | undefined;
+    let propertyVisuals: string | undefined;
     let output: string | undefined;
     for (let index = 0; index < argumentsList.length; index++) {
         const argument = argumentsList[index]!;
@@ -101,6 +109,7 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
         switch (argument) {
             case '--dataset': dataset = value(); break;
             case '--map': mapInput = value(); break;
+            case '--properties': propertyVisuals = value(); break;
             case '--output': output = value(); break;
             default: throw new Error(`Unknown argument: ${argument}`);
         }
@@ -115,6 +124,9 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
         map: mapInput === undefined
             ? path.join(packageRoot, 'inputs', 'map.json')
             : path.resolve(invocationDirectory, mapInput),
+        properties: propertyVisuals === undefined
+            ? path.join(packageRoot, 'assets', 'properties', 'provenance.json')
+            : path.resolve(invocationDirectory, propertyVisuals),
         output: output === undefined ? null : path.resolve(invocationDirectory, output),
     };
 }
@@ -122,7 +134,8 @@ function parseArguments(arguments_: readonly string[]): CliOptions {
 const helpText = `Compile the browser-safe public data artifact.\n\n` +
     `Usage:\n` +
     `  pnpm --filter @neonschedule1/public-data browser:compile -- ` +
-    `--dataset <normalized-dataset> [--map <map-input>] [--output <file>]\n`;
+    `--dataset <normalized-dataset> [--map <map-input>] ` +
+    `[--properties <property-provenance>] [--output <file>]\n`;
 
 main().catch((error: unknown) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

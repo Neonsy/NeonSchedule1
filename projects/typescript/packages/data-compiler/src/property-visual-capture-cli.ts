@@ -1,0 +1,368 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import {
+    canonicalJson,
+    DatasetManifestSchema,
+    normalizedDatasetIdentityInput,
+    PropertyLayoutSchema,
+    type DatasetFile,
+    type DatasetManifest,
+    type PropertyLayout,
+} from '@neonschedule1/core';
+
+import {
+    comparePropertyVisualCapture,
+    contentSha256,
+    createPropertyVisualCaptureRequest,
+    parsePropertyVisualCaptureRequest,
+    parsePropertyVisualCaptureResponse,
+    propertyVisualCaptureRequestFileName,
+    propertyVisualCaptureResponseFileName,
+    type PropertyVisualCapture,
+} from '#data-compiler/property-visual-capture';
+
+interface CliOptions {
+    readonly command: 'prepare' | 'compare';
+    readonly dataset?: string;
+    readonly gameDirectory?: string;
+    readonly exportDirectory?: string;
+}
+
+async function main(): Promise<void> {
+    const options = parseArguments(process.argv.slice(2));
+    const exportDirectory = await resolveExportDirectory(options);
+    const localDirectory = path.join(workspaceRoot(), '.local', 'property-visual-capture');
+    if (options.command === 'prepare') {
+        await prepare(options, localDirectory, exportDirectory);
+    } else {
+        await compare(localDirectory, exportDirectory);
+    }
+}
+
+async function prepare(
+    options: CliOptions,
+    localDirectory: string,
+    exportDirectory: string
+): Promise<void> {
+    const datasetDirectory = await resolveDatasetDirectory(options.dataset);
+    process.stdout.write(`Loading normalized dataset ${datasetDirectory}\n`);
+    const { manifest, layouts } = await loadPropertyDataset(datasetDirectory);
+    const request = createPropertyVisualCaptureRequest(manifest, layouts, randomUUID());
+    const content = Buffer.from(`${JSON.stringify(request, null, 2)}\n`);
+
+    await rm(localDirectory, { recursive: true, force: true });
+    await mkdir(localDirectory, { recursive: true });
+    await mkdir(exportDirectory, { recursive: true });
+    await removeStagedFiles(exportDirectory);
+    await writeAtomic(path.join(localDirectory, 'request.json'), content);
+    const stagedRequest = path.join(exportDirectory, propertyVisualCaptureRequestFileName);
+    await writeAtomic(stagedRequest, content);
+
+    process.stdout.write(
+        `Prepared four private capture views for ${request.propertyCodes.length} properties ` +
+        `from game ${manifest.gameVersion}\n`
+    );
+    process.stdout.write(`Request SHA-256: ${contentSha256(content)}\n`);
+    process.stdout.write(`Staged request: ${stagedRequest}\n`);
+    process.stdout.write('Start Schedule I and load a save.\n');
+}
+
+async function compare(localDirectory: string, exportDirectory: string): Promise<void> {
+    const requestPath = path.join(localDirectory, 'request.json');
+    const responsePath = path.join(exportDirectory, propertyVisualCaptureResponseFileName);
+    const [requestContent, responseContent, responseSidecar] = await Promise.all([
+        readFile(requestPath),
+        readFile(responsePath),
+        readFile(`${responsePath}.sha256`, 'ascii'),
+    ]);
+    const responseSha256 = contentSha256(responseContent);
+    if (responseSidecar.trim() !== responseSha256) {
+        throw new Error(
+            `Property visual capture response failed SHA-256 verification: expected ` +
+            `${responseSidecar.trim()}, calculated ${responseSha256}`
+        );
+    }
+    const request = parsePropertyVisualCaptureRequest(
+        JSON.parse(requestContent.toString('utf8')) as unknown
+    );
+    const response = parsePropertyVisualCaptureResponse(
+        JSON.parse(responseContent.toString('utf8')) as unknown
+    );
+    const report = comparePropertyVisualCapture(
+        request,
+        response,
+        contentSha256(requestContent),
+        responseSha256
+    );
+
+    const captureDirectory = path.join(localDirectory, 'captures');
+    await mkdir(captureDirectory, { recursive: true });
+    for (const capture of response.captures) {
+        const content = await verifiedCapture(exportDirectory, capture);
+        await writeAtomic(
+            path.join(captureDirectory, `${capture.propertyCode}-${capture.view}.png`),
+            content
+        );
+    }
+    await writeAtomic(path.join(localDirectory, 'response.json'), responseContent);
+    await writeAtomic(
+        path.join(localDirectory, 'response.json.sha256'),
+        Buffer.from(responseSidecar)
+    );
+    await writeAtomic(
+        path.join(localDirectory, 'report.json'),
+        Buffer.from(`${JSON.stringify(report, null, 2)}\n`)
+    );
+    await removeStagedFiles(exportDirectory);
+
+    process.stdout.write(
+        `Accepted ${report.captureCount} private property captures for ` +
+        `${report.propertyCount} properties from game ${report.gameVersion}\n`
+    );
+    process.stdout.write(`Local evidence: ${localDirectory}\n`);
+}
+
+async function verifiedCapture(
+    exportDirectory: string,
+    capture: PropertyVisualCapture
+): Promise<Buffer> {
+    const normalized = path.posix.normalize(capture.relativePath.replaceAll('\\', '/'));
+    if (normalized !== capture.relativePath ||
+        normalized.startsWith('../') ||
+        normalized.startsWith('/') ||
+        /^[a-zA-Z]:/u.test(normalized)) {
+        throw new Error(`Unsafe property capture path: ${capture.relativePath}`);
+    }
+    const root = path.resolve(exportDirectory);
+    const resolved = path.resolve(root, ...normalized.split('/'));
+    if (!resolved.startsWith(`${root}${path.sep}`)) {
+        throw new Error(`Property capture path escapes its root: ${capture.relativePath}`);
+    }
+    const content = await readFile(resolved);
+    const actualHash = contentSha256(content);
+    if (actualHash !== capture.sha256) {
+        throw new Error(
+            `Property capture failed SHA-256 verification: ${capture.relativePath}`
+        );
+    }
+    const dimensions = pngDimensions(content, capture.relativePath);
+    if (dimensions.width !== capture.width || dimensions.height !== capture.height) {
+        throw new Error(
+            `Property capture dimensions mismatch for ${capture.relativePath}: ` +
+            `expected ${capture.width}x${capture.height}, received ` +
+            `${dimensions.width}x${dimensions.height}`
+        );
+    }
+    return content;
+}
+
+function pngDimensions(
+    content: Buffer,
+    label: string
+): { readonly width: number; readonly height: number } {
+    const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    if (content.byteLength < 24 || !content.subarray(0, 8).equals(signature) ||
+        content.toString('ascii', 12, 16) !== 'IHDR') {
+        throw new Error(`Property capture is not a PNG: ${label}`);
+    }
+    return {
+        width: content.readUInt32BE(16),
+        height: content.readUInt32BE(20),
+    };
+}
+
+async function loadPropertyDataset(
+    directory: string
+): Promise<{ readonly manifest: DatasetManifest; readonly layouts: readonly PropertyLayout[] }> {
+    const manifest = DatasetManifestSchema.assert(JSON.parse(
+        await readFile(path.join(directory, 'manifest.json'), 'utf8')
+    ) as unknown);
+    const identity = createHash('sha256')
+        .update(canonicalJson(normalizedDatasetIdentityInput(manifest)), 'utf8')
+        .digest('hex');
+    if (identity !== manifest.datasetSha256) {
+        throw new Error(
+            `Normalized dataset identity mismatch: expected ${manifest.datasetSha256}, ` +
+            `computed ${identity}`
+        );
+    }
+    const files = new Map(manifest.files.map((file) => [file.path, file]));
+    const paths = manifest.files.map((file) => file.path)
+        .filter((relativePath) => /^properties\/[^/]+\/layout\.json$/u.test(relativePath))
+        .sort((left, right) => left.localeCompare(right));
+    const layouts = await Promise.all(paths.map(async (relativePath) =>
+        PropertyLayoutSchema.assert(JSON.parse(
+            (await verifiedDatasetFile(directory, files, relativePath)).toString('utf8')
+        ) as unknown)
+    ));
+    if (layouts.length !== manifest.counts.propertyLayouts) {
+        throw new Error(
+            `Expected ${manifest.counts.propertyLayouts} property layouts, loaded ${layouts.length}`
+        );
+    }
+    return { manifest, layouts };
+}
+
+async function verifiedDatasetFile(
+    root: string,
+    files: ReadonlyMap<string, DatasetFile>,
+    relativePath: string
+): Promise<Buffer> {
+    const expected = files.get(relativePath);
+    if (expected === undefined) throw new Error(`Dataset manifest does not contain ${relativePath}`);
+    const normalized = path.posix.normalize(relativePath.replaceAll('\\', '/'));
+    if (normalized.startsWith('../') || normalized.startsWith('/') || /^[a-zA-Z]:/u.test(normalized)) {
+        throw new Error(`Unsafe normalized dataset path: ${relativePath}`);
+    }
+    const resolvedRoot = path.resolve(root);
+    const resolved = path.resolve(resolvedRoot, ...normalized.split('/'));
+    if (!resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
+        throw new Error(`Normalized dataset path escapes its root: ${relativePath}`);
+    }
+    const content = await readFile(resolved);
+    if (content.byteLength !== expected.byteLength || contentSha256(content) !== expected.sha256) {
+        throw new Error(`Normalized dataset file failed integrity verification: ${relativePath}`);
+    }
+    return content;
+}
+
+function parseArguments(arguments_: readonly string[]): CliOptions {
+    const argumentsList = arguments_[0] === '--' ? arguments_.slice(1) : arguments_;
+    if (argumentsList[0] === '--help') {
+        process.stdout.write(helpText);
+        process.exit(0);
+    }
+    const command = argumentsList[0];
+    if (command !== 'prepare' && command !== 'compare') {
+        throw new Error('First argument must be prepare or compare. Use --help for usage.');
+    }
+    let dataset: string | undefined;
+    let gameDirectory: string | undefined;
+    let exportDirectory: string | undefined;
+    for (let index = 1; index < argumentsList.length; index++) {
+        const argument = argumentsList[index]!;
+        const value = (): string => {
+            const next = argumentsList[++index];
+            if (next === undefined) throw new Error(`Missing value after ${argument}`);
+            return next;
+        };
+        switch (argument) {
+            case '--dataset': dataset = value(); break;
+            case '--game-directory': gameDirectory = value(); break;
+            case '--export-directory': exportDirectory = value(); break;
+            case '--help': process.stdout.write(helpText); process.exit(0);
+            default: throw new Error(
+                `Unknown property visual capture argument ${JSON.stringify(argument)}`
+            );
+        }
+    }
+    return {
+        command,
+        ...(dataset === undefined ? {} : { dataset }),
+        ...(gameDirectory === undefined ? {} : { gameDirectory }),
+        ...(exportDirectory === undefined ? {} : { exportDirectory }),
+    };
+}
+
+async function resolveDatasetDirectory(configured?: string): Promise<string> {
+    if (configured !== undefined) {
+        const directory = path.resolve(invocationDirectory(), configured);
+        if (!(await stat(directory).catch(() => null))?.isDirectory()) {
+            throw new Error(`Normalized dataset directory does not exist: ${directory}`);
+        }
+        return directory;
+    }
+    const root = path.join(workspaceRoot(), '.local');
+    const candidates: { directory: string; modifiedAt: number }[] = [];
+    await findDatasets(root, 0, candidates);
+    candidates.sort(
+        (left, right) => right.modifiedAt - left.modifiedAt ||
+            left.directory.localeCompare(right.directory)
+    );
+    const latest = candidates[0];
+    if (latest === undefined) throw new Error(`No normalized dataset was found under ${root}`);
+    return latest.directory;
+}
+
+async function findDatasets(
+    directory: string,
+    depth: number,
+    result: { directory: string; modifiedAt: number }[]
+): Promise<void> {
+    const manifest = await stat(path.join(directory, 'manifest.json')).catch(() => null);
+    if (manifest?.isFile()) {
+        const source = await readFile(path.join(directory, 'manifest.json'), 'utf8')
+            .then((content) => JSON.parse(content) as unknown)
+            .catch(() => null);
+        if (source !== null && typeof source === 'object' && !Array.isArray(source) &&
+            (source as { schema?: unknown }).schema === 'neonschedule1-normalized-data-1') {
+            result.push({ directory, modifiedAt: manifest.mtimeMs });
+        }
+        return;
+    }
+    if (depth === 8) return;
+    const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+        if (entry.isDirectory()) await findDatasets(path.join(directory, entry.name), depth + 1, result);
+    }
+}
+
+async function resolveExportDirectory(options: CliOptions): Promise<string> {
+    if (options.exportDirectory !== undefined) {
+        return path.resolve(invocationDirectory(), options.exportDirectory);
+    }
+    const configured = options.gameDirectory ?? process.env.NEONSCHEDULE1_GAME_DIR;
+    if (configured === undefined || configured.trim() === '') {
+        throw new Error('Pass --game-directory or --export-directory, or set NEONSCHEDULE1_GAME_DIR');
+    }
+    const directory = path.resolve(invocationDirectory(), configured);
+    if (!(await stat(directory).catch(() => null))?.isDirectory()) {
+        throw new Error(`Game directory does not exist: ${directory}`);
+    }
+    return path.join(directory, 'UserData', 'NeonSchedule1', 'exports');
+}
+
+async function removeStagedFiles(exportDirectory: string): Promise<void> {
+    await Promise.all([
+        rm(path.join(exportDirectory, propertyVisualCaptureRequestFileName), { force: true }),
+        rm(path.join(exportDirectory, propertyVisualCaptureResponseFileName), { force: true }),
+        rm(path.join(exportDirectory, `${propertyVisualCaptureResponseFileName}.sha256`), {
+            force: true,
+        }),
+    ]);
+}
+
+async function writeAtomic(output: string, content: Uint8Array): Promise<void> {
+    const temporary = `${output}.${process.pid}.tmp`;
+    await writeFile(temporary, content, { flag: 'wx' });
+    try {
+        await rename(temporary, output);
+    } catch (error) {
+        await rm(temporary, { force: true });
+        throw error;
+    }
+}
+
+function workspaceRoot(): string {
+    return path.resolve(import.meta.dirname, '..', '..', '..');
+}
+
+function invocationDirectory(): string {
+    return process.env.INIT_CWD ?? process.cwd();
+}
+
+const helpText = `Usage: pnpm data:capture-properties <prepare|compare> [options]
+
+Options:
+  --dataset PATH           Normalized dataset; defaults to the newest local dataset
+  --game-directory PATH    Schedule I directory; defaults to NEONSCHEDULE1_GAME_DIR
+  --export-directory PATH  Exporter output directory override
+  --help                   Show this help
+`;
+
+main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+    process.exitCode = 1;
+});

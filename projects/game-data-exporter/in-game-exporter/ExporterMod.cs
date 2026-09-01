@@ -25,7 +25,7 @@ namespace NeonSchedule1.GameDataExporter;
 
 public sealed class ExporterMod : MelonMod
 {
-    public const string ExporterVersion = "0.0.32";
+    public const string ExporterVersion = "0.0.33";
     private const string OutputEnvironmentVariable = "NEONSCHEDULE1_EXPORT_OUTPUT";
 
     private static string OutputDirectory => ResolveOutputDirectory();
@@ -62,18 +62,26 @@ public sealed class ExporterMod : MelonMod
             var observationRequestPath = Path.Combine(
                 OutputDirectory,
                 GameDataCollector.PlannerObservationRequestFileName);
+            var propertyCaptureRequestPath = Path.Combine(
+                OutputDirectory,
+                GameDataCollector.PropertyVisualCaptureRequestFileName);
             var requestCount = new[]
             {
                 recipeRequestPath,
                 convexRequestPath,
                 observationRequestPath,
+                propertyCaptureRequestPath,
             }.Count(File.Exists);
             if (requestCount > 1)
             {
                 throw new InvalidOperationException(
                     "Exporter request modes cannot run together.");
             }
-            if (GameDataCollector.TryRunPlannerObservation(
+            if (GameDataCollector.TryRunPropertyVisualCapture(
+                    OutputDirectory,
+                    ExporterVersion,
+                    message => LoggerInstance.Msg(message)) ||
+                GameDataCollector.TryRunPlannerObservation(
                     OutputDirectory,
                     ExporterVersion,
                     message => LoggerInstance.Msg(message)) ||

@@ -200,6 +200,7 @@ describe('browser data artifact', () => {
             buildables: 62,
             propertyLayouts: 13,
             properties: 13,
+            propertyVisuals: 13,
             shops: 12,
             mapMarkers: 229,
             dealerHomes: 6,
@@ -600,6 +601,21 @@ describe('browser data artifact', () => {
             'assets/map/hyland-point.png',
             'assets/map/tutorial-area.png',
         ]);
+        expect(artifact.properties.map((property) => property.visual.path).sort()).toEqual([
+            'assets/properties/barn.png',
+            'assets/properties/bungalow.png',
+            'assets/properties/carwash.png',
+            'assets/properties/dockswarehouse.png',
+            'assets/properties/laundromat.png',
+            'assets/properties/manor.png',
+            'assets/properties/motelroom.png',
+            'assets/properties/postoffice.png',
+            'assets/properties/rv.png',
+            'assets/properties/seweroffice.png',
+            'assets/properties/storageunit.png',
+            'assets/properties/sweatshop.png',
+            'assets/properties/tacoticklers.png',
+        ]);
     });
 
     it('states the boundary for all 16 planned features', async () => {
@@ -617,7 +633,7 @@ describe('browser data artifact', () => {
             'relationships-progression': 'included',
             'production-planner': 'included',
             'inventory-logistics': 'included',
-            'properties-businesses': 'partial',
+            'properties-businesses': 'included',
             'blueprint-builder': 'partial',
             'interactive-map': 'included',
             'routes-travel': 'included',

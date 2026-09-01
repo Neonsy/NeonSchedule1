@@ -29,6 +29,10 @@ import {
 } from '#public-data/browser/schema';
 import { propertyPublicForms, shopPublicForms } from '#public-data/map/compile';
 import type { MapPublicationInput, PublicMapOmission } from '#public-data/map/input';
+import type {
+    ProcessedPropertyAsset,
+    ProcessedPropertyProvenance,
+} from '#public-data/property/input';
 
 const runtimeItemForms: Readonly<Record<string, string | null>> = {
     cuke_effects: null,
@@ -56,9 +60,10 @@ const omissionCodes: Readonly<Record<PublicMapOmission['sourceFamily'], string>>
 
 export function compileBrowserDataArtifact(
     source: BrowserPublicationSource,
-    mapInput: MapPublicationInput
+    mapInput: MapPublicationInput,
+    propertyVisuals: ProcessedPropertyProvenance
 ): BrowserDataArtifact {
-    requireCompatibility(source, mapInput);
+    requireCompatibility(source, mapInput, propertyVisuals);
 
     const effectKey = createPublicKeyResolver('effect', source.effects.map((effect) => effect.id));
     const itemKey = createPublicKeyResolver('item', source.items.map((item) => item.id));
@@ -85,8 +90,9 @@ export function compileBrowserDataArtifact(
         itemKey,
         effectKey
     ));
+    const propertyVisualsByCode = requirePropertyVisuals(source, propertyVisuals);
     const properties = source.properties.map((property) =>
-        compileProperty(property, propertyKey)
+        compileProperty(property, propertyKey, propertyVisualsByCode.get(property.code)!)
     );
     const shops = source.shops.map((shop) => compileShop(shop, shopKey, itemKey, personKey));
     const production = compilePublicProductionBundle(source.production, source.logistics, itemKey);
@@ -244,6 +250,7 @@ export function compileBrowserDataArtifact(
             buildables: blueprintGeometry.buildables.length,
             propertyLayouts: blueprintGeometry.properties.length,
             properties: properties.length,
+            propertyVisuals: properties.length,
             shops: shops.length,
             mapMarkers: mapInput.markers.length,
             dealerHomes: travel.dealer.counts.dealerHomes,
@@ -394,7 +401,8 @@ function compileCustomer(
 
 function compileProperty(
     property: Property,
-    propertyKey: (sourceKey: string) => string
+    propertyKey: (sourceKey: string) => string,
+    visual: ProcessedPropertyAsset
 ): PublicProperty {
     const label = propertyPublicForms[property.code];
     if (label === undefined || property.name !== label) {
@@ -415,6 +423,13 @@ function compileProperty(
         ownedByDefault: property.ownedByDefault,
         business: property.business,
         layoutStatus: 'calculation-geometry-published',
+        visual: {
+            path: visual.path,
+            sha256: visual.outputSha256,
+            width: visual.width,
+            height: visual.height,
+            treatmentKey: visual.treatmentId,
+        },
     };
 }
 
@@ -507,7 +522,8 @@ function compileBrowserMap(input: MapPublicationInput): BrowserMap {
 
 function requireCompatibility(
     source: BrowserPublicationSource,
-    mapInput: MapPublicationInput
+    mapInput: MapPublicationInput,
+    propertyVisuals: ProcessedPropertyProvenance
 ): void {
     const expected = source.manifest;
     const actual = mapInput.compatibility;
@@ -518,6 +534,39 @@ function requireCompatibility(
     ) {
         throw new Error('Map publication input and normalized dataset are not compatible');
     }
+    if (
+        propertyVisuals.source.gameVersion !== expected.gameVersion ||
+        propertyVisuals.source.datasetSha256 !== expected.datasetSha256
+    ) {
+        throw new Error('Property visual provenance and normalized dataset are not compatible');
+    }
+}
+
+function requirePropertyVisuals(
+    source: BrowserPublicationSource,
+    provenance: ProcessedPropertyProvenance
+): ReadonlyMap<string, ProcessedPropertyAsset> {
+    const assets = new Map<string, ProcessedPropertyAsset>();
+    const paths = new Set<string>();
+    for (const asset of provenance.assets) {
+        if (assets.has(asset.propertyCode)) {
+            throw new Error(`Duplicate property visual for ${asset.propertyCode}`);
+        }
+        if (!paths.add(asset.path)) {
+            throw new Error(`Duplicate property visual path ${asset.path}`);
+        }
+        assets.set(asset.propertyCode, asset);
+    }
+    const expected = new Set(source.properties.map((property) => property.code));
+    const unknown = [...assets.keys()].filter((propertyCode) => !expected.has(propertyCode));
+    const missing = [...expected].filter((propertyCode) => !assets.has(propertyCode));
+    if (unknown.length > 0 || missing.length > 0 || assets.size !== expected.size) {
+        throw new Error(
+            `Property visual coverage mismatch: missing ${missing.sort().join(', ') || 'none'}; ` +
+            `unknown ${unknown.sort().join(', ') || 'none'}`
+        );
+    }
+    return assets;
 }
 
 function rankLabel(sourceRank: string): string {
@@ -601,8 +650,8 @@ const featureCoverage = [
     {
         key: 'properties-businesses',
         label: 'Properties and businesses',
-        artifactStatus: 'partial',
-        note: 'Facts, calculation-safe layouts, results, and proof are included. Approved visual coverage remains incomplete.',
+        artifactStatus: 'included',
+        note: 'Facts, calculation-safe layouts, processed property visuals, results, and proof are included.',
     },
     {
         key: 'blueprint-builder',

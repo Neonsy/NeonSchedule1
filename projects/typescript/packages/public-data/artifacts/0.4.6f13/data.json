@@ -543626,6 +543626,7 @@
     "productionStations": 18,
     "properties": 13,
     "propertyLayouts": 13,
+    "propertyVisuals": 13,
     "rankLevels": 55,
     "relationships": 109,
     "routeEndpoints": 58,
@@ -543676,10 +543677,10 @@
       "note": "Slots, filters, roles, priorities, scheduling, routes, results, and proof are included."
     },
     {
-      "artifactStatus": "partial",
+      "artifactStatus": "included",
       "key": "properties-businesses",
       "label": "Properties and businesses",
-      "note": "Facts, calculation-safe layouts, results, and proof are included. Approved visual coverage remains incomplete."
+      "note": "Facts, calculation-safe layouts, processed property visuals, results, and proof are included."
     },
     {
       "artifactStatus": "partial",
@@ -573584,7 +573585,14 @@
       "loadingDockCount": 2,
       "ownedByDefault": false,
       "price": 25000,
-      "slug": "barn"
+      "slug": "barn",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/barn.png",
+        "sha256": "697fcaa9c9ec18ea058f7e3c6c568b550fa86125537d2f488736d91db29476b0",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573597,7 +573605,14 @@
       "loadingDockCount": 1,
       "ownedByDefault": false,
       "price": 6000,
-      "slug": "bungalow"
+      "slug": "bungalow",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/bungalow.png",
+        "sha256": "e4240b035a8e6bdf13a04444f8b9dac3b3771e7e15bdcf6be6f7b64101129aaf",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573613,7 +573628,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 20000,
-      "slug": "car-wash"
+      "slug": "car-wash",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/carwash.png",
+        "sha256": "6cccc2282d3a03fb5332a0900d8644deddc80eed7f90295520f30d88339bd61c",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573626,7 +573648,14 @@
       "loadingDockCount": 2,
       "ownedByDefault": false,
       "price": 50000,
-      "slug": "docks-warehouse"
+      "slug": "docks-warehouse",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/dockswarehouse.png",
+        "sha256": "b069ef6fb193003776701a0fc3eff874828425ff45898a44e1d55d2ec3c7c5f1",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573639,7 +573668,14 @@
       "loadingDockCount": 3,
       "ownedByDefault": false,
       "price": 250000,
-      "slug": "hyland-manor"
+      "slug": "hyland-manor",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/manor.png",
+        "sha256": "3cb2d304b9fe7721cbdf151134c0945a8f336351741f6af4c4e1aff1417c8e8f",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573655,7 +573691,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 4000,
-      "slug": "laundromat"
+      "slug": "laundromat",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/laundromat.png",
+        "sha256": "bcd826158207ef80824f8fee6ab0a80d5e91ba35d099e87f9ef629b93e051fb3",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573668,7 +573711,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 75,
-      "slug": "motel-room"
+      "slug": "motel-room",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/motelroom.png",
+        "sha256": "9d770939d133395e9cc2d391aa238381ed3573301f88e21653f2ffb8df63d64d",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573684,7 +573734,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 10000,
-      "slug": "post-office"
+      "slug": "post-office",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/postoffice.png",
+        "sha256": "503596d6c34bd9976edee4fb92de569b7b7b6a39ebd9799e6387e6eaaec8fa30",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573697,7 +573754,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": true,
       "price": 1,
-      "slug": "rv"
+      "slug": "rv",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/rv.png",
+        "sha256": "6eacdcb9d4968a8b12a27357e7e50ed99a9c53a87abc15204d5bfac0a2a156b8",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 10,
@@ -573710,7 +573774,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 1,
-      "slug": "sewer-office"
+      "slug": "sewer-office",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/seweroffice.png",
+        "sha256": "4bce99928f9733179a6e559954eb8b4f9fc5d993115e7b8bac9c6fd2488c9034",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573723,7 +573794,14 @@
       "loadingDockCount": 1,
       "ownedByDefault": false,
       "price": 4000,
-      "slug": "storage-unit"
+      "slug": "storage-unit",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/storageunit.png",
+        "sha256": "092d695eb4145146ca57fb915f4a25f3f6816b88ce89188f9116c26a8943ddef",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573736,7 +573814,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 500,
-      "slug": "sweatshop"
+      "slug": "sweatshop",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/sweatshop.png",
+        "sha256": "501c679cbd78c9ff2ecbf0643594204597bdee7986c8d7d8943917618e0259e6",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     },
     {
       "ambientTemperature": 20,
@@ -573752,7 +573837,14 @@
       "loadingDockCount": 0,
       "ownedByDefault": false,
       "price": 50000,
-      "slug": "taco-ticklers"
+      "slug": "taco-ticklers",
+      "visual": {
+        "height": 720,
+        "path": "assets/properties/tacoticklers.png",
+        "sha256": "b5fc7feeb50fc79fb13bbaa98307416f41c05d3db16ec19fe6342f4532cb2282",
+        "treatmentKey": "source-derived-property-grade-1",
+        "width": 960
+      }
     }
   ],
   "ranks": [

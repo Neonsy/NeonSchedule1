@@ -16,7 +16,8 @@
         "test": "vitest run --config ../../vitest.config.mts --project data-compiler",
         "normalize": "node dist/cli.js",
         "validate:convex": "node dist/convex-validation-cli.js",
-        "observe:planner": "node dist/planner-observation-cli.js"
+        "observe:planner": "node dist/planner-observation-cli.js",
+        "capture:properties": "node dist/property-visual-capture-cli.js"
     },
     "dependencies": {
         "@neonschedule1/core": "workspace:*",

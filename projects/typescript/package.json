@@ -9,6 +9,7 @@
     "data:normalize": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler normalize",
     "data:validate-convex": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler validate:convex",
     "data:observe": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler observe:planner",
+    "data:capture-properties": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/data-compiler build && pnpm --filter @neonschedule1/data-compiler capture:properties",
     "solver:benchmark": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark",
     "solver:benchmark:allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:allocation",
     "solver:benchmark:joint-allocation": "pnpm --filter @neonschedule1/core build && pnpm --filter @neonschedule1/solver build && pnpm --filter @neonschedule1/solver benchmark:joint-allocation",

@@ -237,6 +237,13 @@ export const PublicPropertySchema = type({
     ownedByDefault: 'boolean',
     business: type({ launderCapacity: 'number', minimumLaunderAmount: 'number' }).or('null'),
     layoutStatus: "'calculation-geometry-published'",
+    visual: {
+        path: 'string',
+        sha256: Sha256Schema,
+        width: 'number',
+        height: 'number',
+        treatmentKey: 'string',
+    },
 });
 export type PublicProperty = typeof PublicPropertySchema.infer;
 
@@ -370,6 +377,7 @@ export const BrowserDataArtifactSchema = type({
         buildables: 'number',
         propertyLayouts: 'number',
         properties: 'number',
+        propertyVisuals: 'number',
         shops: 'number',
         mapMarkers: 'number',
         dealerHomes: 'number',
