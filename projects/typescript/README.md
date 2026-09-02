@@ -17,7 +17,7 @@ Read the [development overview](/docs/development.md) for repository architectur
 
 ## Install and validate
 
-Install Node.js `24.19.0` and pnpm `11.x`.
+Install Node.js `24.19.0` and pnpm `12.x`.
 Run these commands from this directory:
 
 ```powershell

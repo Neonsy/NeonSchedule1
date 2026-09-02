@@ -99,7 +99,7 @@ Unknown and partial evidence remains explicit.
 
 ## TypeScript workflow
 
-The TypeScript workspace requires Node.js `24.19.0` and pnpm `11.x`.
+The TypeScript workspace requires Node.js `24.19.0` and pnpm `12.x`.
 Run the canonical checks from `projects/typescript`:
 
 ```powershell
